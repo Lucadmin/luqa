@@ -10,6 +10,11 @@ export default withAuth((req) => {
 });
 
 export const config = {
-  // Run on everything except static assets and Next internals.
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    // Exclude static assets, Next internals, auth routes, and the two
+    // Google endpoints that receive requests without a user session:
+    //   - /api/google/callback  (redirect from Google after OAuth)
+    //   - /api/google/webhook   (push notifications from Google's servers)
+    "/((?!api/auth|api/google/callback|api/google/webhook|_next/static|_next/image|favicon.ico).*)",
+  ],
 };
