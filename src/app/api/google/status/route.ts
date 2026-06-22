@@ -11,7 +11,8 @@ export async function GET() {
     select: {
       googleEmail: true,
       calendarId: true,
-      updatedAt: true,
+      lastSyncedAt: true,
+      channelExpiry: true,
     },
   });
 
@@ -21,6 +22,8 @@ export async function GET() {
     connected: true,
     googleEmail: conn.googleEmail,
     calendarId: conn.calendarId,
-    lastSynced: conn.updatedAt.toISOString(),
+    lastSynced: conn.lastSyncedAt?.toISOString() ?? null,
+    webhookActive:
+      conn.channelExpiry !== null && conn.channelExpiry.getTime() > Date.now(),
   });
 }

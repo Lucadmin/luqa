@@ -27,7 +27,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  await pullSync(conn.userId).catch((e) =>
+  const origin = new URL(request.url).origin;
+  await pullSync(conn.userId, origin).catch((e) =>
     console.error("[webhook] pull-sync failed", e),
   );
 

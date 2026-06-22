@@ -73,9 +73,9 @@ export async function PATCH(request: Request, { params }: Params) {
     },
   });
 
-  // Push update to Google Calendar (fire-and-forget).
+  // Push update to Google Calendar (swallows its own errors).
   if (updated.endTime) {
-    void pushEntryUpdate(
+    await pushEntryUpdate(
       userId,
       updated.id,
       updated.description,
@@ -108,9 +108,9 @@ export async function DELETE(_request: Request, { params }: Params) {
     data: { deletedAt: new Date() },
   });
 
-  // Remove from Google Calendar (fire-and-forget).
+  // Remove from Google Calendar (swallows its own errors).
   if (existing.googleEventId) {
-    void pushEntryDelete(userId, existing.googleEventId);
+    await pushEntryDelete(userId, existing.googleEventId);
   }
 
   return NextResponse.json({ ok: true });

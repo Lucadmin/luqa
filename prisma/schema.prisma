@@ -97,6 +97,8 @@ model GoogleConnection {
   resourceId    String?
   channelExpiry DateTime?
 
+  lastSyncedAt DateTime? // set after each successful pull
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

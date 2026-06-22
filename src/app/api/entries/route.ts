@@ -94,9 +94,9 @@ export async function POST(request: Request) {
 
   const dto = toEntryDTO(entry);
 
-  // Push to Google Calendar (fire-and-forget; only if entry is complete).
+  // Push to Google Calendar (only if entry is complete; swallows its own errors).
   if (entry.endTime) {
-    void pushEntryCreate(
+    await pushEntryCreate(
       userId,
       entry.id,
       entry.description,

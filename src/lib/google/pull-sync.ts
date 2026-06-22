@@ -10,12 +10,21 @@ import {
   ensureLuqaCalendar,
   oauthClientForUser,
 } from "@/lib/google/oauth";
+import { needsRenewal, registerWatchChannel } from "@/lib/google/watch";
 import { db } from "@/lib/db";
 
 const SNAP_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 function snapToFiveMin(d: Date): Date {
   return new Date(Math.round(d.getTime() / SNAP_MS) * SNAP_MS);
+}
+
+function isGoneError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as Record<string, unknown>;
+  return e["code"] === 410 || e["status"] === 410 ||
+    (Array.isArray(e["errors"]) &&
+      (e["errors"] as Array<{ reason?: string }>).some((x) => x.reason === "fullSyncRequired"));
 }
 
 /** Find or create a category by name for this user. */
@@ -26,7 +35,6 @@ async function upsertCategory(userId: string, name: string): Promise<string> {
   });
   if (existing) return existing.id;
 
-  // Auto-pick a color from the palette.
   const count = await db.category.count({ where: { userId } });
   const PALETTE = [
     "#6366f1", "#ec4899", "#f59e0b", "#10b981", "#3b82f6",
@@ -39,13 +47,34 @@ async function upsertCategory(userId: string, name: string): Promise<string> {
   return cat.id;
 }
 
-export async function pullSync(userId: string): Promise<{ added: number; updated: number; deleted: number }> {
+export async function pullSync(
+  userId: string,
+  /** Pass the public base URL (e.g. https://luqa-pearl.vercel.app) when available
+   *  so the watch channel can be registered/renewed during the sync. */
+  appOrigin?: string,
+): Promise<{ added: number; updated: number; deleted: number }> {
   const result = await oauthClientForUser(userId);
   if (!result) return { added: 0, updated: 0, deleted: 0 };
 
   const { client, conn } = result;
   const calendarId = await ensureLuqaCalendar(client, userId, conn.calendarId);
   const cal = google.calendar({ version: "v3", auth: client });
+
+  // If the sync token is stale Google returns 410; clear it and start over.
+  if (conn.syncToken) {
+    try {
+      await cal.events.list({ calendarId, syncToken: conn.syncToken, maxResults: 1 });
+    } catch (err) {
+      if (isGoneError(err)) {
+        await db.googleConnection.update({
+          where: { userId },
+          data: { syncToken: null },
+        });
+        return pullSync(userId, appOrigin);
+      }
+      throw err;
+    }
+  }
 
   let added = 0, updated = 0, deleted = 0;
   let pageToken: string | undefined;
@@ -122,7 +151,6 @@ export async function pullSync(userId: string): Promise<{ added: number; updated
         });
         added++;
       } else if (existing.googleEtag !== event.etag) {
-        // Changed on Google side — update.
         await db.timeEntry.update({
           where: { id: existing.id },
           data: {
@@ -143,12 +171,23 @@ export async function pullSync(userId: string): Promise<{ added: number; updated
     if (res.data.nextSyncToken) newSyncToken = res.data.nextSyncToken;
   } while (pageToken);
 
-  // Save the new sync token for the next incremental call.
-  if (newSyncToken) {
-    await db.googleConnection.update({
-      where: { userId },
-      data: { syncToken: newSyncToken },
-    });
+  // Persist the new sync token and record the sync time.
+  await db.googleConnection.update({
+    where: { userId },
+    data: {
+      ...(newSyncToken ? { syncToken: newSyncToken } : {}),
+      lastSyncedAt: new Date(),
+    },
+  });
+
+  // Renew the watch channel if it's expiring (or was never registered).
+  if (appOrigin && needsRenewal(conn.channelExpiry)) {
+    await registerWatchChannel(
+      userId,
+      client,
+      calendarId,
+      `${appOrigin}/api/google/webhook`,
+    ).catch((e) => console.error("[pull-sync] channel renewal failed", e));
   }
 
   return { added, updated, deleted };

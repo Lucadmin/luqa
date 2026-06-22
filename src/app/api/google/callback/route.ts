@@ -55,7 +55,8 @@ export async function GET(request: Request) {
     });
 
     // Do an immediate pull to import existing events.
-    await pullSync(userId).catch((e) =>
+    // Pass origin so the watch channel can be registered right away.
+    await pullSync(userId, origin).catch((e) =>
       console.error("[google-callback] initial pull failed", e),
     );
 

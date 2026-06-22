@@ -35,10 +35,13 @@ export function colorIdForHex(hex: string): string {
 }
 
 export function makeOAuthClient(redirectUri?: string) {
+  const uri =
+    redirectUri ??
+    (process.env.APP_URL ? `${process.env.APP_URL}/api/google/callback` : undefined);
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri ?? `${process.env.APP_URL}/api/google/callback`,
+    uri,
   );
 }
 

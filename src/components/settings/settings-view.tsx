@@ -82,9 +82,19 @@ function GoogleConnectionPanel() {
                     </span>
                   </p>
                   <p className="text-xs text-faint">
-                    Syncing to a dedicated &ldquo;Luqa&rdquo; calendar.
-                    Entries created or edited in either place stay in sync.
+                    {status.webhookActive
+                      ? "Live sync active — changes in Google Calendar appear here automatically."
+                      : "Sync is manual for now. Click “Sync now” to pull recent changes."}
                   </p>
+                  {status.lastSynced && (
+                    <p className="text-xs text-faint">
+                      Last synced:{" "}
+                      {new Date(status.lastSynced).toLocaleString(undefined, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <p className="mt-0.5 text-sm text-muted">

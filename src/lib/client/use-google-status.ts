@@ -7,7 +7,8 @@ export interface GoogleStatus {
   connected: boolean;
   googleEmail?: string;
   calendarId?: string;
-  lastSynced?: string;
+  lastSynced?: string | null;
+  webhookActive?: boolean;
 }
 
 export function useGoogleStatus() {
