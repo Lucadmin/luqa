@@ -14,6 +14,7 @@ import { useEntries } from "@/lib/client/use-entries";
 import {
   formatDuration,
   isoDateKey,
+  MINUTES_PER_DAY,
   minutesSinceMidnight,
   minutesToDate,
   startOfLocalDay,
@@ -62,6 +63,34 @@ export function DayView() {
     () => entries.find((e) => e.endTime === null) ?? null,
     [entries],
   );
+
+  const categoryById = useMemo(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories],
+  );
+
+  // Completed entries as colored bands for the editor dial (context: where the
+  // day is already filled). Computed once; the editor excludes the active one.
+  const daySegments = useMemo(() => {
+    const dayStartMs = startOfLocalDay(day).getTime();
+    return entries.flatMap((e) => {
+      if (!e.endTime) return [];
+      const startMin = (Date.parse(e.startTime) - dayStartMs) / 60000;
+      const endMin = (Date.parse(e.endTime) - dayStartMs) / 60000;
+      if (endMin <= 0 || startMin >= MINUTES_PER_DAY) return [];
+      const color = e.categoryId
+        ? (categoryById.get(e.categoryId)?.color ?? "#9aa0aa")
+        : "#9aa0aa";
+      return [
+        {
+          id: e.id,
+          startMin: Math.max(0, startMin),
+          endMin: Math.min(MINUTES_PER_DAY, endMin),
+          color,
+        },
+      ];
+    });
+  }, [entries, categoryById, day]);
 
   const dayTotal = useMemo(() => {
     let total = 0;
@@ -120,6 +149,11 @@ export function DayView() {
 
   function changeInlineDescription(description: string) {
     setInlineDraft((d) => (d ? { ...d, description } : d));
+  }
+
+  // Picking a suggestion fills both the title and its remembered category.
+  function applyInlineSuggestion(description: string, categoryId: string | null) {
+    setInlineDraft((d) => (d ? { ...d, description, categoryId } : d));
   }
 
   async function saveInline() {
@@ -259,6 +293,7 @@ export function DayView() {
           onCreateInline={createInline}
           onChangeInlineRange={changeInlineRange}
           onChangeInlineDescription={changeInlineDescription}
+          onApplyInlineSuggestion={applyInlineSuggestion}
           onSaveInline={saveInline}
           onExpandInline={expandInline}
           onCancelInline={() => setInlineDraft(null)}
@@ -271,6 +306,7 @@ export function DayView() {
           key={draft.id ?? `${draft.startMin}-${draft.endMin}`}
           draft={draft}
           categories={categories}
+          segments={daySegments.filter((s) => s.id !== draft.id)}
           onSave={handleSave}
           onDelete={draft.id ? handleDelete : undefined}
           onClose={() => setDraft(null)}

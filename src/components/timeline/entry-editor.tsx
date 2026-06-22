@@ -3,7 +3,7 @@
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { CategoryPicker } from "@/components/timeline/category-picker";
-import { TimeDial } from "@/components/timeline/time-dial";
+import { type DialSegment, TimeDial } from "@/components/timeline/time-dial";
 import type { EntryDraft } from "@/components/timeline/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ export interface SaveResult {
 export function EntryEditor({
   draft,
   categories,
+  segments,
   onSave,
   onDelete,
   onClose,
@@ -30,6 +31,7 @@ export function EntryEditor({
 }: {
   draft: EntryDraft;
   categories: CategoryDTO[];
+  segments?: DialSegment[];
   onSave: (result: SaveResult) => void;
   onDelete?: () => void;
   onClose: () => void;
@@ -95,6 +97,7 @@ export function EntryEditor({
           <TimeDial
             startMin={startMin}
             endMin={endMin}
+            segments={segments}
             onChange={(s, e) => {
               setStartMin(s);
               setEndMin(e);

@@ -19,6 +19,13 @@ const CENTER = SIZE / 2;
 
 type Handle = "start" | "end";
 
+/** A read-only colored band on the dial showing another entry's time range. */
+export interface DialSegment {
+  startMin: number;
+  endMin: number;
+  color: string;
+}
+
 /** Point on the dial circle for a given minutes-since-midnight value. */
 function pointFor(minutes: number, radius = R) {
   const angle = (minutes / MINUTES_PER_DAY) * 2 * Math.PI; // clockwise from top
@@ -39,10 +46,12 @@ function arcPath(startMin: number, endMin: number) {
 export function TimeDial({
   startMin,
   endMin,
+  segments,
   onChange,
 }: {
   startMin: number;
   endMin: number;
+  segments?: DialSegment[];
   onChange: (start: number, end: number) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -152,6 +161,18 @@ export function TimeDial({
           className="stroke-surface-2"
           strokeWidth={STROKE}
         />
+        {/* other entries on this day, colored by category */}
+        {segments?.map((seg, i) => (
+          <path
+            key={`seg-${i}-${seg.startMin}`}
+            d={arcPath(seg.startMin, seg.endMin)}
+            fill="none"
+            stroke={seg.color}
+            strokeOpacity={0.45}
+            strokeWidth={STROKE - 3}
+            strokeLinecap="butt"
+          />
+        ))}
         {/* active arc */}
         <path
           d={arcPath(startMin, endMin)}

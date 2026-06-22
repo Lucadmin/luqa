@@ -34,6 +34,7 @@ export function Timeline({
   onCreateInline,
   onChangeInlineRange,
   onChangeInlineDescription,
+  onApplyInlineSuggestion,
   onSaveInline,
   onExpandInline,
   onCancelInline,
@@ -48,6 +49,7 @@ export function Timeline({
   onCreateInline: (startMin: number, endMin: number, autoFocus: boolean) => void;
   onChangeInlineRange: (startMin: number, endMin: number) => void;
   onChangeInlineDescription: (value: string) => void;
+  onApplyInlineSuggestion: (description: string, categoryId: string | null) => void;
   onSaveInline: () => void;
   onExpandInline: () => void;
   onCancelInline: () => void;
@@ -304,10 +306,13 @@ export function Timeline({
             startMin={inlineDraft.startMin}
             endMin={inlineDraft.endMin}
             description={inlineDraft.description}
+            categoryId={inlineDraft.categoryId}
+            categories={categories}
             autoFocus={inlineDraft.autoFocus}
             clientYToMin={clientYToMin}
             onChangeRange={onChangeInlineRange}
             onChangeDescription={onChangeInlineDescription}
+            onApplySuggestion={onApplyInlineSuggestion}
             onSave={onSaveInline}
             onExpand={onExpandInline}
             onCancel={onCancelInline}
