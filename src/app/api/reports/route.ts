@@ -39,6 +39,8 @@ export async function GET(request: Request) {
   const dailyTotals: Record<string, number> = {};
   // Per-category total across the whole range
   const totalsByCategory: Record<string, number> = {};
+  // Per-day, per-category breakdown: { "2025-06-10": { catId: minutes } }
+  const dailyByCategory: Record<string, Record<string, number>> = {};
   let totalMinutes = 0;
 
   for (const e of entries) {
@@ -51,12 +53,16 @@ export async function GET(request: Request) {
 
     const catKey = e.categoryId ?? "__none__";
     totalsByCategory[catKey] = (totalsByCategory[catKey] ?? 0) + mins;
+
+    if (!dailyByCategory[dayKey]) dailyByCategory[dayKey] = {};
+    dailyByCategory[dayKey][catKey] = (dailyByCategory[dayKey][catKey] ?? 0) + mins;
   }
 
   return NextResponse.json({
     categories: categories.map(toCategoryDTO),
     totalsByCategory,
     dailyTotals,
+    dailyByCategory,
     totalMinutes,
   });
 }

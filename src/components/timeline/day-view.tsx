@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EntryEditor, type SaveResult } from "@/components/timeline/entry-editor";
+import { HabitsStrip } from "@/components/timeline/habits-strip";
 import { NowBar } from "@/components/timeline/now-bar";
 import { Timeline } from "@/components/timeline/timeline";
 import type { EntryDraft, InlineDraft } from "@/components/timeline/types";
@@ -282,6 +283,10 @@ export function DayView() {
             onStop={handleStop}
             onCreateCategory={handleCreateCategory}
           />
+        </div>
+
+        <div className="mx-auto mt-3 w-full max-w-3xl">
+          <HabitsStrip day={day} />
         </div>
       </div>
 

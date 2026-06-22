@@ -34,7 +34,7 @@ export function ReportsView() {
   }, [data]);
 
   const dailyBars = useMemo(() => {
-    const days = Object.entries(data.dailyTotals)
+    return Object.entries(data.dailyTotals)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([dayKey, minutes]) => {
         const d = new Date(dayKey + "T00:00:00");
@@ -42,10 +42,18 @@ export function ReportsView() {
           month: "numeric",
           day: "numeric",
         });
-        return { dayKey, label, minutes };
+        const bycat = data.dailyByCategory[dayKey] ?? {};
+        const slices = Object.entries(bycat)
+          .map(([catId, catMinutes]) => ({
+            catId,
+            minutes: catMinutes,
+            color: catId === "__none__" ? "#9aa0aa" : (catMap.get(catId)?.color ?? "#9aa0aa"),
+          }))
+          .sort((a, b) => b.minutes - a.minutes);
+        return { dayKey, label, minutes, slices };
       });
-    return days;
-  }, [data.dailyTotals]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   const maxDayMinutes = useMemo(
     () => Math.max(1, ...dailyBars.map((d) => d.minutes)),

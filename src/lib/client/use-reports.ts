@@ -10,6 +10,8 @@ export interface ReportsData {
   categories: CategoryDTO[];
   totalsByCategory: Record<string, number>;
   dailyTotals: Record<string, number>;
+  /** Per-day, per-category minutes: { "2025-06-10": { catId: minutes } } */
+  dailyByCategory: Record<string, Record<string, number>>;
   totalMinutes: number;
 }
 
@@ -31,7 +33,7 @@ export function useReports(preset: RangePreset) {
   const { data, isLoading, error } = useSWR<ReportsData>(key, fetcher);
 
   return {
-    data: data ?? { categories: [], totalsByCategory: {}, dailyTotals: {}, totalMinutes: 0 },
+    data: data ?? { categories: [], totalsByCategory: {}, dailyTotals: {}, dailyByCategory: {}, totalMinutes: 0 },
     isLoading,
     error,
     from,

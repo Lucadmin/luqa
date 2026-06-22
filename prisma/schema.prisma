@@ -22,6 +22,7 @@ model User {
   categories       Category[]
   timeEntries      TimeEntry[]
   googleConnection GoogleConnection?
+  habits           Habit[]
 
   @@map("users")
 }
@@ -105,4 +106,32 @@ model GoogleConnection {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("google_connections")
+}
+
+// A recurring thing to do every day (or on specific weekdays in v2).
+model Habit {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String    // can include an emoji prefix, e.g. "🏃 Morning run"
+  order      Int       @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  logs HabitLog[]
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("habits")
+}
+
+// One "did it" record — one row per habit per local calendar date.
+model HabitLog {
+  id      String @id @default(cuid())
+  habitId String
+  date    String // "YYYY-MM-DD" in the user's local timezone
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@map("habit_logs")
 }

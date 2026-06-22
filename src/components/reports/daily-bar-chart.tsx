@@ -2,11 +2,21 @@
 
 import { formatDuration } from "@/lib/time";
 
-interface DayBar {
-  dayKey: string; // "2025-06-10"
-  label: string; // "Mon 10"
+interface CategorySlice {
+  catId: string;
   minutes: number;
+  color: string;
 }
+
+export interface DayBar {
+  dayKey: string;
+  label: string;
+  minutes: number;
+  slices: CategorySlice[]; // ordered largest-first so the tallest is at bottom
+}
+
+const BAR_MAX_PX = 180;
+const GOAL_MIN = 8 * 60;
 
 export function DailyBarChart({
   days,
@@ -15,16 +25,16 @@ export function DailyBarChart({
   days: DayBar[];
   maxMinutes: number;
 }) {
-  const goal = 8 * 60; // 8-hour reference line
-
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative flex items-end gap-1.5 overflow-x-auto pb-5">
+      <div className="relative flex items-end gap-1 overflow-x-auto pb-5">
         {/* 8-hour reference line */}
         {maxMinutes > 0 && (
           <div
-            className="pointer-events-none absolute inset-x-0 border-t border-dashed border-border-strong"
-            style={{ bottom: `calc(20px + ${(Math.min(goal, maxMinutes) / maxMinutes) * 180}px)` }}
+            className="pointer-events-none absolute inset-x-0 border-t border-dashed border-border"
+            style={{
+              bottom: `calc(20px + ${(Math.min(GOAL_MIN, maxMinutes) / maxMinutes) * BAR_MAX_PX}px)`,
+            }}
           >
             <span className="absolute right-0 -translate-y-full pr-1 text-[10px] text-faint">
               8h
@@ -33,17 +43,41 @@ export function DailyBarChart({
         )}
 
         {days.map((d) => {
-          const h = maxMinutes > 0 ? Math.max(2, (d.minutes / maxMinutes) * 180) : 2;
+          const totalPx = maxMinutes > 0
+            ? Math.max(d.minutes > 0 ? 3 : 1, (d.minutes / maxMinutes) * BAR_MAX_PX)
+            : 1;
+
           return (
-            <div key={d.dayKey} className="group flex min-w-[28px] flex-1 flex-col items-center gap-1">
+            <div
+              key={d.dayKey}
+              className="group flex min-w-[28px] flex-1 flex-col items-center gap-1"
+            >
               {/* tooltip */}
               <span className="invisible whitespace-nowrap rounded bg-foreground px-1.5 py-0.5 text-[10px] text-background opacity-0 transition-opacity group-hover:visible group-hover:opacity-100">
                 {formatDuration(d.minutes)}
               </span>
+
+              {/* stacked bar */}
               <div
-                className="w-full rounded-t-sm bg-primary/70 transition-all duration-300 group-hover:bg-primary"
-                style={{ height: d.minutes > 0 ? h : 2, opacity: d.minutes > 0 ? 1 : 0.15 }}
-              />
+                className="relative w-full overflow-hidden rounded-t-sm"
+                style={{ height: totalPx, opacity: d.minutes > 0 ? 1 : 0.18 }}
+              >
+                {d.slices.length > 0 ? (
+                  d.slices.map((s) => (
+                    <div
+                      key={s.catId}
+                      className="w-full transition-all duration-300"
+                      style={{
+                        height: `${(s.minutes / d.minutes) * 100}%`,
+                        backgroundColor: s.color,
+                      }}
+                    />
+                  ))
+                ) : (
+                  <div className="h-full w-full bg-primary/30" />
+                )}
+              </div>
+
               <span className="text-[10px] text-faint">{d.label}</span>
             </div>
           );
