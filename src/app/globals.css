@@ -1,26 +1,105 @@
 @import "tailwindcss";
 
+/* Manual dark mode via a `.dark` class (set by next-themes), instead of
+   relying solely on prefers-color-scheme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces */
+  --background: #fbfbfa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --border: #e8e8ea;
+  --border-strong: #d6d6da;
+
+  /* Text */
+  --foreground: #1a1a1e;
+  --muted: #6b6b74;
+  --faint: #9a9aa3;
+
+  /* Brand / accent */
+  --primary: #6366f1;
+  --primary-hover: #5457e5;
+  --primary-foreground: #ffffff;
+  --ring: #6366f1;
+
+  /* Timeline */
+  --grid-line: #ededef;
+  --grid-line-strong: #e0e0e3;
+  --now-line: #ef4444;
+}
+
+.dark {
+  --background: #0b0b0d;
+  --surface: #141417;
+  --surface-2: #1c1c20;
+  --border: #27272c;
+  --border-strong: #34343a;
+
+  --foreground: #f4f4f5;
+  --muted: #a0a0aa;
+  --faint: #6b6b76;
+
+  --primary: #818cf8;
+  --primary-hover: #939dfa;
+  --primary-foreground: #0b0b0d;
+  --ring: #818cf8;
+
+  --grid-line: #1f1f24;
+  --grid-line-strong: #2a2a30;
+  --now-line: #f87171;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --color-grid-line: var(--grid-line);
+  --color-grid-line-strong: var(--grid-line-strong);
+  --color-now-line: var(--now-line);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
+}
+
+html {
+  /* Avoid the brief flash of unthemed scrollbar */
+  color-scheme: light dark;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin, unobtrusive scrollbars to keep the timeline calm. */
+@media (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
