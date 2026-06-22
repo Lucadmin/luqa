@@ -1,0 +1,106 @@
+// Luqa time tracker — data model
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// A registered user. Auth is email + password (credentials).
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  categories       Category[]
+  timeEntries      TimeEntry[]
+  googleConnection GoogleConnection?
+
+  @@map("users")
+}
+
+// A category / "project" in Toggl terms. The list grows as the user works.
+model Category {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String   @default("#6366f1") // hex, shown as the project dot
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timeEntries TimeEntry[]
+
+  // A user can't have two categories with the same name.
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("categories")
+}
+
+// Where an entry originated / where it currently lives in sync terms.
+enum EntrySource {
+  APP // created in the Luqa UI
+  GOOGLE // created from a Google Calendar event
+}
+
+// One tracked block of time. endTime is null while a timer is running.
+model TimeEntry {
+  id          String    @id @default(cuid())
+  userId      String
+  categoryId  String?
+  description String    @default("")
+  startTime   DateTime
+  endTime     DateTime? // null => currently running
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Google Calendar sync metadata
+  source        EntrySource @default(APP)
+  googleEventId String? // id of the mirrored event in the dedicated calendar
+  googleEtag    String? // last-seen etag, for conflict detection
+  lastSyncedAt  DateTime?
+  deletedAt     DateTime? // soft delete so deletions can propagate to Google
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, googleEventId])
+  @@index([userId, startTime])
+  @@index([userId, endTime])
+  @@map("time_entries")
+}
+
+// A user's connection to Google Calendar (separate OAuth from login).
+// Holds tokens + the dedicated "Luqa" calendar id and incremental sync state.
+model GoogleConnection {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  googleEmail  String?
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime // access token expiry
+  scope        String
+
+  calendarId String? // id of the dedicated Luqa calendar
+  syncToken  String? // Google incremental sync token (nextSyncToken)
+
+  // Push-notification channel (calendar watch), so Google can ping us on change
+  channelId     String?
+  resourceId    String?
+  channelExpiry DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("google_connections")
+}
