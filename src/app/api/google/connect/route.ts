@@ -3,11 +3,12 @@ import { GOOGLE_SCOPES, makeOAuthClient } from "@/lib/google/oauth";
 import { getUserId } from "@/lib/api-auth";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: Request) {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const client = makeOAuthClient();
+  const origin = new URL(request.url).origin;
+  const client = makeOAuthClient(`${origin}/api/google/callback`);
   const url = client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent", // always return a refresh_token

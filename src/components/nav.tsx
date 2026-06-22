@@ -16,7 +16,7 @@ export function Sidebar({ userLabel }: { userLabel: string }) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-surface px-3 py-5 md:flex">
+    <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-surface px-3 py-5 md:flex">
       <div className="px-3 pb-6">
         <span className="text-lg font-semibold tracking-tight">luqa</span>
       </div>

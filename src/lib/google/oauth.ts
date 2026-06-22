@@ -34,11 +34,11 @@ export function colorIdForHex(hex: string): string {
   return HEX_TO_COLOR_ID[hex.toLowerCase()] ?? DEFAULT_COLOR_ID;
 }
 
-export function makeOAuthClient() {
+export function makeOAuthClient(redirectUri?: string) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    `${process.env.APP_URL}/api/google/callback`,
+    redirectUri ?? `${process.env.APP_URL}/api/google/callback`,
   );
 }
 
