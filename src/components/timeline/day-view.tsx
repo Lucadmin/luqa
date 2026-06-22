@@ -5,13 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { EntryEditor, type SaveResult } from "@/components/timeline/entry-editor";
 import { NowBar } from "@/components/timeline/now-bar";
 import { Timeline } from "@/components/timeline/timeline";
-import type { EntryDraft } from "@/components/timeline/types";
+import type { EntryDraft, InlineDraft } from "@/components/timeline/types";
 import {
   createCategory,
   useCategories,
 } from "@/lib/client/use-categories";
 import { useEntries } from "@/lib/client/use-entries";
-import type { Gap } from "@/lib/timeline-layout";
 import {
   formatDuration,
   isoDateKey,
@@ -42,6 +41,7 @@ function dayLabel(day: Date): string {
 export function DayView() {
   const [day, setDay] = useState(() => startOfLocalDay(new Date()));
   const [draft, setDraft] = useState<EntryDraft | null>(null);
+  const [inlineDraft, setInlineDraft] = useState<InlineDraft | null>(null);
   const [saving, setSaving] = useState(false);
 
   // A single ticking clock; everything time-dependent derives from it so
@@ -95,6 +95,7 @@ export function DayView() {
 
   function openEntry(entry: TimeEntryDTO) {
     if (entry.endTime === null) return; // running entry is managed by the timer
+    setInlineDraft(null);
     const dayStartMs = startOfLocalDay(day).getTime();
     const startMin = Math.round((Date.parse(entry.startTime) - dayStartMs) / 60000);
     const endMin = Math.round((Date.parse(entry.endTime) - dayStartMs) / 60000);
@@ -107,14 +108,46 @@ export function DayView() {
     });
   }
 
-  function openGap(gap: Gap) {
+  // ── In-place draft block (drag/tap-to-create) ──────────────────────────────
+  function createInline(startMin: number, endMin: number, autoFocus: boolean) {
+    setDraft(null);
+    setInlineDraft({ description: "", categoryId: null, startMin, endMin, autoFocus });
+  }
+
+  function changeInlineRange(startMin: number, endMin: number) {
+    setInlineDraft((d) => (d ? { ...d, startMin, endMin } : d));
+  }
+
+  function changeInlineDescription(description: string) {
+    setInlineDraft((d) => (d ? { ...d, description } : d));
+  }
+
+  async function saveInline() {
+    if (!inlineDraft) return;
+    setSaving(true);
+    try {
+      await createEntry({
+        description: inlineDraft.description,
+        categoryId: inlineDraft.categoryId,
+        startTime: minutesToDate(day, inlineDraft.startMin).toISOString(),
+        endTime: minutesToDate(day, inlineDraft.endMin).toISOString(),
+      });
+      setInlineDraft(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Hand the inline draft off to the full editor popup for richer controls.
+  function expandInline() {
+    if (!inlineDraft) return;
     setDraft({
-      description: "",
-      categoryId: null,
-      startMin: gap.startMin,
-      endMin: gap.endMin,
-      gapEndMin: gap.endMin,
+      description: inlineDraft.description,
+      categoryId: inlineDraft.categoryId,
+      startMin: inlineDraft.startMin,
+      endMin: inlineDraft.endMin,
     });
+    setInlineDraft(null);
   }
 
   async function handleSave(result: SaveResult) {
@@ -221,8 +254,15 @@ export function DayView() {
           entries={entries}
           categories={categories}
           nowMin={nowMin}
+          inlineDraft={inlineDraft}
           onOpenEntry={openEntry}
-          onOpenGap={openGap}
+          onCreateInline={createInline}
+          onChangeInlineRange={changeInlineRange}
+          onChangeInlineDescription={changeInlineDescription}
+          onSaveInline={saveInline}
+          onExpandInline={expandInline}
+          onCancelInline={() => setInlineDraft(null)}
+          saving={saving}
         />
       </div>
 

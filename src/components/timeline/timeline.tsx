@@ -1,41 +1,73 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CategoryDot } from "@/components/timeline/category-picker";
-import type { Gap } from "@/lib/timeline-layout";
+import { DraftBlock } from "@/components/timeline/draft-block";
+import type { InlineDraft } from "@/components/timeline/types";
 import { computeGaps, computeLayout } from "@/lib/timeline-layout";
 import { cn } from "@/lib/cn";
 import {
+  clampToDay,
   formatClock,
   formatDuration,
   HOUR_HEIGHT,
   MINUTES_PER_DAY,
   PX_PER_MINUTE,
+  snapMinutes,
   startOfLocalDay,
 } from "@/lib/time";
 import type { CategoryDTO, TimeEntryDTO } from "@/lib/types";
 
 const GUTTER = 52; // px for hour labels
 const TOTAL_HEIGHT = MINUTES_PER_DAY * PX_PER_MINUTE;
+const DEFAULT_LEN = 30; // minutes — default size for a tap/click-created block
+const MIN_DRAG = 10; // minutes — shorter drags fall back to the default size
 
 export function Timeline({
   day,
   entries,
   categories,
   nowMin,
+  inlineDraft,
   onOpenEntry,
-  onOpenGap,
+  onCreateInline,
+  onChangeInlineRange,
+  onChangeInlineDescription,
+  onSaveInline,
+  onExpandInline,
+  onCancelInline,
+  saving,
 }: {
   day: Date;
   entries: TimeEntryDTO[];
   categories: CategoryDTO[];
   nowMin: number | null;
+  inlineDraft: InlineDraft | null;
   onOpenEntry: (entry: TimeEntryDTO) => void;
-  onOpenGap: (gap: Gap) => void;
+  onCreateInline: (startMin: number, endMin: number, autoFocus: boolean) => void;
+  onChangeInlineRange: (startMin: number, endMin: number) => void;
+  onChangeInlineDescription: (value: string) => void;
+  onSaveInline: () => void;
+  onExpandInline: () => void;
+  onCancelInline: () => void;
+  saving: boolean;
 }) {
   const focusRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const dayStartMs = startOfLocalDay(day).getTime();
+
+  // Drag-to-create bookkeeping (mouse) / tap-to-create (touch).
+  const createRef = useRef<{
+    pointerId: number;
+    type: string;
+    anchorMin: number;
+    startClientY: number;
+    engaged: boolean;
+  } | null>(null);
+  const [preview, setPreview] = useState<{ startMin: number; endMin: number } | null>(
+    null,
+  );
 
   const categoryById = useMemo(() => {
     const map = new Map<string, CategoryDTO>();
@@ -52,15 +84,105 @@ export function Timeline({
     [entries, dayStartMs, nowMin],
   );
 
+  const clientYToMin = useCallback((clientY: number) => {
+    const el = containerRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    return clampToDay((clientY - rect.top) / PX_PER_MINUTE);
+  }, []);
+
   // On mount, bring the interesting part of the day into view.
   const focusMin = nowMin ?? layout[0]?.startMin ?? 8 * 60;
   useEffect(() => {
     focusRef.current?.scrollIntoView({ block: "center" });
   }, []);
 
+  function onPointerDown(e: React.PointerEvent) {
+    // Let entries, gap pills and the draft block handle their own pointers.
+    if ((e.target as HTMLElement).closest("[data-entry],[data-fill],[data-draft]")) {
+      return;
+    }
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+
+    createRef.current = {
+      pointerId: e.pointerId,
+      type: e.pointerType,
+      anchorMin: clientYToMin(e.clientY),
+      startClientY: e.clientY,
+      engaged: false,
+    };
+
+    // Mouse: capture so a drag draws a box. Touch: stay passive so a vertical
+    // swipe still scrolls the timeline; only a stationary tap creates.
+    if (e.pointerType === "mouse") {
+      e.preventDefault();
+      containerRef.current?.setPointerCapture(e.pointerId);
+    }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    const st = createRef.current;
+    if (!st || st.pointerId !== e.pointerId) return;
+
+    if (st.type === "mouse") {
+      if (!st.engaged && Math.abs(e.clientY - st.startClientY) > 3) {
+        st.engaged = true;
+      }
+      if (st.engaged) {
+        const cur = snapMinutes(clientYToMin(e.clientY));
+        const anchor = snapMinutes(st.anchorMin);
+        setPreview({
+          startMin: Math.min(anchor, cur),
+          endMin: Math.max(anchor, cur),
+        });
+      }
+    } else if (Math.abs(e.clientY - st.startClientY) > 8) {
+      // Treated as a scroll — bail out of create.
+      createRef.current = null;
+    }
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    const st = createRef.current;
+    if (!st || st.pointerId !== e.pointerId) return;
+    createRef.current = null;
+    setPreview(null);
+
+    const cur = snapMinutes(clientYToMin(e.clientY));
+    const anchor = snapMinutes(st.anchorMin);
+
+    let start: number;
+    let end: number;
+    if (st.engaged && st.type === "mouse" && Math.abs(cur - anchor) >= MIN_DRAG) {
+      start = Math.min(anchor, cur);
+      end = Math.max(anchor, cur);
+    } else {
+      start = anchor;
+      end = anchor + DEFAULT_LEN;
+    }
+    if (end > MINUTES_PER_DAY) {
+      end = MINUTES_PER_DAY;
+      start = Math.max(0, end - DEFAULT_LEN);
+    }
+    onCreateInline(start, end, st.type === "mouse");
+  }
+
+  function onPointerCancel() {
+    createRef.current = null;
+    setPreview(null);
+  }
+
   return (
     <div className="relative">
-      <div className="relative" style={{ height: TOTAL_HEIGHT }}>
+      <div
+        ref={containerRef}
+        className="relative select-none"
+        style={{ height: TOTAL_HEIGHT }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+      >
         {/* scroll anchor */}
         <div
           ref={focusRef}
@@ -71,7 +193,7 @@ export function Timeline({
         {Array.from({ length: 24 }).map((_, h) => (
           <div
             key={h}
-            className="absolute inset-x-0 flex items-start"
+            className="pointer-events-none absolute inset-x-0 flex items-start"
             style={{ top: h * HOUR_HEIGHT, height: HOUR_HEIGHT }}
           >
             <span className="w-[52px] shrink-0 -translate-y-2 pr-2 text-right text-[11px] tabular-nums text-faint">
@@ -81,28 +203,29 @@ export function Timeline({
           </div>
         ))}
 
-        {/* gaps */}
+        {/* gaps — dashed hint with a small "fill whole gap" pill */}
         {gaps.map((gap) => {
           const top = gap.startMin * PX_PER_MINUTE;
           const height = (gap.endMin - gap.startMin) * PX_PER_MINUTE;
+          const showPill = gap.endMin - gap.startMin >= 15;
           return (
-            <button
+            <div
               key={`gap-${gap.startMin}`}
-              type="button"
-              onClick={() => onOpenGap(gap)}
-              className="group absolute flex items-center justify-center rounded-lg border border-dashed border-border text-faint transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
-              style={{
-                top,
-                height,
-                left: GUTTER,
-                right: 4,
-              }}
+              className="pointer-events-none absolute rounded-lg border border-dashed border-border/70"
+              style={{ top, height, left: GUTTER, right: 4 }}
             >
-              <span className="flex items-center gap-1.5 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100">
-                <Plus className="h-3.5 w-3.5" />
-                Fill {formatDuration(gap.endMin - gap.startMin)}
-              </span>
-            </button>
+              {showPill && (
+                <button
+                  data-fill
+                  type="button"
+                  onClick={() => onCreateInline(gap.startMin, gap.endMin, true)}
+                  className="pointer-events-auto absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm transition-colors hover:border-primary/50 hover:text-primary"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Fill {formatDuration(gap.endMin - gap.startMin)}
+                </button>
+              )}
+            </div>
           );
         })}
 
@@ -120,6 +243,7 @@ export function Timeline({
           return (
             <button
               key={entry.id}
+              data-entry
               type="button"
               onClick={() => onOpenEntry(entry)}
               className={cn(
@@ -156,6 +280,40 @@ export function Timeline({
             </button>
           );
         })}
+
+        {/* drag-create preview (mouse) */}
+        {preview && !inlineDraft && (
+          <div
+            className="pointer-events-none absolute z-20 rounded-lg border-2 border-dashed border-primary bg-primary/10"
+            style={{
+              top: preview.startMin * PX_PER_MINUTE,
+              height: Math.max((preview.endMin - preview.startMin) * PX_PER_MINUTE, 2),
+              left: GUTTER,
+              right: 4,
+            }}
+          >
+            <span className="block px-2 py-1 text-[11px] font-semibold tabular-nums text-primary">
+              {formatClock(preview.startMin)}–{formatClock(preview.endMin)}
+            </span>
+          </div>
+        )}
+
+        {/* in-place draft block */}
+        {inlineDraft && (
+          <DraftBlock
+            startMin={inlineDraft.startMin}
+            endMin={inlineDraft.endMin}
+            description={inlineDraft.description}
+            autoFocus={inlineDraft.autoFocus}
+            clientYToMin={clientYToMin}
+            onChangeRange={onChangeInlineRange}
+            onChangeDescription={onChangeInlineDescription}
+            onSave={onSaveInline}
+            onExpand={onExpandInline}
+            onCancel={onCancelInline}
+            saving={saving}
+          />
+        )}
 
         {/* now line */}
         {nowMin !== null && (

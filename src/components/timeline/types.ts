@@ -8,3 +8,13 @@ export interface EntryDraft {
   /** When filling a gap, the ceiling of the gap being chipped away. */
   gapEndMin?: number;
 }
+
+// Lightweight draft rendered directly on the timeline (drag-to-create).
+export interface InlineDraft {
+  description: string;
+  categoryId: string | null;
+  startMin: number;
+  endMin: number;
+  /** Focus the inline title field on mount (mouse/desktop only). */
+  autoFocus: boolean;
+}
