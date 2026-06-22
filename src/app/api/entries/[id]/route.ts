@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
+import { pushEntryDelete, pushEntryUpdate } from "@/lib/google/push-sync";
 import { toEntryDTO } from "@/lib/serializers";
 import { updateEntrySchema } from "@/lib/validations";
 
@@ -72,10 +73,22 @@ export async function PATCH(request: Request, { params }: Params) {
     },
   });
 
+  // Push update to Google Calendar (fire-and-forget).
+  if (updated.endTime) {
+    void pushEntryUpdate(
+      userId,
+      updated.id,
+      updated.description,
+      updated.categoryId,
+      updated.startTime.toISOString(),
+      updated.endTime.toISOString(),
+    );
+  }
+
   return NextResponse.json({ entry: toEntryDTO(updated) });
 }
 
-// DELETE /api/entries/:id — soft delete so it can propagate to Google later.
+// DELETE /api/entries/:id — soft delete + propagate to Google Calendar.
 export async function DELETE(_request: Request, { params }: Params) {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -84,7 +97,7 @@ export async function DELETE(_request: Request, { params }: Params) {
 
   const existing = await db.timeEntry.findFirst({
     where: { id, userId, deletedAt: null },
-    select: { id: true },
+    select: { id: true, googleEventId: true },
   });
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -94,6 +107,11 @@ export async function DELETE(_request: Request, { params }: Params) {
     where: { id },
     data: { deletedAt: new Date() },
   });
+
+  // Remove from Google Calendar (fire-and-forget).
+  if (existing.googleEventId) {
+    void pushEntryDelete(userId, existing.googleEventId);
+  }
 
   return NextResponse.json({ ok: true });
 }

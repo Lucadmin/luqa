@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
+import { pushEntryCreate } from "@/lib/google/push-sync";
 import { toEntryDTO } from "@/lib/serializers";
 import { createEntrySchema } from "@/lib/validations";
 
@@ -91,5 +92,19 @@ export async function POST(request: Request) {
     });
   });
 
-  return NextResponse.json({ entry: toEntryDTO(entry) }, { status: 201 });
+  const dto = toEntryDTO(entry);
+
+  // Push to Google Calendar (fire-and-forget; only if entry is complete).
+  if (entry.endTime) {
+    void pushEntryCreate(
+      userId,
+      entry.id,
+      entry.description,
+      entry.categoryId,
+      entry.startTime.toISOString(),
+      entry.endTime.toISOString(),
+    );
+  }
+
+  return NextResponse.json({ entry: dto }, { status: 201 });
 }
