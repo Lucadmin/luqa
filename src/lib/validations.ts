@@ -11,3 +11,54 @@ export const signupSchema = credentialsSchema.extend({
 
 export type SignupInput = z.infer<typeof signupSchema>;
 export type CredentialsInput = z.infer<typeof credentialsSchema>;
+
+// --- Time entries & categories ---
+
+const isoString = z
+  .string()
+  .refine((s) => !Number.isNaN(Date.parse(s)), "Invalid datetime");
+
+const hexColor = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color like #6366f1");
+
+export const createEntrySchema = z
+  .object({
+    description: z.string().max(500).optional().default(""),
+    categoryId: z.string().nullish(),
+    startTime: isoString,
+    endTime: isoString.nullish(),
+  })
+  .refine(
+    (v) => !v.endTime || Date.parse(v.endTime) > Date.parse(v.startTime),
+    { message: "End must be after start", path: ["endTime"] },
+  );
+
+export const updateEntrySchema = z
+  .object({
+    description: z.string().max(500).optional(),
+    categoryId: z.string().nullable().optional(),
+    startTime: isoString.optional(),
+    endTime: isoString.nullable().optional(),
+  })
+  .refine(
+    (v) =>
+      !v.startTime ||
+      !v.endTime ||
+      Date.parse(v.endTime) > Date.parse(v.startTime),
+    { message: "End must be after start", path: ["endTime"] },
+  );
+
+export const createCategorySchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  color: hexColor.optional(),
+});
+
+export const updateCategorySchema = z.object({
+  name: z.string().trim().min(1).max(60).optional(),
+  color: hexColor.optional(),
+  archived: z.boolean().optional(),
+});
+
+export type CreateEntryInput = z.infer<typeof createEntrySchema>;
+export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
