@@ -1,10 +1,11 @@
 "use client";
 
-import { Pause, Play } from "lucide-react";
+import { Clock, Pause, Play, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CategoryDot, CategoryPicker } from "@/components/timeline/category-picker";
 import { useClickOutside } from "@/lib/client/use-click-outside";
 import { useSuggestions } from "@/lib/client/use-suggestions";
+import { cn } from "@/lib/cn";
 import type { CategoryDTO, TimeEntryDTO } from "@/lib/types";
 
 function stopwatch(ms: number): string {
@@ -13,6 +14,19 @@ function stopwatch(ms: number): string {
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function nowHHMM(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Parse a "HH:MM" string into an absolute Date using today as the base date. */
+function parseStartAt(hhMM: string): Date {
+  const [h, m] = hhMM.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
 }
 
 export function NowBar({
@@ -24,7 +38,7 @@ export function NowBar({
 }: {
   categories: CategoryDTO[];
   runningEntry: TimeEntryDTO | null;
-  onStart: (description: string, categoryId: string | null) => Promise<void>;
+  onStart: (description: string, categoryId: string | null, startTime?: Date) => Promise<void>;
   onStop: () => Promise<void>;
   onCreateCategory: (name: string) => Promise<CategoryDTO>;
 }) {
@@ -33,6 +47,8 @@ export function NowBar({
   const [busy, setBusy] = useState(false);
   const [focused, setFocused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  // "" means "start now"; a "HH:MM" string means a specific past start time.
+  const [startAt, setStartAt] = useState("");
 
   const wrapRef = useRef<HTMLDivElement>(null);
   useClickOutside(wrapRef, () => setFocused(false), focused);
@@ -53,13 +69,19 @@ export function NowBar({
     ? categories.find((c) => c.id === runningEntry.categoryId)
     : null;
 
+  function toggleStartAt() {
+    setStartAt((prev) => (prev ? "" : nowHHMM()));
+  }
+
   async function handleStart() {
     if (busy) return;
     setBusy(true);
     try {
-      await onStart(description.trim(), categoryId);
+      const customStart = startAt ? parseStartAt(startAt) : undefined;
+      await onStart(description.trim(), categoryId, customStart);
       setDescription("");
       setCategoryId(null);
+      setStartAt("");
       setFocused(false);
     } finally {
       setBusy(false);
@@ -77,6 +99,8 @@ export function NowBar({
   }
 
   if (runningEntry) {
+    const startedAt = new Date(runningEntry.startTime);
+    const startedLabel = `${String(startedAt.getHours()).padStart(2, "0")}:${String(startedAt.getMinutes()).padStart(2, "0")}`;
     return (
       <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3 shadow-sm">
         <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-now-line" />
@@ -84,12 +108,16 @@ export function NowBar({
           <p className="truncate text-sm font-medium">
             {runningEntry.description || "Untitled"}
           </p>
-          {runningCategory && (
-            <span className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-muted">
-              <CategoryDot color={runningCategory.color} className="h-2 w-2" />
-              {runningCategory.name}
-            </span>
-          )}
+          <span className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-muted">
+            {runningCategory && (
+              <>
+                <CategoryDot color={runningCategory.color} className="h-2 w-2" />
+                <span>{runningCategory.name}</span>
+                <span>·</span>
+              </>
+            )}
+            Since {startedLabel}
+          </span>
         </div>
         <span className="font-mono text-lg font-semibold tabular-nums">
           {stopwatch(elapsed)}
@@ -123,6 +151,20 @@ export function NowBar({
           placeholder="What are you working on?"
           className="h-11 min-w-0 flex-1 bg-transparent px-1 text-sm placeholder:text-faint focus:outline-none"
         />
+        <button
+          type="button"
+          onClick={toggleStartAt}
+          aria-label={startAt ? "Clear start time" : "Set start time"}
+          title={startAt ? "Started at a custom time — click to reset to now" : "Started earlier? Set the start time"}
+          className={cn(
+            "grid h-8 w-8 shrink-0 place-items-center rounded-lg transition-colors",
+            startAt
+              ? "bg-primary/10 text-primary"
+              : "text-muted hover:bg-surface-2 hover:text-foreground",
+          )}
+        >
+          <Clock className="h-4 w-4" />
+        </button>
         <CategoryPicker
           categories={categories}
           value={categoryId}
@@ -141,6 +183,27 @@ export function NowBar({
         </button>
       </div>
 
+      {/* Custom start time row */}
+      {startAt && (
+        <div className="mt-1.5 flex items-center gap-2 px-1">
+          <span className="text-xs text-muted">Started at</span>
+          <input
+            type="time"
+            value={startAt}
+            onChange={(e) => setStartAt(e.target.value)}
+            className="rounded-md border border-border bg-transparent px-2 py-0.5 text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <button
+            type="button"
+            onClick={() => setStartAt("")}
+            aria-label="Reset to now"
+            className="grid h-5 w-5 place-items-center rounded text-muted hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {focused && suggestions.length > 0 && (
         <div className="absolute inset-x-2 top-full z-40 mt-1 overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
           <div className="max-h-64 overflow-y-auto py-1">
@@ -150,7 +213,6 @@ export function NowBar({
                 : null;
               return (
                 <button
-                  // description+category is unique per suggestion row
                   key={`${s.description}-${s.categoryId ?? "none"}-${i}`}
                   type="button"
                   onClick={() => {

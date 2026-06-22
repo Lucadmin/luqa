@@ -108,11 +108,15 @@ export function DayView() {
     return cat;
   }
 
-  async function handleStart(description: string, categoryId: string | null) {
+  async function handleStart(
+    description: string,
+    categoryId: string | null,
+    startTime?: Date,
+  ) {
     await createEntry({
       description,
       categoryId,
-      startTime: new Date().toISOString(),
+      startTime: (startTime ?? new Date()).toISOString(),
       endTime: null,
     });
   }
