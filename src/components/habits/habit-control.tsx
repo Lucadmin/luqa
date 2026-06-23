@@ -22,7 +22,7 @@ export function HabitControl({
   variant?: Variant;
 }) {
   const [busy, setBusy] = useState(false);
-  const size = variant === "card" ? 46 : 34;
+  const size = variant === "card" ? 42 : 28;
 
   async function run(action: HabitAction, value?: number) {
     if (busy) return;
@@ -53,7 +53,10 @@ export function HabitControl({
           backgroundColor: habit.done ? habit.color : "transparent",
         }}
       >
-        <Check className="h-5 w-5" strokeWidth={3} />
+        <Check
+          className={variant === "card" ? "h-5 w-5" : "h-3.5 w-3.5"}
+          strokeWidth={3}
+        />
       </button>
     );
   }
@@ -85,9 +88,18 @@ export function HabitControl({
         >
           <ProgressRing size={size} fraction={progress.fraction} color={habit.color}>
             {habit.done ? (
-              <Check className="h-5 w-5" style={{ color: habit.color }} strokeWidth={3} />
+              <Check
+                className={variant === "card" ? "h-5 w-5" : "h-3 w-3"}
+                style={{ color: habit.color }}
+                strokeWidth={3}
+              />
             ) : (
-              <span className="text-[11px] font-semibold tabular-nums text-foreground">
+              <span
+                className={cn(
+                  "font-semibold tabular-nums text-foreground",
+                  variant === "card" ? "text-[11px]" : "text-[9px]",
+                )}
+              >
                 {habit.count}
                 <span className="text-faint">/{target}</span>
               </span>
@@ -110,7 +122,7 @@ export function HabitControl({
     >
       <ProgressRing size={size} fraction={progress.fraction} color={habit.color}>
         <Icon
-          className={cn("h-4 w-4", progress.running && "animate-none")}
+          className={cn(variant === "card" ? "h-4 w-4" : "h-3 w-3", progress.running && "animate-none")}
           style={{ color: habit.color }}
           strokeWidth={progress.done ? 3 : 2}
           fill={progress.running ? "none" : progress.done ? "none" : habit.color}

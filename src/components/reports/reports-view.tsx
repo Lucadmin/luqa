@@ -4,14 +4,17 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DailyBarChart } from "@/components/reports/daily-bar-chart";
 import { DonutChart } from "@/components/reports/donut-chart";
+import { HabitGlyph } from "@/components/habits/habit-glyph";
 import {
   computeRange,
   type RangeMode,
   rangeLabel,
   useReportsData,
 } from "@/lib/client/use-reports";
+import { useHabits, useHabitStats } from "@/lib/client/use-habits";
 import { useSettings } from "@/lib/client/use-settings";
 import { cn } from "@/lib/cn";
+import { addDays } from "@/lib/habits";
 import type { CategoryDTO } from "@/lib/types";
 import { formatDuration, isoDateKey } from "@/lib/time";
 
@@ -67,6 +70,20 @@ export function ReportsView() {
     [mode, offset, settings.weekStartsOn],
   );
   const { data, isLoading } = useReportsData(from, to);
+
+  // Habits stats for the same range.
+  const fromKey = isoDateKey(from);
+  const toKey = addDays(isoDateKey(to), -1); // to is exclusive; stats API is inclusive
+  const { habits: allHabits } = useHabits();
+  const { stats: habitStats } = useHabitStats(fromKey, toKey);
+  const habitMap = useMemo(
+    () => new Map(allHabits.map((h) => [h.id, h])),
+    [allHabits],
+  );
+  const activeHabitStats = useMemo(
+    () => habitStats.filter((s) => s.scheduled > 0),
+    [habitStats],
+  );
 
   const catMap = useMemo(
     () => new Map(data.categories.map((c) => [c.id, c])),
@@ -262,6 +279,52 @@ export function ReportsView() {
               <DonutChart segments={rangeSegments} totalMinutes={data.totalMinutes} />
             ) : null}
           </div>
+
+          {/* habits completion */}
+          {activeHabitStats.length > 0 && (
+            <div className="rounded-2xl border border-border bg-surface p-5">
+              <h2 className="mb-4 text-sm font-semibold">Habits</h2>
+              <div className="flex flex-col gap-3">
+                {activeHabitStats.map((stat) => {
+                  const habit = habitMap.get(stat.habitId);
+                  if (!habit) return null;
+                  const pct = stat.scheduled > 0 ? stat.completed / stat.scheduled : 0;
+                  return (
+                    <div key={stat.habitId} className="flex items-center gap-3">
+                      <span
+                        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg"
+                        style={{ backgroundColor: `${habit.color}22`, color: habit.color }}
+                      >
+                        <HabitGlyph name={habit.icon} className="h-3.5 w-3.5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-medium">{habit.name}</span>
+                          <span className="shrink-0 text-xs tabular-nums text-faint">
+                            {stat.completed}/{stat.scheduled}
+                          </span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${pct * 100}%`, backgroundColor: habit.color }}
+                          />
+                        </div>
+                      </div>
+                      {stat.streak > 1 && (
+                        <span
+                          className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums"
+                          style={{ backgroundColor: `${habit.color}22`, color: habit.color }}
+                        >
+                          {stat.streak}d
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

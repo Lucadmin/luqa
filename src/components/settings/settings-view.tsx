@@ -68,16 +68,16 @@ function GoogleConnectionPanel() {
       )}
 
       <div className="rounded-2xl border border-border bg-surface p-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-4">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2">
               <CalendarDays className="h-5 w-5 text-muted" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <h3 className="text-sm font-semibold">Google Calendar</h3>
               {status.connected ? (
                 <div className="mt-0.5 flex flex-col gap-0.5">
-                  <p className="text-sm text-muted">
+                  <p className="truncate text-sm text-muted">
                     Connected as{" "}
                     <span className="font-medium text-foreground">
                       {status.googleEmail}
@@ -86,7 +86,7 @@ function GoogleConnectionPanel() {
                   <p className="text-xs text-faint">
                     {status.webhookActive
                       ? "Live sync active — changes in Google Calendar appear here automatically."
-                      : "Sync is manual for now. Click “Sync now” to pull recent changes."}
+                      : "Sync is manual. Click Sync now to pull recent changes."}
                   </p>
                   {status.lastSynced && (
                     <p className="text-xs text-faint">
@@ -108,7 +108,7 @@ function GoogleConnectionPanel() {
           </div>
 
           {status.connected ? (
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
                 size="sm"
@@ -130,9 +130,11 @@ function GoogleConnectionPanel() {
               </Button>
             </div>
           ) : (
-            <a href="/api/google/connect">
-              <Button size="sm">Connect</Button>
-            </a>
+            <div>
+              <a href="/api/google/connect">
+                <Button size="sm">Connect</Button>
+              </a>
+            </div>
           )}
         </div>
 
