@@ -1,5 +1,8 @@
-import { MINUTES_PER_DAY, SNAP_MINUTES } from "@/lib/time";
+import { DAY_START_HOUR, MINUTES_PER_DAY, SNAP_MINUTES } from "@/lib/time";
 import type { TimeEntryDTO } from "@/lib/types";
+
+/** How far past midnight entries can extend on the visual timeline. */
+const OVERFLOW_MINUTES = DAY_START_HOUR * 60;
 
 export interface LaidOutEntry {
   entry: TimeEntryDTO;
@@ -15,7 +18,8 @@ export interface Gap {
   endMin: number;
 }
 
-const clamp = (n: number) => Math.max(0, Math.min(MINUTES_PER_DAY, n));
+const clampStart = (n: number) => Math.max(0, Math.min(MINUTES_PER_DAY, n));
+const clampEnd = (n: number) => Math.max(0, Math.min(MINUTES_PER_DAY + OVERFLOW_MINUTES, n));
 
 interface Raw {
   entry: TimeEntryDTO;
@@ -31,12 +35,12 @@ function toRaw(
 ): Raw[] {
   return entries
     .map((entry) => {
-      const startMin = clamp((Date.parse(entry.startTime) - dayStartMs) / 60000);
+      const startMin = clampStart((Date.parse(entry.startTime) - dayStartMs) / 60000);
       const running = entry.endTime === null;
       const rawEnd = running
         ? (nowMin ?? MINUTES_PER_DAY)
         : (Date.parse(entry.endTime as string) - dayStartMs) / 60000;
-      const endMin = Math.max(startMin + 1, clamp(rawEnd));
+      const endMin = Math.max(startMin + 1, clampEnd(rawEnd));
       return { entry, startMin, endMin, running };
     })
     .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
@@ -98,9 +102,14 @@ export function computeGaps(
   const raw = toRaw(entries, dayStartMs, nowMin);
   if (raw.length === 0) return [];
 
+  // Cap at midnight for gap purposes — don't show "Fill" pills in the
+  // extended zone (the user can't drag-create past midnight anyway).
+  const gapNowMin = nowMin !== null ? Math.min(nowMin, MINUTES_PER_DAY) : null;
+  const gapRaw = raw.map((r) => ({ ...r, endMin: Math.min(r.endMin, MINUTES_PER_DAY) }));
+
   // Merge covered intervals.
   const merged: Gap[] = [];
-  for (const r of raw) {
+  for (const r of gapRaw) {
     const last = merged[merged.length - 1];
     if (last && r.startMin <= last.endMin) {
       last.endMin = Math.max(last.endMin, r.endMin);
@@ -117,8 +126,8 @@ export function computeGaps(
 
   // Trailing gap up to "now" (today only).
   const lastEnd = merged[merged.length - 1].endMin;
-  if (nowMin !== null && nowMin - lastEnd >= SNAP_MINUTES) {
-    gaps.push({ startMin: lastEnd, endMin: nowMin });
+  if (gapNowMin !== null && gapNowMin - lastEnd >= SNAP_MINUTES) {
+    gaps.push({ startMin: lastEnd, endMin: gapNowMin });
   }
 
   return gaps;

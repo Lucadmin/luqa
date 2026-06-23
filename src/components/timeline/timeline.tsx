@@ -9,6 +9,7 @@ import { computeGaps, computeLayout } from "@/lib/timeline-layout";
 import { cn } from "@/lib/cn";
 import {
   clampToDay,
+  DAY_START_HOUR,
   formatClock,
   formatDuration,
   HOUR_HEIGHT,
@@ -20,7 +21,8 @@ import {
 import type { CategoryDTO, TimeEntryDTO } from "@/lib/types";
 
 const GUTTER = 52; // px for hour labels
-const TOTAL_HEIGHT = MINUTES_PER_DAY * PX_PER_MINUTE;
+const OVERFLOW_HOURS = DAY_START_HOUR;
+const TOTAL_HEIGHT = (MINUTES_PER_DAY + OVERFLOW_HOURS * 60) * PX_PER_MINUTE;
 const DEFAULT_LEN = 30; // minutes — default size for a tap/click-created block
 const MIN_DRAG = 10; // minutes — shorter drags fall back to the default size
 
@@ -191,19 +193,38 @@ export function Timeline({
           className="pointer-events-none absolute"
           style={{ top: focusMin * PX_PER_MINUTE }}
         />
-        {/* hour grid */}
-        {Array.from({ length: 24 }).map((_, h) => (
-          <div
-            key={h}
-            className="pointer-events-none absolute inset-x-0 flex items-start"
-            style={{ top: h * HOUR_HEIGHT, height: HOUR_HEIGHT }}
-          >
-            <span className="w-[52px] shrink-0 -translate-y-2 pr-2 text-right text-[11px] tabular-nums text-faint">
-              {h > 0 ? `${String(h).padStart(2, "0")}:00` : ""}
-            </span>
-            <div className="flex-1 border-t border-grid-line" />
-          </div>
-        ))}
+        {/* hour grid — 24 normal hours + overflow zone past midnight */}
+        {Array.from({ length: 24 + OVERFLOW_HOURS }).map((_, h) => {
+          const past = h >= 24;
+          const label = h === 0 ? "" : `${String(h % 24).padStart(2, "0")}:00`;
+          return (
+            <div
+              key={h}
+              className="pointer-events-none absolute inset-x-0 flex items-start"
+              style={{ top: h * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+            >
+              <span
+                className={`w-[52px] shrink-0 -translate-y-2 pr-2 text-right text-[11px] tabular-nums ${past ? "text-faint/40" : "text-faint"}`}
+              >
+                {label}
+              </span>
+              <div
+                className={`flex-1 border-t ${past ? "border-dashed border-grid-line/30" : "border-grid-line"}`}
+              />
+            </div>
+          );
+        })}
+
+        {/* midnight divider — bold line with "next day" label */}
+        <div
+          className="pointer-events-none absolute inset-x-0 flex items-center"
+          style={{ top: MINUTES_PER_DAY * PX_PER_MINUTE }}
+        >
+          <span className="w-[52px] shrink-0 -translate-y-2.5 pr-2 text-right text-[10px] text-faint/50">
+            00:00
+          </span>
+          <div className="flex-1 border-t-2 border-border/50" />
+        </div>
 
         {/* gaps — dashed hint with a small "fill whole gap" pill */}
         {gaps.map((gap) => {

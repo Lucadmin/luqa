@@ -13,10 +13,11 @@ import {
 } from "@/lib/client/use-categories";
 import { useEntries } from "@/lib/client/use-entries";
 import {
+  DAY_START_HOUR,
   formatDuration,
   isoDateKey,
+  logicalDayKey,
   MINUTES_PER_DAY,
-  minutesSinceMidnight,
   minutesToDate,
   startOfLocalDay,
 } from "@/lib/time";
@@ -28,11 +29,16 @@ function addDays(d: Date, n: number) {
   return c;
 }
 
+/** The logical "today" respects the 3am cutoff: before 3am we're still yesterday. */
+function logicalToday(): Date {
+  return startOfLocalDay(new Date(Date.now() - DAY_START_HOUR * 3_600_000));
+}
+
 function dayLabel(day: Date): string {
-  const today = isoDateKey(new Date());
+  const today = logicalToday();
   const key = isoDateKey(day);
-  if (key === today) return "Today";
-  if (key === isoDateKey(addDays(new Date(), -1))) return "Yesterday";
+  if (key === isoDateKey(today)) return "Today";
+  if (key === isoDateKey(addDays(today, -1))) return "Yesterday";
   return day.toLocaleDateString(undefined, {
     weekday: "long",
     month: "short",
@@ -41,7 +47,8 @@ function dayLabel(day: Date): string {
 }
 
 export function DayView() {
-  const [day, setDay] = useState(() => startOfLocalDay(new Date()));
+  // Initialize to the logical day (before 3am we're still on yesterday).
+  const [day, setDay] = useState(() => logicalToday());
   const [draft, setDraft] = useState<EntryDraft | null>(null);
   const [inlineDraft, setInlineDraft] = useState<InlineDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -54,8 +61,13 @@ export function DayView() {
     return () => clearInterval(id);
   }, []);
 
-  const isToday = isoDateKey(day) === isoDateKey(new Date(nowTick));
-  const nowMin = isToday ? minutesSinceMidnight(new Date(nowTick)) : null;
+  // Use the 3am-shifted logical day so that "today" at 01:00am is still yesterday.
+  const isToday = isoDateKey(day) === isoDateKey(new Date(nowTick - DAY_START_HOUR * 3_600_000));
+  // Minutes since midnight of the *displayed calendar day* (can exceed 1440 when
+  // we're past midnight but still in the logical same day).
+  const nowMin = isToday
+    ? (nowTick - startOfLocalDay(day).getTime()) / 60_000
+    : null;
 
   const { entries, createEntry, updateEntry, deleteEntry } = useEntries(day);
   const { categories, mutate: mutateCategories } = useCategories();
@@ -94,14 +106,18 @@ export function DayView() {
   }, [entries, categoryById, day]);
 
   const dayTotal = useMemo(() => {
+    const displayedKey = isoDateKey(day);
     let total = 0;
     for (const e of entries) {
+      // Only count entries whose logical day matches the displayed calendar day,
+      // so cross-midnight entries aren't double-counted on both adjacent days.
+      if (logicalDayKey(new Date(e.startTime)) !== displayedKey) continue;
       const start = Date.parse(e.startTime);
       const end = e.endTime ? Date.parse(e.endTime) : nowTick;
       total += Math.max(0, (end - start) / 60000);
     }
     return total;
-  }, [entries, nowTick]);
+  }, [entries, nowTick, day]);
 
   async function handleCreateCategory(name: string) {
     const cat = await createCategory(name);
@@ -260,7 +276,7 @@ export function DayView() {
             {!isToday && (
               <button
                 type="button"
-                onClick={() => setDay(startOfLocalDay(new Date()))}
+                onClick={() => setDay(logicalToday())}
                 className="ml-2 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-2"
               >
                 Today

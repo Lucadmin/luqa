@@ -3,7 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import { startOfWeekMonday, useWeek } from "@/lib/client/use-week";
-import { formatDuration, isoDateKey } from "@/lib/time";
+import { formatDuration, isoDateKey, logicalDayKey } from "@/lib/time";
 import type { CategoryDTO, TimeEntryDTO } from "@/lib/types";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -27,7 +27,7 @@ function minutesForDay(
 ): number {
   return entries.reduce((sum, e) => {
     if (!e.endTime) return sum;
-    if (isoDateKey(new Date(e.startTime)) !== dayKey) return sum;
+    if (logicalDayKey(new Date(e.startTime)) !== dayKey) return sum;
     return sum + (Date.parse(e.endTime) - Date.parse(e.startTime)) / 60000;
   }, 0);
 }
@@ -39,7 +39,7 @@ function minutesByCategoryForDay(
   const map: Record<string, number> = {};
   for (const e of entries) {
     if (!e.endTime) continue;
-    if (isoDateKey(new Date(e.startTime)) !== dayKey) continue;
+    if (logicalDayKey(new Date(e.startTime)) !== dayKey) continue;
     const mins = (Date.parse(e.endTime) - Date.parse(e.startTime)) / 60000;
     const key = e.categoryId ?? "__none__";
     map[key] = (map[key] ?? 0) + mins;
