@@ -41,3 +41,7 @@ export async function updateCategory(
   );
   return category;
 }
+
+export async function deleteCategory(id: string): Promise<void> {
+  await apiSend(`/api/categories/${id}`, "DELETE");
+}

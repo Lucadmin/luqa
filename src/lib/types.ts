@@ -24,3 +24,14 @@ export interface SuggestionDTO {
   description: string;
   categoryId: string | null;
 }
+
+export interface SettingsDTO {
+  name: string | null;
+  email: string;
+  /** Hour (0–23) at which the logical day flips for stats. */
+  dayStartHour: number;
+  /** Tracked-time goal per day in minutes (reports goal line). */
+  dailyGoalMinutes: number;
+  /** 0 = Sunday, 1 = Monday. */
+  weekStartsOn: number;
+}

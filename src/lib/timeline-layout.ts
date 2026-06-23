@@ -1,9 +1,6 @@
 import { DAY_START_HOUR, MINUTES_PER_DAY, SNAP_MINUTES } from "@/lib/time";
 import type { TimeEntryDTO } from "@/lib/types";
 
-/** How far past midnight entries can extend on the visual timeline. */
-const OVERFLOW_MINUTES = DAY_START_HOUR * 60;
-
 export interface LaidOutEntry {
   entry: TimeEntryDTO;
   startMin: number;
@@ -19,7 +16,8 @@ export interface Gap {
 }
 
 const clampStart = (n: number) => Math.max(0, Math.min(MINUTES_PER_DAY, n));
-const clampEnd = (n: number) => Math.max(0, Math.min(MINUTES_PER_DAY + OVERFLOW_MINUTES, n));
+const clampEndTo = (n: number, overflowMin: number) =>
+  Math.max(0, Math.min(MINUTES_PER_DAY + overflowMin, n));
 
 interface Raw {
   entry: TimeEntryDTO;
@@ -32,6 +30,7 @@ function toRaw(
   entries: TimeEntryDTO[],
   dayStartMs: number,
   nowMin: number | null,
+  overflowMin: number,
 ): Raw[] {
   return entries
     .map((entry) => {
@@ -40,7 +39,7 @@ function toRaw(
       const rawEnd = running
         ? (nowMin ?? MINUTES_PER_DAY)
         : (Date.parse(entry.endTime as string) - dayStartMs) / 60000;
-      const endMin = Math.max(startMin + 1, clampEnd(rawEnd));
+      const endMin = Math.max(startMin + 1, clampEndTo(rawEnd, overflowMin));
       return { entry, startMin, endMin, running };
     })
     .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
@@ -51,8 +50,9 @@ export function computeLayout(
   entries: TimeEntryDTO[],
   dayStartMs: number,
   nowMin: number | null,
+  overflowMin = DAY_START_HOUR * 60,
 ): LaidOutEntry[] {
-  const raw = toRaw(entries, dayStartMs, nowMin);
+  const raw = toRaw(entries, dayStartMs, nowMin, overflowMin);
   const result: LaidOutEntry[] = [];
 
   let i = 0;
@@ -99,7 +99,8 @@ export function computeGaps(
   dayStartMs: number,
   nowMin: number | null,
 ): Gap[] {
-  const raw = toRaw(entries, dayStartMs, nowMin);
+  // Gaps are only ever computed up to midnight, so no overflow is needed here.
+  const raw = toRaw(entries, dayStartMs, nowMin, 0);
   if (raw.length === 0) return [];
 
   // Cap at midnight for gap purposes — don't show "Fill" pills in the

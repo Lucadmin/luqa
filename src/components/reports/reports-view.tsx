@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { DailyBarChart } from "@/components/reports/daily-bar-chart";
 import { DonutChart } from "@/components/reports/donut-chart";
 import { type RangePreset, useReports } from "@/lib/client/use-reports";
+import { useSettings } from "@/lib/client/use-settings";
 import { cn } from "@/lib/cn";
 import { formatDuration } from "@/lib/time";
 
@@ -16,6 +17,7 @@ const PRESETS: { value: RangePreset; label: string }[] = [
 export function ReportsView() {
   const [preset, setPreset] = useState<RangePreset>("30d");
   const { data, isLoading } = useReports(preset);
+  const { settings } = useSettings();
 
   const catMap = new Map(data.categories.map((c) => [c.id, c]));
 
@@ -128,7 +130,11 @@ export function ReportsView() {
           {/* daily activity bar chart */}
           <div className="rounded-2xl border border-border bg-surface p-5">
             <h2 className="mb-4 text-sm font-semibold">Daily activity</h2>
-            <DailyBarChart days={dailyBars} maxMinutes={maxDayMinutes} />
+            <DailyBarChart
+              days={dailyBars}
+              maxMinutes={maxDayMinutes}
+              goalMinutes={settings.dailyGoalMinutes}
+            />
           </div>
 
           {/* donut breakdown */}

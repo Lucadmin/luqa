@@ -86,10 +86,15 @@ export function isoDateKey(d: Date): string {
 }
 
 /**
- * Logical day key for stats: shifts the time back by DAY_START_HOUR so that
- * entries starting between 00:00–02:59 are attributed to the previous calendar
+ * Logical day key for stats: shifts the time back by `startHour` so that
+ * entries starting before that hour are attributed to the previous calendar
  * day. Client-side only (uses local timezone).
  */
-export function logicalDayKey(d: Date): string {
-  return isoDateKey(new Date(d.getTime() - DAY_START_HOUR * 3_600_000));
+export function logicalDayKey(d: Date, startHour = DAY_START_HOUR): string {
+  return isoDateKey(new Date(d.getTime() - startHour * 3_600_000));
+}
+
+/** Midnight of the logical day that the instant `d` belongs to. */
+export function startOfViewDay(d: Date, startHour = DAY_START_HOUR): Date {
+  return startOfLocalDay(new Date(d.getTime() - startHour * 3_600_000));
 }

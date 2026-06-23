@@ -60,5 +60,15 @@ export const updateCategorySchema = z.object({
   archived: z.boolean().optional(),
 });
 
+// --- User settings / preferences ---
+
+export const updateSettingsSchema = z.object({
+  name: z.string().trim().max(80).nullish(),
+  dayStartHour: z.number().int().min(0).max(23).optional(),
+  dailyGoalMinutes: z.number().int().min(0).max(1440).optional(),
+  weekStartsOn: z.union([z.literal(0), z.literal(1)]).optional(),
+});
+
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
+export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

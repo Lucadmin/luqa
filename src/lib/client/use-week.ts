@@ -13,11 +13,11 @@ export interface WeekData {
   totalMinutes: number;
 }
 
-function startOfWeekMonday(d: Date): Date {
+function startOfWeek(d: Date, weekStartsOn = 1): Date {
   const c = startOfLocalDay(d);
   const day = c.getDay(); // 0 = Sun
-  const diff = (day === 0 ? -6 : 1 - day);
-  c.setDate(c.getDate() + diff);
+  const diff = (day - weekStartsOn + 7) % 7;
+  c.setDate(c.getDate() - diff);
   return c;
 }
 
@@ -40,4 +40,4 @@ export function useWeek(weekStart: Date) {
   };
 }
 
-export { startOfWeekMonday };
+export { startOfWeek };

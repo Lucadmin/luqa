@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { toCategoryDTO } from "@/lib/serializers";
-import { DAY_START_HOUR, isoDateKey } from "@/lib/time";
+import { isoDateKey } from "@/lib/time";
 
 // GET /api/reports?from=ISO&to=ISO
 // Daily totals + per-category breakdown for a date range.
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const fromDate = new Date(from);
   const toDate = new Date(to);
 
-  const [entries, categories] = await Promise.all([
+  const [entries, categories, user] = await Promise.all([
     db.timeEntry.findMany({
       where: {
         userId,
@@ -33,7 +33,10 @@ export async function GET(request: Request) {
       where: { userId, archived: false },
       orderBy: { name: "asc" },
     }),
+    db.user.findUnique({ where: { id: userId }, select: { dayStartHour: true } }),
   ]);
+
+  const dayStartHour = user?.dayStartHour ?? 3;
 
   // Daily totals: { "2025-06-10": minutes }
   const dailyTotals: Record<string, number> = {};
@@ -48,10 +51,10 @@ export async function GET(request: Request) {
     const mins = (e.endTime.getTime() - e.startTime.getTime()) / 60000;
     totalMinutes += mins;
 
-    // Shift by DAY_START_HOUR so early-morning entries (00:00–02:59) count to
-    // the previous calendar day. Server runs UTC; this is approximate for non-UTC
-    // timezones (pre-existing limitation) but correct for the common case.
-    const dayKey = isoDateKey(new Date(e.startTime.getTime() - DAY_START_HOUR * 3_600_000));
+    // Shift by the user's cutoff so early-morning entries count to the previous
+    // calendar day. Server runs UTC; this is approximate for non-UTC timezones
+    // (pre-existing limitation) but correct for the common case.
+    const dayKey = isoDateKey(new Date(e.startTime.getTime() - dayStartHour * 3_600_000));
     dailyTotals[dayKey] = (dailyTotals[dayKey] ?? 0) + mins;
 
     const catKey = e.categoryId ?? "__none__";

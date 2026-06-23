@@ -12,14 +12,15 @@ import {
   useCategories,
 } from "@/lib/client/use-categories";
 import { useEntries } from "@/lib/client/use-entries";
+import { useSettings } from "@/lib/client/use-settings";
 import {
-  DAY_START_HOUR,
   formatDuration,
   isoDateKey,
   logicalDayKey,
   MINUTES_PER_DAY,
   minutesToDate,
   startOfLocalDay,
+  startOfViewDay,
 } from "@/lib/time";
 import type { TimeEntryDTO } from "@/lib/types";
 
@@ -29,13 +30,13 @@ function addDays(d: Date, n: number) {
   return c;
 }
 
-/** The logical "today" respects the 3am cutoff: before 3am we're still yesterday. */
-function logicalToday(): Date {
-  return startOfLocalDay(new Date(Date.now() - DAY_START_HOUR * 3_600_000));
+/** The logical "today" respects the day-start cutoff: before it we're still yesterday. */
+function logicalToday(startHour?: number): Date {
+  return startOfViewDay(new Date(), startHour);
 }
 
-function dayLabel(day: Date): string {
-  const today = logicalToday();
+function dayLabel(day: Date, startHour: number): string {
+  const today = logicalToday(startHour);
   const key = isoDateKey(day);
   if (key === isoDateKey(today)) return "Today";
   if (key === isoDateKey(addDays(today, -1))) return "Yesterday";
@@ -47,7 +48,10 @@ function dayLabel(day: Date): string {
 }
 
 export function DayView() {
-  // Initialize to the logical day (before 3am we're still on yesterday).
+  const { settings } = useSettings();
+  const dayStartHour = settings.dayStartHour;
+
+  // Initialize to the logical day (before the cutoff we're still on yesterday).
   const [day, setDay] = useState(() => logicalToday());
   const [draft, setDraft] = useState<EntryDraft | null>(null);
   const [inlineDraft, setInlineDraft] = useState<InlineDraft | null>(null);
@@ -61,8 +65,8 @@ export function DayView() {
     return () => clearInterval(id);
   }, []);
 
-  // Use the 3am-shifted logical day so that "today" at 01:00am is still yesterday.
-  const isToday = isoDateKey(day) === isoDateKey(new Date(nowTick - DAY_START_HOUR * 3_600_000));
+  // Use the cutoff-shifted logical day so that "today" at 01:00am is still yesterday.
+  const isToday = isoDateKey(day) === logicalDayKey(new Date(nowTick), dayStartHour);
   // Minutes since midnight of the *displayed calendar day* (can exceed 1440 when
   // we're past midnight but still in the logical same day).
   const nowMin = isToday
@@ -111,13 +115,13 @@ export function DayView() {
     for (const e of entries) {
       // Only count entries whose logical day matches the displayed calendar day,
       // so cross-midnight entries aren't double-counted on both adjacent days.
-      if (logicalDayKey(new Date(e.startTime)) !== displayedKey) continue;
+      if (logicalDayKey(new Date(e.startTime), dayStartHour) !== displayedKey) continue;
       const start = Date.parse(e.startTime);
       const end = e.endTime ? Date.parse(e.endTime) : nowTick;
       total += Math.max(0, (end - start) / 60000);
     }
     return total;
-  }, [entries, nowTick, day]);
+  }, [entries, nowTick, day, dayStartHour]);
 
   async function handleCreateCategory(name: string) {
     const cat = await createCategory(name);
@@ -263,7 +267,7 @@ export function DayView() {
               <ChevronLeft className="h-4 w-4" />
             </button>
             <h1 className="min-w-[7rem] text-center text-base font-semibold">
-              {dayLabel(day)}
+              {dayLabel(day, dayStartHour)}
             </h1>
             <button
               type="button"
@@ -276,7 +280,7 @@ export function DayView() {
             {!isToday && (
               <button
                 type="button"
-                onClick={() => setDay(logicalToday())}
+                onClick={() => setDay(logicalToday(dayStartHour))}
                 className="ml-2 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-2"
               >
                 Today
@@ -314,6 +318,7 @@ export function DayView() {
           categories={categories}
           nowMin={nowMin}
           inlineDraft={inlineDraft}
+          dayStartHour={dayStartHour}
           onOpenEntry={openEntry}
           onCreateInline={createInline}
           onChangeInlineRange={changeInlineRange}

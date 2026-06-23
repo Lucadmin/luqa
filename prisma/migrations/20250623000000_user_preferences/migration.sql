@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "users" ADD COLUMN     "dayStartHour" INTEGER NOT NULL DEFAULT 3,
+ADD COLUMN     "dailyGoalMinutes" INTEGER NOT NULL DEFAULT 480,
+ADD COLUMN     "weekStartsOn" INTEGER NOT NULL DEFAULT 1;

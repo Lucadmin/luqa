@@ -3,6 +3,8 @@
 import { CalendarDays, Check, RefreshCw, Unlink, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { CategoriesPanel } from "@/components/settings/categories-panel";
+import { PreferencesPanel, ProfilePanel } from "@/components/settings/preferences-panel";
 import { Button } from "@/components/ui/button";
 import { apiSend } from "@/lib/client/fetcher";
 import { useGoogleStatus } from "@/lib/client/use-google-status";
@@ -142,20 +144,46 @@ function GoogleConnectionPanel() {
   );
 }
 
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-sm font-medium uppercase tracking-wide text-faint">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
 export function SettingsView() {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-6 md:px-8 md:py-8">
       <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
 
-      <div className="mt-6 flex flex-col gap-6">
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-faint">
-            Integrations
-          </h2>
+      <div className="mt-6 flex flex-col gap-8">
+        <Section title="Profile">
+          <ProfilePanel />
+        </Section>
+
+        <Section title="Preferences">
+          <PreferencesPanel />
+        </Section>
+
+        <Section title="Categories">
+          <CategoriesPanel />
+        </Section>
+
+        <Section title="Integrations">
           <Suspense fallback={<div className="h-20 animate-pulse rounded-xl bg-surface-2" />}>
             <GoogleConnectionPanel />
           </Suspense>
-        </section>
+        </Section>
       </div>
     </div>
   );

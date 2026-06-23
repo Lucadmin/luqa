@@ -16,28 +16,29 @@ export interface DayBar {
 }
 
 const BAR_MAX_PX = 180;
-const GOAL_MIN = 8 * 60;
 
 export function DailyBarChart({
   days,
   maxMinutes,
+  goalMinutes = 8 * 60,
 }: {
   days: DayBar[];
   maxMinutes: number;
+  goalMinutes?: number;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="relative flex items-end gap-1 overflow-x-auto pb-5">
-        {/* 8-hour reference line */}
-        {maxMinutes > 0 && (
+        {/* daily-goal reference line */}
+        {maxMinutes > 0 && goalMinutes > 0 && goalMinutes <= maxMinutes && (
           <div
             className="pointer-events-none absolute inset-x-0 border-t border-dashed border-border"
             style={{
-              bottom: `calc(20px + ${(Math.min(GOAL_MIN, maxMinutes) / maxMinutes) * BAR_MAX_PX}px)`,
+              bottom: `calc(20px + ${(goalMinutes / maxMinutes) * BAR_MAX_PX}px)`,
             }}
           >
             <span className="absolute right-0 -translate-y-full pr-1 text-[10px] text-faint">
-              8h
+              {Math.round((goalMinutes / 60) * 10) / 10}h
             </span>
           </div>
         )}

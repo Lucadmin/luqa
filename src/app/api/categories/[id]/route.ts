@@ -42,3 +42,24 @@ export async function PATCH(request: Request, { params }: Params) {
 
   return NextResponse.json({ category: toCategoryDTO(updated) });
 }
+
+// DELETE /api/categories/:id — permanently remove a category. Existing time
+// entries keep their data but become uncategorized (schema onDelete: SetNull).
+export async function DELETE(_request: Request, { params }: Params) {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+
+  const existing = await db.category.findFirst({
+    where: { id, userId },
+    select: { id: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  await db.category.delete({ where: { id } });
+
+  return NextResponse.json({ ok: true });
+}

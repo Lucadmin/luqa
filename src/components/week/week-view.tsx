@@ -2,11 +2,12 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
-import { startOfWeekMonday, useWeek } from "@/lib/client/use-week";
+import { useSettings } from "@/lib/client/use-settings";
+import { startOfWeek, useWeek } from "@/lib/client/use-week";
 import { formatDuration, isoDateKey, logicalDayKey } from "@/lib/time";
 import type { CategoryDTO, TimeEntryDTO } from "@/lib/types";
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function addWeeks(d: Date, n: number) {
   const c = new Date(d);
@@ -24,10 +25,11 @@ function weekLabel(start: Date): string {
 function minutesForDay(
   entries: TimeEntryDTO[],
   dayKey: string,
+  dayStartHour: number,
 ): number {
   return entries.reduce((sum, e) => {
     if (!e.endTime) return sum;
-    if (logicalDayKey(new Date(e.startTime)) !== dayKey) return sum;
+    if (logicalDayKey(new Date(e.startTime), dayStartHour) !== dayKey) return sum;
     return sum + (Date.parse(e.endTime) - Date.parse(e.startTime)) / 60000;
   }, 0);
 }
@@ -35,11 +37,12 @@ function minutesForDay(
 function minutesByCategoryForDay(
   entries: TimeEntryDTO[],
   dayKey: string,
+  dayStartHour: number,
 ): Record<string, number> {
   const map: Record<string, number> = {};
   for (const e of entries) {
     if (!e.endTime) continue;
-    if (logicalDayKey(new Date(e.startTime)) !== dayKey) continue;
+    if (logicalDayKey(new Date(e.startTime), dayStartHour) !== dayKey) continue;
     const mins = (Date.parse(e.endTime) - Date.parse(e.startTime)) / 60000;
     const key = e.categoryId ?? "__none__";
     map[key] = (map[key] ?? 0) + mins;
@@ -54,6 +57,7 @@ function DayColumn({
   categories,
   maxMinutes,
   isToday,
+  dayStartHour,
 }: {
   label: string;
   date: Date;
@@ -61,10 +65,11 @@ function DayColumn({
   categories: CategoryDTO[];
   maxMinutes: number;
   isToday: boolean;
+  dayStartHour: number;
 }) {
   const dayKey = isoDateKey(date);
-  const totalMins = minutesForDay(entries, dayKey);
-  const byCategory = minutesByCategoryForDay(entries, dayKey);
+  const totalMins = minutesForDay(entries, dayKey, dayStartHour);
+  const byCategory = minutesByCategoryForDay(entries, dayKey, dayStartHour);
   const catMap = new Map(categories.map((c) => [c.id, c]));
 
   const segments = Object.entries(byCategory)
@@ -124,11 +129,24 @@ function DayColumn({
 }
 
 export function WeekView() {
-  const [weekStart, setWeekStart] = useState(() =>
-    startOfWeekMonday(new Date()),
+  const { settings } = useSettings();
+  const { dayStartHour, weekStartsOn } = settings;
+
+  // Track an offset from the current week so the visible week recomputes when
+  // the week-start preference loads/changes (rather than freezing at mount).
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekStart = useMemo(
+    () => addWeeks(startOfWeek(new Date(), weekStartsOn), weekOffset),
+    [weekStartsOn, weekOffset],
   );
+
   const { data, isLoading } = useWeek(weekStart);
-  const todayKey = isoDateKey(new Date());
+  const todayKey = logicalDayKey(new Date(), dayStartHour);
+
+  const dayLabels = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => WEEKDAY_NAMES[(weekStartsOn + i) % 7]),
+    [weekStartsOn],
+  );
 
   const days = useMemo(() =>
     Array.from({ length: 7 }, (_, i) => {
@@ -141,12 +159,11 @@ export function WeekView() {
   const maxDayMinutes = useMemo(() => {
     return Math.max(
       1,
-      ...days.map((d) => minutesForDay(data.entries, isoDateKey(d))),
+      ...days.map((d) => minutesForDay(data.entries, isoDateKey(d), dayStartHour)),
     );
-  }, [data.entries, days]);
+  }, [data.entries, days, dayStartHour]);
 
-  const isThisWeek =
-    isoDateKey(weekStart) === isoDateKey(startOfWeekMonday(new Date()));
+  const isThisWeek = weekOffset === 0;
 
   // Category breakdown for the whole week.
   const catMap = new Map(data.categories.map((c) => [c.id, c]));
@@ -167,7 +184,7 @@ export function WeekView() {
           <button
             type="button"
             aria-label="Previous week"
-            onClick={() => setWeekStart((w) => addWeeks(w, -1))}
+            onClick={() => setWeekOffset((o) => o - 1)}
             className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -178,7 +195,7 @@ export function WeekView() {
           <button
             type="button"
             aria-label="Next week"
-            onClick={() => setWeekStart((w) => addWeeks(w, 1))}
+            onClick={() => setWeekOffset((o) => o + 1)}
             className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
           >
             <ChevronRight className="h-4 w-4" />
@@ -186,7 +203,7 @@ export function WeekView() {
           {!isThisWeek && (
             <button
               type="button"
-              onClick={() => setWeekStart(startOfWeekMonday(new Date()))}
+              onClick={() => setWeekOffset(0)}
               className="ml-2 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-2"
             >
               This week
@@ -217,12 +234,13 @@ export function WeekView() {
             {days.map((d, i) => (
               <DayColumn
                 key={isoDateKey(d)}
-                label={DAY_LABELS[i]}
+                label={dayLabels[i]}
                 date={d}
                 entries={data.entries}
                 categories={data.categories}
                 maxMinutes={maxDayMinutes}
                 isToday={isoDateKey(d) === todayKey}
+                dayStartHour={dayStartHour}
               />
             ))}
           </div>

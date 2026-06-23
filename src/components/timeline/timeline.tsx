@@ -21,8 +21,6 @@ import {
 import type { CategoryDTO, TimeEntryDTO } from "@/lib/types";
 
 const GUTTER = 52; // px for hour labels
-const OVERFLOW_HOURS = DAY_START_HOUR;
-const TOTAL_HEIGHT = (MINUTES_PER_DAY + OVERFLOW_HOURS * 60) * PX_PER_MINUTE;
 const DEFAULT_LEN = 30; // minutes — default size for a tap/click-created block
 const MIN_DRAG = 10; // minutes — shorter drags fall back to the default size
 
@@ -32,6 +30,7 @@ export function Timeline({
   categories,
   nowMin,
   inlineDraft,
+  dayStartHour = DAY_START_HOUR,
   onOpenEntry,
   onCreateInline,
   onChangeInlineRange,
@@ -47,6 +46,7 @@ export function Timeline({
   categories: CategoryDTO[];
   nowMin: number | null;
   inlineDraft: InlineDraft | null;
+  dayStartHour?: number;
   onOpenEntry: (entry: TimeEntryDTO) => void;
   onCreateInline: (startMin: number, endMin: number, autoFocus: boolean) => void;
   onChangeInlineRange: (startMin: number, endMin: number) => void;
@@ -60,6 +60,12 @@ export function Timeline({
   const focusRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dayStartMs = startOfLocalDay(day).getTime();
+
+  // The grid runs midnight→midnight plus an "overflow" tail so entries that
+  // run into the early hours (and still count to this day) stay visible.
+  const overflowHours = Math.max(1, dayStartHour);
+  const overflowMin = overflowHours * 60;
+  const totalHeight = (MINUTES_PER_DAY + overflowMin) * PX_PER_MINUTE;
 
   // Drag-to-create bookkeeping (mouse) / tap-to-create (touch).
   const createRef = useRef<{
@@ -80,8 +86,8 @@ export function Timeline({
   }, [categories]);
 
   const layout = useMemo(
-    () => computeLayout(entries, dayStartMs, nowMin),
-    [entries, dayStartMs, nowMin],
+    () => computeLayout(entries, dayStartMs, nowMin, overflowMin),
+    [entries, dayStartMs, nowMin, overflowMin],
   );
   const gaps = useMemo(
     () => computeGaps(entries, dayStartMs, nowMin),
@@ -181,7 +187,7 @@ export function Timeline({
       <div
         ref={containerRef}
         className="relative select-none"
-        style={{ height: TOTAL_HEIGHT }}
+        style={{ height: totalHeight }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -194,7 +200,7 @@ export function Timeline({
           style={{ top: focusMin * PX_PER_MINUTE }}
         />
         {/* hour grid — 24 normal hours + overflow zone past midnight */}
-        {Array.from({ length: 24 + OVERFLOW_HOURS }).map((_, h) => {
+        {Array.from({ length: 24 + overflowHours }).map((_, h) => {
           const past = h >= 24;
           const label = h === 0 ? "" : `${String(h % 24).padStart(2, "0")}:00`;
           return (
