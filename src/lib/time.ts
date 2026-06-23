@@ -44,6 +44,28 @@ export function minutesToDate(day: Date, minutes: number): Date {
   return base;
 }
 
+/**
+ * Split the interval [start, end) at every local midnight it crosses, yielding
+ * one piece per local day. A same-day interval returns a single piece. Used to
+ * keep an entry that runs past 12am from belonging to two days at once — each
+ * day gets its own entry instead.
+ */
+export function splitAtMidnight(
+  start: Date,
+  end: Date,
+): { start: Date; end: Date }[] {
+  const pieces: { start: Date; end: Date }[] = [];
+  let segStart = new Date(start);
+  let nextMidnight = endOfLocalDay(segStart);
+  while (nextMidnight < end) {
+    pieces.push({ start: segStart, end: nextMidnight });
+    segStart = nextMidnight;
+    nextMidnight = endOfLocalDay(segStart);
+  }
+  pieces.push({ start: segStart, end: new Date(end) });
+  return pieces;
+}
+
 export function minutesToY(minutes: number): number {
   return minutes * PX_PER_MINUTE;
 }
