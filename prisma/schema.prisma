@@ -121,6 +121,13 @@ enum HabitGoalType {
   TIME // accumulate a target duration (e.g. 2h focus)
 }
 
+// Whether a TIME habit's target is a daily quota or a period (week/month) total.
+enum HabitGoalPeriod {
+  DAY // target applies per day (default)
+  WEEK // target is the cumulative total for the week
+  MONTH // target is the cumulative total for the month
+}
+
 // How a habit recurs. Mirrors the options in the create flow.
 enum HabitScheduleType {
   DAILY // every day
@@ -146,9 +153,10 @@ model Habit {
   updatedAt  DateTime  @updatedAt
 
   // Goal
-  goalType      HabitGoalType @default(TASK)
-  targetCount   Int           @default(1) // COUNT: reps needed; TASK: always 1
-  targetSeconds Int           @default(0) // TIME: duration goal in seconds
+  goalType      HabitGoalType   @default(TASK)
+  goalPeriod    HabitGoalPeriod @default(DAY) // TIME only: DAY = daily, WEEK/MONTH = cumulative
+  targetCount   Int             @default(1) // COUNT: reps needed; TASK: always 1
+  targetSeconds Int             @default(0) // TIME: duration goal in seconds (or period total)
 
   // Optional link to a tracking category. When set on a TIME habit, its
   // progress is derived from time tracked on that category, and its timer

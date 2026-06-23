@@ -74,6 +74,7 @@ export const updateSettingsSchema = z.object({
 const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
 const habitGoalType = z.enum(["TASK", "COUNT", "TIME"]);
+const habitGoalPeriod = z.enum(["DAY", "WEEK", "MONTH"]);
 const habitScheduleType = z.enum([
   "DAILY",
   "WEEKDAYS",
@@ -90,8 +91,9 @@ export const createHabitSchema = z.object({
   color: hexColor.optional(),
 
   goalType: habitGoalType.optional(),
+  goalPeriod: habitGoalPeriod.optional(),
   targetCount: z.number().int().min(1).max(1000).optional(),
-  targetSeconds: z.number().int().min(0).max(24 * 3600).optional(),
+  targetSeconds: z.number().int().min(0).max(30 * 24 * 3600).optional(), // up to 30 days worth
   categoryId: z.string().nullish(),
 
   scheduleType: habitScheduleType.optional(),

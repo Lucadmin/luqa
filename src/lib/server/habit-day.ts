@@ -18,6 +18,7 @@ import {
   isScheduledOn,
   periodRange,
 } from "@/lib/habits";
+import type { HabitGoalPeriod } from "@/lib/types";
 import { toHabitDTO } from "@/lib/serializers";
 import type { HabitDayDTO } from "@/lib/types";
 
@@ -38,6 +39,7 @@ export function habitSchedule(h: Habit): HabitSchedule {
 export function habitGoal(h: Habit): HabitGoal {
   return {
     goalType: h.goalType,
+    goalPeriod: h.goalPeriod,
     targetCount: h.targetCount,
     targetSeconds: h.targetSeconds,
   };
@@ -53,6 +55,11 @@ export function dayWindow(dateKey: string, dayStartHour: number): [Date, Date] {
   start.setUTCHours(dayStartHour, 0, 0, 0);
   const end = new Date(start.getTime() + 24 * 3_600_000);
   return [start, end];
+}
+
+/** Map a TIME goal period to a schedule type for periodRange(). */
+function goalPeriodToScheduleType(period: HabitGoalPeriod) {
+  return period === "MONTH" ? "TIMES_PER_MONTH" : "TIMES_PER_WEEK";
 }
 
 /** Tracked seconds + running-start for a set of categories within a day. */
@@ -83,6 +90,72 @@ async function trackedByCategory(
     cur.seconds += Math.max(0, Math.round((endMs - e.startTime.getTime()) / 1000));
     if (!e.endTime) cur.runningSince = e.startTime;
     out.set(e.categoryId, cur);
+  }
+  return out;
+}
+
+/** Tracked seconds for a set of categories within a date range (for period-TIME goals). */
+async function trackedByCategoryRange(
+  userId: string,
+  categoryIds: string[],
+  from: string,
+  to: string,
+  dayStartHour: number,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (categoryIds.length === 0) return out;
+
+  const [startDate, endDate] = dayWindow(from, dayStartHour);
+  const [, periodEnd] = dayWindow(to, dayStartHour);
+  const entries = await db.timeEntry.findMany({
+    where: {
+      userId,
+      deletedAt: null,
+      categoryId: { in: categoryIds },
+      startTime: { gte: startDate, lt: periodEnd },
+      endTime: { not: null },
+    },
+  });
+
+  const now = Date.now();
+  for (const e of entries) {
+    if (!e.categoryId || !e.endTime) continue;
+    const cur = out.get(e.categoryId) ?? 0;
+    out.set(e.categoryId, cur + Math.max(0, Math.round((e.endTime.getTime() - e.startTime.getTime()) / 1000)));
+  }
+  // Also include any currently-running entry in the period
+  const running = await db.timeEntry.findFirst({
+    where: { userId, deletedAt: null, categoryId: { in: categoryIds }, startTime: { gte: startDate, lt: periodEnd }, endTime: null },
+    orderBy: { startTime: "desc" },
+  });
+  if (running?.categoryId) {
+    const cur = out.get(running.categoryId) ?? 0;
+    out.set(running.categoryId, cur + Math.max(0, Math.round((now - running.startTime.getTime()) / 1000)));
+  }
+  return out;
+}
+
+/** Sum HabitLog.seconds across a date range for unlinked period-TIME habits. */
+async function periodLogSeconds(
+  habitIds: string[],
+  from: string,
+  to: string,
+): Promise<Map<string, { seconds: number; runningSince: Date | null }>> {
+  const out = new Map<string, { seconds: number; runningSince: Date | null }>();
+  if (habitIds.length === 0) return out;
+
+  const logs = await db.habitLog.findMany({
+    where: { habitId: { in: habitIds }, date: { gte: from, lte: to } },
+    select: { habitId: true, seconds: true, runningSince: true },
+  });
+  for (const l of logs) {
+    const cur = out.get(l.habitId) ?? { seconds: 0, runningSince: null };
+    cur.seconds += l.seconds;
+    // Take the most recent runningSince (only today's log can have it running)
+    if (l.runningSince && (!cur.runningSince || l.runningSince > cur.runningSince)) {
+      cur.runningSince = l.runningSince;
+    }
+    out.set(l.habitId, cur);
   }
   return out;
 }
@@ -129,14 +202,65 @@ export async function resolveHabitDay(
   });
   const logByHabit = new Map(dayLogs.map((l) => [l.habitId, l]));
 
-  const linkedCatIds = [
+  // Separate period-TIME habits from daily-TIME habits.
+  const periodTimeHabits = scheduled.filter(
+    (h) => h.goalType === "TIME" && h.goalPeriod !== "DAY",
+  );
+  const dailyTimeHabits = scheduled.filter(
+    (h) => h.goalType !== "TIME" || h.goalPeriod === "DAY",
+  );
+
+  // For daily TIME habits: track today's seconds by category.
+  const dailyLinkedCatIds = [
     ...new Set(
-      scheduled
+      dailyTimeHabits
         .filter((h) => h.goalType === "TIME" && h.categoryId)
         .map((h) => h.categoryId as string),
     ),
   ];
-  const tracked = await trackedByCategory(userId, linkedCatIds, dateKey, dayStartHour);
+  const tracked = await trackedByCategory(userId, dailyLinkedCatIds, dateKey, dayStartHour);
+
+  // For period-TIME habits: aggregate seconds across the period window.
+  const periodTrackedByCategory = new Map<string, number>();
+  const periodLogSecondsMap = new Map<string, { seconds: number; runningSince: Date | null }>();
+
+  if (periodTimeHabits.length > 0) {
+    // Compute per-habit period windows (may differ by goalPeriod type).
+    const habitPeriodRanges = new Map<string, { from: string; to: string }>();
+    for (const h of periodTimeHabits) {
+      const r = periodRange(goalPeriodToScheduleType(h.goalPeriod), dateKey, weekStartsOn);
+      habitPeriodRanges.set(h.id, r);
+    }
+    // Linked period-TIME: fetch time entries across each period.
+    const periodLinkedCatIds = [
+      ...new Set(
+        periodTimeHabits
+          .filter((h) => h.categoryId)
+          .map((h) => h.categoryId as string),
+      ),
+    ];
+    if (periodLinkedCatIds.length > 0) {
+      // Use the broadest range that covers all period windows.
+      const allFroms = [...habitPeriodRanges.values()].map((r) => r.from);
+      const allTos = [...habitPeriodRanges.values()].map((r) => r.to);
+      const minFrom = allFroms.reduce((a, b) => (a < b ? a : b));
+      const maxTo = allTos.reduce((a, b) => (a > b ? a : b));
+      const catSecs = await trackedByCategoryRange(userId, periodLinkedCatIds, minFrom, maxTo, dayStartHour);
+      catSecs.forEach((secs, catId) => periodTrackedByCategory.set(catId, secs));
+    }
+    // Unlinked period-TIME: sum HabitLog.seconds across the period.
+    const unlinkedPeriodHabitIds = periodTimeHabits
+      .filter((h) => !h.categoryId)
+      .map((h) => h.id);
+    if (unlinkedPeriodHabitIds.length > 0) {
+      const allFroms = unlinkedPeriodHabitIds.map((id) => habitPeriodRanges.get(id)!.from);
+      const allTos = unlinkedPeriodHabitIds.map((id) => habitPeriodRanges.get(id)!.to);
+      const minFrom = allFroms.reduce((a, b) => (a < b ? a : b));
+      const maxTo = allTos.reduce((a, b) => (a > b ? a : b));
+      const logSecs = await periodLogSeconds(unlinkedPeriodHabitIds, minFrom, maxTo);
+      logSecs.forEach((val, id) => periodLogSecondsMap.set(id, val));
+    }
+  }
 
   // Period quotas: count completed days in each period schedule's window.
   const periodHabits = scheduled.filter((h) => isPeriodSchedule(h.scheduleType));
@@ -172,7 +296,27 @@ export async function resolveHabitDay(
   const result: HabitDayDTO[] = [];
   for (const h of scheduled) {
     const log = logByHabit.get(h.id);
-    const { progress, runningSince } = rawProgress(h, log, tracked);
+
+    let progress: DayProgress;
+    let runningSince: Date | null;
+
+    if (h.goalType === "TIME" && h.goalPeriod !== "DAY") {
+      // Period-TIME: use aggregated period seconds.
+      if (h.categoryId) {
+        const secs = periodTrackedByCategory.get(h.categoryId) ?? 0;
+        progress = { count: 0, seconds: secs };
+        runningSince = null; // running detection included in secs above
+      } else {
+        const periodData = periodLogSecondsMap.get(h.id) ?? { seconds: 0, runningSince: null };
+        progress = { count: 0, seconds: periodData.seconds };
+        runningSince = periodData.runningSince;
+      }
+    } else {
+      const raw = rawProgress(h, log, tracked);
+      progress = raw.progress;
+      runningSince = raw.runningSince;
+    }
+
     const done = isGoalMet(habitGoal(h), progress);
 
     // Reconcile completedAt for linked-TIME habits (no log mutation path).
@@ -222,12 +366,31 @@ export async function resolveSingleHabitDay(
       where: { habitId_date: { habitId: h.id, date: dateKey } },
     })) ?? undefined;
 
-  const tracked =
-    h.goalType === "TIME" && h.categoryId
-      ? await trackedByCategory(userId, [h.categoryId], dateKey, dayStartHour)
-      : new Map<string, { seconds: number; runningSince: Date | null }>();
+  let progress: DayProgress;
+  let runningSince: Date | null;
 
-  const { progress, runningSince } = rawProgress(h, log, tracked);
+  if (h.goalType === "TIME" && h.goalPeriod !== "DAY") {
+    const r = periodRange(goalPeriodToScheduleType(h.goalPeriod), dateKey, weekStartsOn);
+    if (h.categoryId) {
+      const catSecs = await trackedByCategoryRange(userId, [h.categoryId], r.from, r.to, dayStartHour);
+      progress = { count: 0, seconds: catSecs.get(h.categoryId) ?? 0 };
+      runningSince = null;
+    } else {
+      const logSecs = await periodLogSeconds([h.id], r.from, r.to);
+      const periodData = logSecs.get(h.id) ?? { seconds: 0, runningSince: null };
+      progress = { count: 0, seconds: periodData.seconds };
+      runningSince = periodData.runningSince;
+    }
+  } else {
+    const tracked =
+      h.goalType === "TIME" && h.categoryId
+        ? await trackedByCategory(userId, [h.categoryId], dateKey, dayStartHour)
+        : new Map<string, { seconds: number; runningSince: Date | null }>();
+    const raw = rawProgress(h, log, tracked);
+    progress = raw.progress;
+    runningSince = raw.runningSince;
+  }
+
   const done = isGoalMet(habitGoal(h), progress);
 
   if (h.goalType === "TIME" && h.categoryId && done !== !!log?.completedAt) {

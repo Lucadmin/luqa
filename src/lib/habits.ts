@@ -5,9 +5,9 @@
 // calendar fields (getFullYear/Month/Date/Day), so the math is timezone-stable.
 
 import { isoDateKey } from "./time";
-import type { HabitGoalType, HabitScheduleType } from "./types";
+import type { HabitGoalPeriod, HabitGoalType, HabitScheduleType } from "./types";
 
-export type { HabitGoalType, HabitScheduleType };
+export type { HabitGoalPeriod, HabitGoalType, HabitScheduleType };
 
 export const PERIOD_SCHEDULES: HabitScheduleType[] = [
   "TIMES_PER_WEEK",
@@ -32,6 +32,8 @@ export interface HabitSchedule {
 /** The subset needed to decide whether a day's goal is met. */
 export interface HabitGoal {
   goalType: HabitGoalType;
+  /** DAY = per-day quota; WEEK/MONTH = cumulative total for the period. */
+  goalPeriod: HabitGoalPeriod;
   targetCount: number;
   targetSeconds: number;
 }
@@ -207,4 +209,11 @@ export function scheduleSummary(h: HabitSchedule): string {
         ? "On 1 date"
         : `On ${h.dates.length} dates`;
   }
+}
+
+/** "this week" / "this month" label for period TIME goals. */
+export function goalPeriodLabel(period: HabitGoalPeriod): string {
+  if (period === "WEEK") return "this week";
+  if (period === "MONTH") return "this month";
+  return "";
 }

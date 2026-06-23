@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       color: d.color ?? "#f5c451",
       order: count,
       goalType,
+      goalPeriod: goalType === "TIME" ? (d.goalPeriod ?? "DAY") : "DAY",
       targetCount: d.targetCount ?? 1,
       targetSeconds: d.targetSeconds ?? 0,
       categoryId,

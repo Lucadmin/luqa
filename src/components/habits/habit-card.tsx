@@ -3,7 +3,7 @@
 import type { HabitAction } from "@/lib/client/use-habits";
 import { useHabitProgress } from "@/lib/client/use-habit-progress";
 import { cn } from "@/lib/cn";
-import { scheduleSummary } from "@/lib/habits";
+import { goalPeriodLabel, scheduleSummary } from "@/lib/habits";
 import { formatHMS } from "@/lib/time";
 import type { HabitDayDTO } from "@/lib/types";
 import { HabitControl } from "./habit-control";
@@ -29,7 +29,9 @@ export function HabitCard({
 
   const parts: string[] = [];
   if (habit.goalType === "TIME") {
-    parts.push(`${formatHMS(progress.liveSeconds)} / ${formatHMS(habit.targetSeconds)}`);
+    const periodLabel = goalPeriodLabel(habit.goalPeriod);
+    const suffix = periodLabel ? ` ${periodLabel}` : "";
+    parts.push(`${formatHMS(progress.liveSeconds)} / ${formatHMS(habit.targetSeconds)}${suffix}`);
   } else if (habit.goalType === "COUNT") {
     parts.push(`${habit.count} / ${habit.targetCount}`);
   }

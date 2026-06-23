@@ -29,6 +29,7 @@ export function toHabitDTO(h: Habit): HabitDTO {
     color: h.color,
     order: h.order,
     goalType: h.goalType,
+    goalPeriod: h.goalPeriod,
     targetCount: h.targetCount,
     targetSeconds: h.targetSeconds,
     categoryId: h.categoryId,

@@ -6,7 +6,7 @@ import { archiveHabit, createHabit, updateHabit } from "@/lib/client/use-habits"
 import { useCategories } from "@/lib/client/use-categories";
 import { cn } from "@/lib/cn";
 import { DEFAULT_HABIT_ICON, HABIT_COLORS } from "@/lib/habit-icons";
-import type { HabitDTO, HabitGoalType } from "@/lib/types";
+import type { HabitDTO, HabitGoalPeriod, HabitGoalType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
@@ -20,6 +20,7 @@ interface Draft {
   icon: string;
   color: string;
   goalType: HabitGoalType;
+  goalPeriod: HabitGoalPeriod;
   targetCount: number;
   targetSeconds: number;
   categoryId: string | null;
@@ -39,6 +40,7 @@ function draftFrom(habit: HabitDTO | null, defaultDate: string): Draft {
       icon: habit.icon ?? DEFAULT_HABIT_ICON,
       color: habit.color,
       goalType: habit.goalType,
+      goalPeriod: habit.goalPeriod,
       targetCount: habit.targetCount,
       targetSeconds: habit.targetSeconds || 30 * 60,
       categoryId: habit.categoryId,
@@ -56,6 +58,7 @@ function draftFrom(habit: HabitDTO | null, defaultDate: string): Draft {
     icon: DEFAULT_HABIT_ICON,
     color: HABIT_COLORS[0],
     goalType: "TASK",
+    goalPeriod: "DAY",
     targetCount: 3,
     targetSeconds: 30 * 60,
     categoryId: null,
@@ -106,6 +109,7 @@ export function HabitForm({
   function setGoalType(goalType: HabitGoalType) {
     patch({
       goalType,
+      goalPeriod: "DAY",
       ...(goalType === "TIME" && draft.targetSeconds < 60 ? { targetSeconds: 30 * 60 } : {}),
     });
   }
@@ -128,6 +132,7 @@ export function HabitForm({
         icon: draft.icon,
         color: draft.color,
         goalType: draft.goalType,
+        goalPeriod: draft.goalType === "TIME" ? draft.goalPeriod : "DAY",
         targetCount: draft.targetCount,
         targetSeconds: draft.targetSeconds,
         categoryId: draft.goalType === "TIME" ? draft.categoryId : null,
@@ -268,6 +273,26 @@ export function HabitForm({
 
           {draft.goalType === "TIME" && (
             <div className="mt-3 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted">Goal period</span>
+                <div className="inline-flex overflow-hidden rounded-lg border border-border">
+                  {(["DAY", "WEEK", "MONTH"] as HabitGoalPeriod[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => patch({ goalPeriod: p })}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium transition-colors",
+                        draft.goalPeriod === p
+                          ? "bg-primary/10 text-foreground"
+                          : "text-faint hover:bg-surface-2",
+                      )}
+                    >
+                      {p === "DAY" ? "Daily" : p === "WEEK" ? "Weekly" : "Monthly"}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted">Duration</span>
                 <div className="flex items-center gap-3">

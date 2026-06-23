@@ -39,6 +39,7 @@ export interface SettingsDTO {
 // --- Habits ---
 
 export type HabitGoalType = "TASK" | "COUNT" | "TIME";
+export type HabitGoalPeriod = "DAY" | "WEEK" | "MONTH";
 
 export type HabitScheduleType =
   | "DAILY"
@@ -58,6 +59,7 @@ export interface HabitDTO {
   order: number;
 
   goalType: HabitGoalType;
+  goalPeriod: HabitGoalPeriod;
   targetCount: number;
   targetSeconds: number;
   categoryId: string | null;

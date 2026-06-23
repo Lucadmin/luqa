@@ -39,6 +39,7 @@ export async function PATCH(
   if (d.color !== undefined) data.color = d.color;
   if (d.order !== undefined) data.order = d.order;
   if (d.goalType !== undefined) data.goalType = d.goalType;
+  if (d.goalPeriod !== undefined) data.goalPeriod = d.goalPeriod;
   if (d.targetCount !== undefined) data.targetCount = d.targetCount;
   if (d.targetSeconds !== undefined) data.targetSeconds = d.targetSeconds;
   if (d.scheduleType !== undefined) data.scheduleType = d.scheduleType;
