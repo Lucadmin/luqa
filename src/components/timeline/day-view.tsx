@@ -18,7 +18,6 @@ import {
   MINUTES_PER_DAY,
   minutesSinceMidnight,
   minutesToDate,
-  splitAtMidnight,
   startOfLocalDay,
 } from "@/lib/time";
 import type { TimeEntryDTO } from "@/lib/types";
@@ -125,28 +124,7 @@ export function DayView() {
 
   async function handleStop() {
     if (!runningEntry) return;
-    const start = new Date(runningEntry.startTime);
-    const now = new Date();
-    const pieces = splitAtMidnight(start, now);
-
-    // Common case: started and stopped on the same day — just close it.
-    if (pieces.length === 1) {
-      await updateEntry(runningEntry.id, { endTime: now.toISOString() });
-      return;
-    }
-
-    // Ran past midnight: close the original at the first midnight, then recreate
-    // the remaining day-pieces as their own entries so each day stays separate.
-    const [first, ...rest] = pieces;
-    await updateEntry(runningEntry.id, { endTime: first.end.toISOString() });
-    for (const piece of rest) {
-      await createEntry({
-        description: runningEntry.description,
-        categoryId: runningEntry.categoryId,
-        startTime: piece.start.toISOString(),
-        endTime: piece.end.toISOString(),
-      });
-    }
+    await updateEntry(runningEntry.id, { endTime: new Date().toISOString() });
   }
 
   function openEntry(entry: TimeEntryDTO) {
