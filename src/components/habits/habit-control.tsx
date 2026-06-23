@@ -84,7 +84,7 @@ export function HabitControl({
           aria-label={habit.done ? "Reset count" : "Add one"}
           onClick={primary}
           disabled={busy}
-          className="rounded-full transition-transform active:scale-95 disabled:opacity-60"
+          className="flex shrink-0 rounded-full transition-transform active:scale-95 disabled:opacity-60"
         >
           <ProgressRing size={size} fraction={progress.fraction} color={habit.color}>
             {habit.done ? (
@@ -118,7 +118,7 @@ export function HabitControl({
       aria-label={progress.running ? "Pause timer" : "Start timer"}
       onClick={() => run(progress.running ? "stop" : "start")}
       disabled={busy}
-      className="shrink-0 rounded-full transition-transform active:scale-95 disabled:opacity-60"
+      className="flex shrink-0 rounded-full transition-transform active:scale-95 disabled:opacity-60"
     >
       <ProgressRing size={size} fraction={progress.fraction} color={habit.color}>
         <Icon

@@ -92,8 +92,12 @@ function GoogleConnectionPanel() {
                     <p className="text-xs text-faint">
                       Last synced:{" "}
                       {new Date(status.lastSynced).toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: false,
                       })}
                     </p>
                   )}
