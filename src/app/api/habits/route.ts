@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { z } from "zod";
+import { toHabitDTO } from "@/lib/serializers";
+import { createHabitSchema } from "@/lib/validations";
 
-// GET /api/habits — list non-archived habits for the current user
+// GET /api/habits — list non-archived habits (full config) for the user.
 export async function GET() {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -13,30 +14,67 @@ export async function GET() {
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });
 
-  return NextResponse.json({ habits });
+  return NextResponse.json({ habits: habits.map(toHabitDTO) });
 }
 
-const createSchema = z.object({ name: z.string().trim().min(1).max(80) });
-
-// POST /api/habits — create a new habit
+// POST /api/habits — create a habit with full goal + schedule config.
 export async function POST(request: Request) {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let body: unknown;
-  try { body = await request.json(); } catch {
+  try {
+    body = await request.json();
+  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = createSchema.safeParse(body);
+  const parsed = createHabitSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid input", issues: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+  const d = parsed.data;
+  const goalType = d.goalType ?? "TASK";
+
+  // A category link only applies to TIME goals; verify ownership.
+  let categoryId: string | null = null;
+  if (goalType === "TIME" && d.categoryId) {
+    const owns = await db.category.findFirst({
+      where: { id: d.categoryId, userId },
+      select: { id: true },
+    });
+    if (!owns) {
+      return NextResponse.json({ error: "Unknown category" }, { status: 400 });
+    }
+    categoryId = d.categoryId;
   }
 
   const count = await db.habit.count({ where: { userId, archivedAt: null } });
+
   const habit = await db.habit.create({
-    data: { userId, name: parsed.data.name, order: count },
+    data: {
+      userId,
+      name: d.name,
+      icon: d.icon ?? null,
+      color: d.color ?? "#f5c451",
+      order: count,
+      goalType,
+      targetCount: d.targetCount ?? 1,
+      targetSeconds: d.targetSeconds ?? 0,
+      categoryId,
+      scheduleType: d.scheduleType ?? "DAILY",
+      weekdays: d.weekdays ?? [],
+      weekInterval: d.weekInterval ?? 1,
+      intervalDays: d.intervalDays ?? 2,
+      timesPerPeriod: d.timesPerPeriod ?? 3,
+      anchorDate: d.anchorDate ?? null,
+      dates: d.dates ?? [],
+      excludedDates: d.excludedDates ?? [],
+    },
   });
 
-  return NextResponse.json({ habit }, { status: 201 });
+  return NextResponse.json({ habit: toHabitDTO(habit) }, { status: 201 });
 }

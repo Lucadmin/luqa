@@ -78,6 +78,20 @@ export function formatDuration(minutes: number): string {
   return `${h}h ${m}m`;
 }
 
+/** "2:00:00", "0:45:30" — H:MM:SS for habit timers. */
+export function formatHMS(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/** Compact goal label for a duration in seconds: "2h", "1h 30m", "20m". */
+export function formatSecondsShort(seconds: number): string {
+  return formatDuration(Math.round(seconds / 60));
+}
+
 export function isoDateKey(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");

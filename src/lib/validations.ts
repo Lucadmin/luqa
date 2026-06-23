@@ -69,6 +69,69 @@ export const updateSettingsSchema = z.object({
   weekStartsOn: z.union([z.literal(0), z.literal(1)]).optional(),
 });
 
+// --- Habits ---
+
+const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+
+const habitGoalType = z.enum(["TASK", "COUNT", "TIME"]);
+const habitScheduleType = z.enum([
+  "DAILY",
+  "WEEKDAYS",
+  "INTERVAL",
+  "TIMES_PER_WEEK",
+  "TIMES_PER_MONTH",
+  "TIMES_PER_YEAR",
+  "DATES",
+]);
+
+export const createHabitSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  icon: z.string().trim().max(40).nullish(),
+  color: hexColor.optional(),
+
+  goalType: habitGoalType.optional(),
+  targetCount: z.number().int().min(1).max(1000).optional(),
+  targetSeconds: z.number().int().min(0).max(24 * 3600).optional(),
+  categoryId: z.string().nullish(),
+
+  scheduleType: habitScheduleType.optional(),
+  weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+  weekInterval: z.number().int().min(1).max(12).optional(),
+  intervalDays: z.number().int().min(1).max(365).optional(),
+  timesPerPeriod: z.number().int().min(1).max(366).optional(),
+  anchorDate: dateKey.nullish(),
+  dates: z.array(dateKey).max(366).optional(),
+  excludedDates: z.array(dateKey).max(366).optional(),
+});
+
+export const updateHabitSchema = createHabitSchema.partial().extend({
+  order: z.number().int().min(0).optional(),
+  archived: z.boolean().optional(),
+});
+
+// Reorder: an explicit ordering of habit ids.
+export const reorderHabitsSchema = z.object({
+  ids: z.array(z.string()).min(1).max(200),
+});
+
+// Mutate progress for a habit on a given day.
+export const habitLogSchema = z.object({
+  date: dateKey,
+  action: z.enum([
+    "toggle",
+    "increment",
+    "decrement",
+    "start",
+    "stop",
+    "setCount",
+    "addSeconds",
+  ]),
+  value: z.number().int().optional(),
+});
+
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
+export type CreateHabitInput = z.infer<typeof createHabitSchema>;
+export type UpdateHabitInput = z.infer<typeof updateHabitSchema>;
+export type HabitLogInput = z.infer<typeof habitLogSchema>;

@@ -1,5 +1,5 @@
-import type { Category, TimeEntry } from "@/generated/prisma/client";
-import type { CategoryDTO, TimeEntryDTO } from "@/lib/types";
+import type { Category, Habit, TimeEntry } from "@/generated/prisma/client";
+import type { CategoryDTO, HabitDTO, TimeEntryDTO } from "@/lib/types";
 
 export function toEntryDTO(e: TimeEntry): TimeEntryDTO {
   return {
@@ -18,5 +18,28 @@ export function toCategoryDTO(c: Category): CategoryDTO {
     name: c.name,
     color: c.color,
     archived: c.archived,
+  };
+}
+
+export function toHabitDTO(h: Habit): HabitDTO {
+  return {
+    id: h.id,
+    name: h.name,
+    icon: h.icon,
+    color: h.color,
+    order: h.order,
+    goalType: h.goalType,
+    targetCount: h.targetCount,
+    targetSeconds: h.targetSeconds,
+    categoryId: h.categoryId,
+    scheduleType: h.scheduleType,
+    weekdays: h.weekdays,
+    weekInterval: h.weekInterval,
+    intervalDays: h.intervalDays,
+    timesPerPeriod: h.timesPerPeriod,
+    anchorDate: h.anchorDate,
+    dates: h.dates,
+    excludedDates: h.excludedDates,
+    createdAt: h.createdAt.toISOString(),
   };
 }

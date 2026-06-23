@@ -44,6 +44,7 @@ model Category {
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   timeEntries TimeEntry[]
+  habits      Habit[]
 
   // A user can't have two categories with the same name.
   @@unique([userId, name])
@@ -113,27 +114,77 @@ model GoogleConnection {
   @@map("google_connections")
 }
 
-// A recurring thing to do every day (or on specific weekdays in v2).
+// What "done" means for a habit on a given day.
+enum HabitGoalType {
+  TASK // simple done / not done
+  COUNT // reach a target number of reps (e.g. 3× water)
+  TIME // accumulate a target duration (e.g. 2h focus)
+}
+
+// How a habit recurs. Mirrors the options in the create flow.
+enum HabitScheduleType {
+  DAILY // every day
+  WEEKDAYS // specific days of the week, optionally every N weeks
+  INTERVAL // every N days from an anchor date
+  TIMES_PER_WEEK // a quota of completions within each week
+  TIMES_PER_MONTH // a quota within each calendar month
+  TIMES_PER_YEAR // a quota within each calendar year
+  DATES // specific calendar dates only
+}
+
+// A habit the user wants to keep up. Goal + schedule together decide what
+// shows on a given day and what counts as "done".
 model Habit {
   id         String    @id @default(cuid())
   userId     String
-  name       String    // can include an emoji prefix, e.g. "🏃 Morning run"
+  name       String
+  icon       String? // lucide icon name, e.g. "dumbbell"
+  color      String    @default("#f5c451")
   order      Int       @default(0)
   archivedAt DateTime?
   createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  logs HabitLog[]
-  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Goal
+  goalType      HabitGoalType @default(TASK)
+  targetCount   Int           @default(1) // COUNT: reps needed; TASK: always 1
+  targetSeconds Int           @default(0) // TIME: duration goal in seconds
+
+  // Optional link to a tracking category. When set on a TIME habit, its
+  // progress is derived from time tracked on that category, and its timer
+  // creates real time entries.
+  categoryId String?
+
+  // Schedule
+  scheduleType   HabitScheduleType @default(DAILY)
+  weekdays       Int[] // WEEKDAYS: 0=Sun … 6=Sat
+  weekInterval   Int               @default(1) // WEEKDAYS: every N weeks
+  intervalDays   Int               @default(2) // INTERVAL: every N days
+  timesPerPeriod Int               @default(3) // TIMES_PER_*: quota per period
+  anchorDate     String? // INTERVAL anchor, "YYYY-MM-DD"
+  dates          String[] // DATES: explicit "YYYY-MM-DD" list
+  excludedDates  String[] // any schedule: dates to skip
+
+  logs     HabitLog[]
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([categoryId])
   @@map("habits")
 }
 
-// One "did it" record — one row per habit per local calendar date.
+// Progress for one habit on one logical day. Created lazily on first interaction.
 model HabitLog {
-  id      String @id @default(cuid())
-  habitId String
-  date    String // "YYYY-MM-DD" in the user's local timezone
+  id           String    @id @default(cuid())
+  habitId      String
+  date         String // "YYYY-MM-DD" logical day in the user's timezone
+  count        Int       @default(0) // COUNT progress; TASK: 0 or 1
+  seconds      Int       @default(0) // TIME (unlinked) accumulated seconds
+  runningSince DateTime? // TIME (unlinked): timer running since this instant
+  completedAt  DateTime? // first moment the goal was met (for streaks)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
 
