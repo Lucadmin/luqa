@@ -61,6 +61,8 @@ interface GoogleHealthSleepResponse {
   nextPageToken?: string;
 }
 
+type GoogleHealthSleepReadMode = "list" | "reconcile";
+
 function intMinutes(value: string | number | undefined): number | null {
   if (value === undefined) return null;
   const parsed = typeof value === "number" ? value : Number.parseInt(value, 10);
@@ -130,23 +132,29 @@ function toImportEntry(point: GoogleHealthSleepPoint): ImportSleepInput["entries
   };
 }
 
-export async function fetchGoogleHealthIdentity(accessToken: string) {
-  return googleHealthFetch<GoogleHealthIdentity>(accessToken, "/users/me/identity");
+function sessionKey(entry: ImportSleepInput["entries"][number]): string {
+  return `${entry.startTime}|${entry.endTime}`;
 }
 
-export async function syncGoogleHealthSleep(
-  userId: string,
-  options?: { from?: Date; to?: Date },
-): Promise<{ imported: number; deleted: number; from: string; to: string }> {
-  const result = await googleHealthClientForUser(userId);
-  if (!result) return { imported: 0, deleted: 0, from: "", to: "" };
+function latestEnd(entries: ImportSleepInput["entries"]): string | null {
+  let latest: string | null = null;
+  for (const entry of entries) {
+    if (!latest || Date.parse(entry.endTime) > Date.parse(latest)) {
+      latest = entry.endTime;
+    }
+  }
+  return latest;
+}
 
-  const from = options?.from ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-  const to = options?.to ?? new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const filter =
-    `sleep.interval.end_time >= "${from.toISOString()}" ` +
-    `AND sleep.interval.end_time < "${to.toISOString()}"`;
-
+async function fetchSleepEntries({
+  accessToken,
+  filter,
+  mode,
+}: {
+  accessToken: string;
+  filter: string;
+  mode: GoogleHealthSleepReadMode;
+}): Promise<ImportSleepInput["entries"]> {
   const entries: ImportSleepInput["entries"] = [];
   let pageToken: string | undefined;
   let pageCount = 0;
@@ -156,11 +164,15 @@ export async function syncGoogleHealthSleep(
       filter,
       pageSize: "25",
     });
+    if (mode === "reconcile") {
+      params.set("dataSourceFamily", "users/me/dataSourceFamilies/all-sources");
+    }
     if (pageToken) params.set("pageToken", pageToken);
 
+    const suffix = mode === "reconcile" ? ":reconcile" : "";
     const response = await googleHealthFetch<GoogleHealthSleepResponse>(
-      result.accessToken,
-      `/users/me/dataTypes/sleep/dataPoints:reconcile?${params.toString()}`,
+      accessToken,
+      `/users/me/dataTypes/sleep/dataPoints${suffix}?${params.toString()}`,
     );
 
     for (const point of response.dataPoints ?? []) {
@@ -170,7 +182,83 @@ export async function syncGoogleHealthSleep(
 
     pageToken = response.nextPageToken || undefined;
     pageCount++;
-  } while (pageToken && pageCount < 40);
+  } while (pageToken && pageCount < 80);
+
+  return entries;
+}
+
+function mergeSleepEntries(
+  rawEntries: ImportSleepInput["entries"],
+  reconciledEntries: ImportSleepInput["entries"],
+): ImportSleepInput["entries"] {
+  const byExternalId = new Map<string, ImportSleepInput["entries"][number]>();
+  const seenSessions = new Set<string>();
+
+  // Prefer raw list results. Reconciled sleep can lag/omit recent raw sessions,
+  // while raw points keep the source/stage payload we need for sleep analysis.
+  for (const entry of rawEntries) {
+    if (!entry.externalId) continue;
+    byExternalId.set(entry.externalId, entry);
+    seenSessions.add(sessionKey(entry));
+  }
+
+  for (const entry of reconciledEntries) {
+    if (!entry.externalId || seenSessions.has(sessionKey(entry))) continue;
+    byExternalId.set(entry.externalId, entry);
+    seenSessions.add(sessionKey(entry));
+  }
+
+  return [...byExternalId.values()];
+}
+
+export async function fetchGoogleHealthIdentity(accessToken: string) {
+  return googleHealthFetch<GoogleHealthIdentity>(accessToken, "/users/me/identity");
+}
+
+export async function syncGoogleHealthSleep(
+  userId: string,
+  options?: { from?: Date; to?: Date },
+): Promise<{
+  imported: number;
+  deleted: number;
+  from: string;
+  to: string;
+  raw: number;
+  reconciled: number;
+  latestEnd: string | null;
+}> {
+  const result = await googleHealthClientForUser(userId);
+  if (!result) {
+    return {
+      imported: 0,
+      deleted: 0,
+      from: "",
+      to: "",
+      raw: 0,
+      reconciled: 0,
+      latestEnd: null,
+    };
+  }
+
+  const from = options?.from ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const to = options?.to ?? new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const filter =
+    `sleep.interval.end_time >= "${from.toISOString()}" ` +
+    `AND sleep.interval.end_time < "${to.toISOString()}"`;
+
+  const [rawEntries, reconciledEntries] = await Promise.all([
+    fetchSleepEntries({
+      accessToken: result.accessToken,
+      filter,
+      mode: "list",
+    }),
+    fetchSleepEntries({
+      accessToken: result.accessToken,
+      filter,
+      mode: "reconcile",
+    }),
+  ]);
+  const entries = mergeSleepEntries(rawEntries, reconciledEntries);
 
   const imported = await importSleepEntries(userId, {
     source: "GOOGLE_HEALTH",
@@ -194,5 +282,8 @@ export async function syncGoogleHealthSleep(
     deleted,
     from: from.toISOString(),
     to: to.toISOString(),
+    raw: rawEntries.length,
+    reconciled: reconciledEntries.length,
+    latestEnd: latestEnd(entries),
   };
 }

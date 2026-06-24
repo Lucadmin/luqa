@@ -165,11 +165,29 @@ function GoogleHealthPanel() {
     setSyncing(true);
     setSyncResult(null);
     try {
-      const res = await apiSend<{ imported: number; deleted: number }>(
+      const res = await apiSend<{
+        imported: number;
+        deleted: number;
+        raw?: number;
+        reconciled?: number;
+        latestEnd?: string | null;
+      }>(
         "/api/health/google/sync",
         "POST",
       );
-      setSyncResult(`Synced: ${res.imported} sleep sessions, ${res.deleted} removed`);
+      const latest = res.latestEnd
+        ? ` Latest: ${new Date(res.latestEnd).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+          })}.`
+        : "";
+      const scanned =
+        res.raw !== undefined && res.reconciled !== undefined
+          ? ` Raw ${res.raw}, reconciled ${res.reconciled}.`
+          : "";
+      setSyncResult(
+        `Synced: ${res.imported} sleep sessions, ${res.deleted} removed.${scanned}${latest}`,
+      );
       await mutate();
       await globalMutate(
         (key) =>
