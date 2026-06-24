@@ -10,7 +10,6 @@ import {
   clampToDay,
   formatClock,
   formatDuration,
-  MINUTES_PER_DAY,
   PX_PER_MINUTE,
   SNAP_MINUTES,
   snapMinutes,
@@ -34,6 +33,7 @@ export function DraftBlock({
   categoryId,
   categories,
   autoFocus,
+  maxEndMin,
   clientYToMin,
   onChangeRange,
   onChangeDescription,
@@ -49,6 +49,7 @@ export function DraftBlock({
   categoryId: string | null;
   categories: CategoryDTO[];
   autoFocus: boolean;
+  maxEndMin: number;
   clientYToMin: (clientY: number) => number;
   onChangeRange: (start: number, end: number) => void;
   onChangeDescription: (value: string) => void;
@@ -101,12 +102,12 @@ export function DraftBlock({
     if (mode === "start") {
       onChangeRange(clampToDay(Math.min(cur, endMin - SNAP_MINUTES)), endMin);
     } else if (mode === "end") {
-      onChangeRange(startMin, clampToDay(Math.max(cur, startMin + SNAP_MINUTES)));
+      onChangeRange(startMin, Math.min(maxEndMin, Math.max(cur, startMin + SNAP_MINUTES)));
     } else {
       const dur = endMin - startMin;
       const s = Math.max(
         0,
-        Math.min(MINUTES_PER_DAY - dur, snapMinutes(cur - drag.current.grabOffset)),
+        Math.min(maxEndMin - dur, snapMinutes(cur - drag.current.grabOffset)),
       );
       onChangeRange(s, s + dur);
     }
@@ -117,7 +118,7 @@ export function DraftBlock({
   }
 
   // Anchor the toolbar below the block, flipping above it near the day's end.
-  const nearBottom = endMin > MINUTES_PER_DAY - 200;
+  const nearBottom = endMin > maxEndMin - 200;
   const aboveTop = top - TOOLBAR_H - 8;
   const toolbarTop = nearBottom && aboveTop > 4 ? aboveTop : top + height + 8;
 

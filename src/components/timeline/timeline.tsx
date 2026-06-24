@@ -336,6 +336,7 @@ export function Timeline({
             categoryId={inlineDraft.categoryId}
             categories={categories}
             autoFocus={inlineDraft.autoFocus}
+            maxEndMin={MINUTES_PER_DAY + overflowMin}
             clientYToMin={clientYToMin}
             onChangeRange={onChangeInlineRange}
             onChangeDescription={onChangeInlineDescription}
