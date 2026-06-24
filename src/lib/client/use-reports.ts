@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { fetcher } from "@/lib/client/fetcher";
 import { startOfWeek } from "@/lib/client/use-week";
 import { startOfLocalDay } from "@/lib/time";
-import type { CategoryDTO } from "@/lib/types";
+import type { CategoryDTO, SleepReportDTO } from "@/lib/types";
 
 export interface ReportsData {
   categories: CategoryDTO[];
@@ -13,6 +13,7 @@ export interface ReportsData {
   /** Per-day, per-category minutes: { "2025-06-10": { catId: minutes } } */
   dailyByCategory: Record<string, Record<string, number>>;
   totalMinutes: number;
+  sleep: SleepReportDTO;
 }
 
 export type RangeMode = "week" | "30d" | "90d";
@@ -23,6 +24,13 @@ const EMPTY: ReportsData = {
   dailyTotals: {},
   dailyByCategory: {},
   totalMinutes: 0,
+  sleep: {
+    dailySleep: {},
+    totalMinutes: 0,
+    averageMinutes: 0,
+    daysWithSleep: 0,
+    bestDay: null,
+  },
 };
 
 /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Moon, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DailyBarChart } from "@/components/reports/daily-bar-chart";
 import { DonutChart } from "@/components/reports/donut-chart";
@@ -15,7 +15,7 @@ import { useHabits, useHabitStats } from "@/lib/client/use-habits";
 import { useSettings } from "@/lib/client/use-settings";
 import { cn } from "@/lib/cn";
 import { addDays } from "@/lib/habits";
-import type { CategoryDTO } from "@/lib/types";
+import type { CategoryDTO, SleepDayStatsDTO } from "@/lib/types";
 import { formatDuration, isoDateKey } from "@/lib/time";
 
 const MODES: { value: RangeMode; label: string }[] = [
@@ -30,6 +30,12 @@ interface Segment {
   color: string;
   minutes: number;
   pct: number;
+}
+
+interface SleepRow {
+  dayKey: string;
+  label: string;
+  stats: SleepDayStatsDTO;
 }
 
 function buildSegments(
@@ -119,6 +125,27 @@ export function ReportsView() {
     [dailyBars],
   );
 
+  const sleepRows = useMemo(
+    () =>
+      dayKeys
+        .map((key) => {
+          const d = new Date(`${key}T00:00:00`);
+          const label =
+            mode === "week"
+              ? d.toLocaleDateString(undefined, { weekday: "short" })
+              : d.toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
+          const stats = data.sleep.dailySleep[key];
+          return stats ? { dayKey: key, label, stats } : null;
+        })
+        .filter((row): row is SleepRow => row !== null),
+    [dayKeys, data.sleep.dailySleep, mode],
+  );
+
+  const maxSleepMinutes = useMemo(
+    () => Math.max(1, ...sleepRows.map((d) => d.stats.totalMinutes)),
+    [sleepRows],
+  );
+
   // A selected day only counts if it's inside the visible range.
   const activeDayKey = selectedDayKey && dayKeys.includes(selectedDayKey) ? selectedDayKey : null;
 
@@ -146,6 +173,8 @@ export function ReportsView() {
   );
 
   const resetLabel = mode === "week" ? "This week" : "Latest";
+  const hasTrackedTime = data.totalMinutes > 0;
+  const hasSleep = data.sleep.totalMinutes > 0;
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-8">
@@ -204,10 +233,23 @@ export function ReportsView() {
           </button>
         )}
         <span className="ml-auto text-sm text-muted">
-          <span className="font-semibold tabular-nums text-foreground">
-            {formatDuration(data.totalMinutes)}
-          </span>{" "}
-          total
+          {hasTrackedTime && (
+            <>
+              <span className="font-semibold tabular-nums text-foreground">
+                {formatDuration(data.totalMinutes)}
+              </span>{" "}
+              tracked
+            </>
+          )}
+          {hasTrackedTime && hasSleep ? " · " : ""}
+          {hasSleep && (
+            <>
+              <span className="font-semibold tabular-nums text-foreground">
+                {formatDuration(data.sleep.totalMinutes)}
+              </span>{" "}
+              sleep
+            </>
+          )}
         </span>
       </div>
 
@@ -217,68 +259,83 @@ export function ReportsView() {
             <div key={i} className="h-32 animate-pulse rounded-2xl bg-surface-2" />
           ))}
         </div>
-      ) : data.totalMinutes === 0 ? (
+      ) : !hasTrackedTime && !hasSleep ? (
         <p className="mt-24 text-center text-sm text-faint">
-          No tracked time in this period yet.
+          No tracked time or sleep in this period yet.
         </p>
       ) : (
         <div className="mt-6 flex flex-col gap-6">
           {/* stat cards */}
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Total tracked", value: formatDuration(data.totalMinutes) },
-              { label: "Daily average", value: formatDuration(avgPerDay) },
-              {
-                label: "Best day",
-                value: bestDay.minutes > 0 ? formatDuration(bestDay.minutes) : "—",
-                sub: bestDay.minutes > 0 ? bestDay.label : undefined,
-              },
-            ].map(({ label, value, sub }) => (
-              <div key={label} className="rounded-2xl border border-border bg-surface p-4">
-                <p className="text-xs text-faint">{label}</p>
-                <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
-                {sub && <p className="text-xs text-muted">{sub}</p>}
-              </div>
-            ))}
-          </div>
+          {hasTrackedTime && (
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "Total tracked", value: formatDuration(data.totalMinutes) },
+                { label: "Daily average", value: formatDuration(avgPerDay) },
+                {
+                  label: "Best day",
+                  value: bestDay.minutes > 0 ? formatDuration(bestDay.minutes) : "—",
+                  sub: bestDay.minutes > 0 ? bestDay.label : undefined,
+                },
+              ].map(({ label, value, sub }) => (
+                <div key={label} className="rounded-2xl border border-border bg-surface p-4">
+                  <p className="text-xs text-faint">{label}</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
+                  {sub && <p className="text-xs text-muted">{sub}</p>}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* daily activity bar chart */}
-          <div className="rounded-2xl border border-border bg-surface p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Daily activity</h2>
-              <span className="text-xs text-faint">Tap a day for its breakdown</span>
+          {hasTrackedTime && (
+            <div className="rounded-2xl border border-border bg-surface p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold">Daily activity</h2>
+                <span className="text-xs text-faint">Tap a day for its breakdown</span>
+              </div>
+              <DailyBarChart
+                days={dailyBars}
+                maxMinutes={maxDayMinutes}
+                goalMinutes={settings.dailyGoalMinutes}
+                selectedKey={activeDayKey}
+                onSelect={(key) =>
+                  setSelectedDayKey((prev) => (prev === key ? null : key))
+                }
+              />
             </div>
-            <DailyBarChart
-              days={dailyBars}
-              maxMinutes={maxDayMinutes}
-              goalMinutes={settings.dailyGoalMinutes}
-              selectedKey={activeDayKey}
-              onSelect={(key) =>
-                setSelectedDayKey((prev) => (prev === key ? null : key))
-              }
-            />
-          </div>
+          )}
 
           {/* category breakdown — for the selected day, or the whole range */}
-          <div className="rounded-2xl border border-border bg-surface p-5">
-            {activeDayKey ? (
-              <DayBreakdownHeader dayKey={activeDayKey} total={dayTotal} onClear={() => setSelectedDayKey(null)} />
-            ) : (
-              <h2 className="mb-5 text-sm font-semibold">By category</h2>
-            )}
-
-            {activeDayKey ? (
-              daySegments.length > 0 ? (
-                <DonutChart segments={daySegments} totalMinutes={dayTotal} />
+          {hasTrackedTime && (
+            <div className="rounded-2xl border border-border bg-surface p-5">
+              {activeDayKey ? (
+                <DayBreakdownHeader dayKey={activeDayKey} total={dayTotal} onClear={() => setSelectedDayKey(null)} />
               ) : (
-                <p className="py-6 text-center text-sm text-faint">
-                  No tracked time on this day.
-                </p>
-              )
-            ) : rangeSegments.length > 0 ? (
-              <DonutChart segments={rangeSegments} totalMinutes={data.totalMinutes} />
-            ) : null}
-          </div>
+                <h2 className="mb-5 text-sm font-semibold">By category</h2>
+              )}
+
+              {activeDayKey ? (
+                daySegments.length > 0 ? (
+                  <DonutChart segments={daySegments} totalMinutes={dayTotal} />
+                ) : (
+                  <p className="py-6 text-center text-sm text-faint">
+                    No tracked time on this day.
+                  </p>
+                )
+              ) : rangeSegments.length > 0 ? (
+                <DonutChart segments={rangeSegments} totalMinutes={data.totalMinutes} />
+              ) : null}
+            </div>
+          )}
+
+          {hasSleep && (
+            <SleepPanel
+              rows={sleepRows}
+              maxMinutes={maxSleepMinutes}
+              averageMinutes={data.sleep.averageMinutes}
+              bestDay={data.sleep.bestDay}
+            />
+          )}
 
           {/* habits completion */}
           {activeHabitStats.length > 0 && (
@@ -359,6 +416,104 @@ function DayBreakdownHeader({
         <X className="h-3 w-3" />
         Whole range
       </button>
+    </div>
+  );
+}
+
+function SleepPanel({
+  rows,
+  maxMinutes,
+  averageMinutes,
+  bestDay,
+}: {
+  rows: SleepRow[];
+  maxMinutes: number;
+  averageMinutes: number;
+  bestDay: { dayKey: string; minutes: number } | null;
+}) {
+  const bestLabel = bestDay
+    ? new Date(`${bestDay.dayKey}T00:00:00`).toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-surface-2 text-muted">
+          <Moon className="h-3.5 w-3.5" />
+        </span>
+        <h2 className="text-sm font-semibold">Sleep</h2>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 border-b border-border pb-4">
+        <div>
+          <p className="text-xs text-faint">Average</p>
+          <p className="mt-1 text-lg font-bold tabular-nums">
+            {formatDuration(averageMinutes)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-faint">Best night</p>
+          <p className="mt-1 text-lg font-bold tabular-nums">
+            {bestDay ? formatDuration(bestDay.minutes) : "—"}
+          </p>
+          {bestLabel && <p className="text-xs text-muted">{bestLabel}</p>}
+        </div>
+        <div>
+          <p className="text-xs text-faint">Logged nights</p>
+          <p className="mt-1 text-lg font-bold tabular-nums">{rows.length}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3">
+        {rows.map((row) => (
+          <SleepRowBar key={row.dayKey} row={row} maxMinutes={maxMinutes} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SleepRowBar({ row, maxMinutes }: { row: SleepRow; maxMinutes: number }) {
+  const { stats } = row;
+  const width = Math.max(6, (stats.totalMinutes / maxMinutes) * 100);
+  const stageTotal = stats.lightMinutes + stats.deepMinutes + stats.remMinutes + stats.awakeMinutes;
+  const unknownMinutes = Math.max(0, stats.totalMinutes - stageTotal);
+  const segments = [
+    { key: "deep", minutes: stats.deepMinutes, color: "#6366f1" },
+    { key: "rem", minutes: stats.remMinutes, color: "#ec4899" },
+    { key: "light", minutes: stats.lightMinutes, color: "#38bdf8" },
+    { key: "awake", minutes: stats.awakeMinutes, color: "#f59e0b" },
+    { key: "sleep", minutes: unknownMinutes, color: "#8b9aaa" },
+  ].filter((segment) => segment.minutes > 0);
+
+  return (
+    <div className="grid grid-cols-[3.5rem_1fr_4.5rem] items-center gap-3">
+      <span className="text-xs font-medium text-muted">{row.label}</span>
+      <div className="h-3 overflow-hidden rounded-full bg-surface-2">
+        <div className="flex h-full overflow-hidden rounded-full" style={{ width: `${width}%` }}>
+          {segments.length > 0 ? (
+            segments.map((segment) => (
+              <span
+                key={segment.key}
+                className="h-full"
+                style={{
+                  width: `${(segment.minutes / Math.max(1, stats.totalMinutes)) * 100}%`,
+                  backgroundColor: segment.color,
+                }}
+              />
+            ))
+          ) : (
+            <span className="h-full w-full bg-muted" />
+          )}
+        </div>
+      </div>
+      <span className="text-right text-xs tabular-nums text-faint">
+        {formatDuration(stats.totalMinutes)}
+      </span>
     </div>
   );
 }

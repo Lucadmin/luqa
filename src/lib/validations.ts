@@ -60,6 +60,50 @@ export const updateCategorySchema = z.object({
   archived: z.boolean().optional(),
 });
 
+// --- Sleep imports ---
+
+const sleepSource = z.enum(["HEALTH_CONNECT", "GOOGLE_HEALTH", "MANUAL"]);
+const sleepMinutes = z.number().int().min(0).max(48 * 60);
+
+const sleepStageSchema = z
+  .object({
+    stage: z.string().trim().min(1).max(40),
+    startTime: isoString,
+    endTime: isoString,
+  })
+  .refine((v) => Date.parse(v.endTime) > Date.parse(v.startTime), {
+    message: "Stage end must be after start",
+    path: ["endTime"],
+  });
+
+const sleepEntryImportSchema = z
+  .object({
+    externalId: z.string().trim().min(1).max(300).optional(),
+    title: z.string().trim().max(120).nullish(),
+    sourceApp: z.string().trim().max(120).nullish(),
+    startTime: isoString,
+    endTime: isoString,
+    startZoneOffset: z.string().trim().max(40).nullish(),
+    endZoneOffset: z.string().trim().max(40).nullish(),
+    sleepMinutes: sleepMinutes.nullish(),
+    awakeMinutes: sleepMinutes.nullish(),
+    lightMinutes: sleepMinutes.nullish(),
+    deepMinutes: sleepMinutes.nullish(),
+    remMinutes: sleepMinutes.nullish(),
+    stages: z.array(sleepStageSchema).max(300).optional(),
+    raw: z.unknown().optional(),
+  })
+  .refine((v) => Date.parse(v.endTime) > Date.parse(v.startTime), {
+    message: "End must be after start",
+    path: ["endTime"],
+  });
+
+export const importSleepSchema = z.object({
+  source: sleepSource.default("HEALTH_CONNECT"),
+  entries: z.array(sleepEntryImportSchema).max(1000).default([]),
+  deletedExternalIds: z.array(z.string().trim().min(1).max(300)).max(1000).optional(),
+});
+
 // --- User settings / preferences ---
 
 export const updateSettingsSchema = z.object({
@@ -133,6 +177,7 @@ export const habitLogSchema = z.object({
 
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
+export type ImportSleepInput = z.infer<typeof importSleepSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 export type CreateHabitInput = z.infer<typeof createHabitSchema>;
 export type UpdateHabitInput = z.infer<typeof updateHabitSchema>;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { toCategoryDTO } from "@/lib/serializers";
+import { buildSleepReport } from "@/lib/sleep";
 import { isoDateKey } from "@/lib/time";
 
 // GET /api/reports?from=ISO&to=ISO
@@ -20,13 +21,20 @@ export async function GET(request: Request) {
   const fromDate = new Date(from);
   const toDate = new Date(to);
 
-  const [entries, categories, user] = await Promise.all([
+  const [entries, sleepEntries, categories, user] = await Promise.all([
     db.timeEntry.findMany({
       where: {
         userId,
         deletedAt: null,
         startTime: { gte: fromDate, lt: toDate },
         endTime: { not: null },
+      },
+    }),
+    db.sleepEntry.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+        endTime: { gte: fromDate, lt: toDate },
       },
     }),
     db.category.findMany({
@@ -70,5 +78,6 @@ export async function GET(request: Request) {
     dailyTotals,
     dailyByCategory,
     totalMinutes,
+    sleep: buildSleepReport(sleepEntries, dayStartHour),
   });
 }

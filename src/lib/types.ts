@@ -1,6 +1,7 @@
 // Wire types shared between the API routes and the client.
 
 export type EntrySource = "APP" | "GOOGLE";
+export type SleepSource = "HEALTH_CONNECT" | "GOOGLE_HEALTH" | "MANUAL";
 
 export interface CategoryDTO {
   id: string;
@@ -18,6 +19,59 @@ export interface TimeEntryDTO {
   /** ISO UTC, or null while running. */
   endTime: string | null;
   source: EntrySource;
+}
+
+export interface SleepStageDTO {
+  stage: string;
+  /** ISO UTC. */
+  startTime: string;
+  /** ISO UTC. */
+  endTime: string;
+}
+
+export interface SleepEntryDTO {
+  id: string;
+  source: SleepSource;
+  externalId: string;
+  title: string | null;
+  sourceApp: string | null;
+  /** ISO UTC. */
+  startTime: string;
+  /** ISO UTC. */
+  endTime: string;
+  sleepMinutes: number | null;
+  awakeMinutes: number | null;
+  lightMinutes: number | null;
+  deepMinutes: number | null;
+  remMinutes: number | null;
+  stages: SleepStageDTO[];
+}
+
+export interface SleepDayStatsDTO {
+  totalMinutes: number;
+  asleepMinutes: number;
+  awakeMinutes: number;
+  lightMinutes: number;
+  deepMinutes: number;
+  remMinutes: number;
+  sessionCount: number;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+export interface SleepReportDTO {
+  dailySleep: Record<string, SleepDayStatsDTO>;
+  totalMinutes: number;
+  averageMinutes: number;
+  daysWithSleep: number;
+  bestDay: { dayKey: string; minutes: number } | null;
+}
+
+export interface GoogleHealthStatusDTO {
+  connected: boolean;
+  googleEmail: string | null;
+  healthUserId: string | null;
+  lastSynced: string | null;
 }
 
 export interface SuggestionDTO {
