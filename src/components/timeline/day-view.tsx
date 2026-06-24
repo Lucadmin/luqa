@@ -73,6 +73,9 @@ export function DayView() {
     ? (nowTick - startOfLocalDay(day).getTime()) / 60_000
     : null;
 
+  const overflowMin = Math.max(1, dayStartHour) * 60;
+  const maxEndMin = MINUTES_PER_DAY + overflowMin;
+
   const { entries, createEntry, updateEntry, deleteEntry } = useEntries(day);
   const { categories, mutate: mutateCategories } = useCategories();
 
@@ -158,7 +161,7 @@ export function DayView() {
       description: entry.description,
       categoryId: entry.categoryId,
       startMin: Math.max(0, startMin),
-      endMin: Math.min(24 * 60, endMin),
+      endMin: Math.max(0, endMin),
     });
   }
 
@@ -337,6 +340,7 @@ export function DayView() {
           draft={draft}
           categories={categories}
           segments={daySegments.filter((s) => s.id !== draft.id)}
+          maxEndMin={maxEndMin}
           onSave={handleSave}
           onDelete={draft.id ? handleDelete : undefined}
           onClose={() => setDraft(null)}

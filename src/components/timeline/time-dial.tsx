@@ -65,11 +65,13 @@ export function TimeDial({
   startMin,
   endMin,
   segments,
+  maxEndMin = MINUTES_PER_DAY,
   onChange,
 }: {
   startMin: number;
   endMin: number;
   segments?: DialSegment[];
+  maxEndMin?: number;
   onChange: (start: number, end: number) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -123,11 +125,12 @@ export function TimeDial({
     state.totalMinutes += (delta / (2 * Math.PI)) * MINUTES_PER_REV;
 
     const snapped = Math.round(state.totalMinutes / SNAP_MINUTES) * SNAP_MINUTES;
-    const clamped = Math.max(0, Math.min(MINUTES_PER_DAY, snapped));
 
     if (state.handle === "start") {
+      const clamped = Math.max(0, Math.min(MINUTES_PER_DAY, snapped));
       onChange(Math.min(clamped, endMin - SNAP_MINUTES), endMin);
     } else {
+      const clamped = Math.max(0, Math.min(maxEndMin, snapped));
       onChange(startMin, Math.max(clamped, startMin + SNAP_MINUTES));
     }
   };
@@ -142,7 +145,7 @@ export function TimeDial({
       const s = clampToDay(startMin + delta);
       onChange(Math.min(s, endMin - SNAP_MINUTES), endMin);
     } else {
-      const e = clampToDay(endMin + delta);
+      const e = Math.max(0, Math.min(maxEndMin, endMin + delta));
       onChange(startMin, Math.max(e, startMin + SNAP_MINUTES));
     }
   };

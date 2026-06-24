@@ -23,6 +23,7 @@ export function EntryEditor({
   draft,
   categories,
   segments,
+  maxEndMin,
   onSave,
   onDelete,
   onClose,
@@ -32,6 +33,7 @@ export function EntryEditor({
   draft: EntryDraft;
   categories: CategoryDTO[];
   segments?: DialSegment[];
+  maxEndMin?: number;
   onSave: (result: SaveResult) => void;
   onDelete?: () => void;
   onClose: () => void;
@@ -98,6 +100,7 @@ export function EntryEditor({
             startMin={startMin}
             endMin={endMin}
             segments={segments}
+            maxEndMin={maxEndMin}
             onChange={(s, e) => {
               setStartMin(s);
               setEndMin(e);

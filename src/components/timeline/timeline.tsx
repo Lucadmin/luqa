@@ -8,7 +8,6 @@ import type { InlineDraft } from "@/components/timeline/types";
 import { computeGaps, computeLayout } from "@/lib/timeline-layout";
 import { cn } from "@/lib/cn";
 import {
-  clampToDay,
   DAY_START_HOUR,
   formatClock,
   formatDuration,
@@ -98,8 +97,9 @@ export function Timeline({
     const el = containerRef.current;
     if (!el) return 0;
     const rect = el.getBoundingClientRect();
-    return clampToDay((clientY - rect.top) / PX_PER_MINUTE);
-  }, []);
+    const raw = (clientY - rect.top) / PX_PER_MINUTE;
+    return Math.max(0, Math.min(MINUTES_PER_DAY + overflowMin, raw));
+  }, [overflowMin]);
 
   // On mount, bring the interesting part of the day into view.
   const focusMin = nowMin ?? layout[0]?.startMin ?? 8 * 60;
@@ -170,8 +170,8 @@ export function Timeline({
       start = anchor;
       end = anchor + DEFAULT_LEN;
     }
-    if (end > MINUTES_PER_DAY) {
-      end = MINUTES_PER_DAY;
+    if (end > MINUTES_PER_DAY + overflowMin) {
+      end = MINUTES_PER_DAY + overflowMin;
       start = Math.max(0, end - DEFAULT_LEN);
     }
     onCreateInline(start, end, st.type === "mouse");

@@ -86,9 +86,12 @@ async function trackedByCategory(
   for (const e of entries) {
     if (!e.categoryId) continue;
     const cur = out.get(e.categoryId) ?? { seconds: 0, runningSince: null };
-    const endMs = e.endTime ? e.endTime.getTime() : now;
-    cur.seconds += Math.max(0, Math.round((endMs - e.startTime.getTime()) / 1000));
-    if (!e.endTime) cur.runningSince = e.startTime;
+    if (e.endTime) {
+      cur.seconds += Math.max(0, Math.round((e.endTime.getTime() - e.startTime.getTime()) / 1000));
+    } else {
+      // Running entry: record runningSince so the client adds live elapsed (avoids double-counting).
+      cur.runningSince = e.startTime;
+    }
     out.set(e.categoryId, cur);
   }
   return out;

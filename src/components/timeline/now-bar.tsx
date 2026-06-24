@@ -21,9 +21,11 @@ function nowHHMM(): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-/** Parse a "HH:MM" string into an absolute Date using today as the base date. */
-function parseStartAt(hhMM: string): Date {
+/** Parse a "HH:MM" string into an absolute Date, or null if invalid. */
+function parseStartAt(hhMM: string): Date | null {
   const [h, m] = hhMM.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || h > 23 || m < 0 || m > 59)
+    return null;
   const d = new Date();
   d.setHours(h, m, 0, 0);
   return d;
@@ -77,7 +79,7 @@ export function NowBar({
     if (busy) return;
     setBusy(true);
     try {
-      const customStart = startAt ? parseStartAt(startAt) : undefined;
+      const customStart = startAt ? (parseStartAt(startAt) ?? undefined) : undefined;
       await onStart(description.trim(), categoryId, customStart);
       setDescription("");
       setCategoryId(null);
@@ -188,10 +190,16 @@ export function NowBar({
         <div className="mt-1.5 flex items-center gap-2 px-1">
           <span className="text-xs text-muted">Started at</span>
           <input
-            type="time"
+            type="text"
+            inputMode="numeric"
             value={startAt}
-            onChange={(e) => setStartAt(e.target.value)}
-            className="rounded-md border border-border bg-transparent px-2 py-0.5 text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^\d:]/g, "").slice(0, 5);
+              setStartAt(raw);
+            }}
+            placeholder="HH:MM"
+            maxLength={5}
+            className="w-16 rounded-md border border-border bg-transparent px-2 py-0.5 text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <button
             type="button"
