@@ -75,6 +75,29 @@ export async function importSleepEntries(
     const sleepMinutes = entry.sleepMinutes ?? inferSleepMinutes(duration, awakeMinutes, stages);
     const externalId =
       entry.externalId ?? generatedExternalId(source, entry.startTime, entry.endTime);
+    const existing = await db.sleepEntry.findUnique({
+      where: {
+        userId_source_externalId: {
+          userId,
+          source,
+          externalId,
+        },
+      },
+      select: { id: true, manualOverrideAt: true },
+    });
+
+    if (existing?.manualOverrideAt) {
+      await db.sleepEntry.update({
+        where: { id: existing.id },
+        data: {
+          sourceApp: entry.sourceApp ?? undefined,
+          raw: jsonValue(entry.raw),
+          lastSyncedAt: now,
+        },
+      });
+      upserted++;
+      continue;
+    }
 
     await db.sleepEntry.upsert({
       where: {
@@ -100,6 +123,7 @@ export async function importSleepEntries(
         raw: jsonValue(entry.raw),
         lastSyncedAt: now,
         deletedAt: null,
+        manualOverrideAt: null,
       },
       create: {
         userId,
@@ -119,6 +143,7 @@ export async function importSleepEntries(
         stages: jsonValue(stages),
         raw: jsonValue(entry.raw),
         lastSyncedAt: now,
+        manualOverrideAt: null,
       },
     });
     upserted++;
@@ -130,6 +155,7 @@ export async function importSleepEntries(
         userId,
         source,
         externalId: { in: input.deletedExternalIds },
+        manualOverrideAt: null,
         deletedAt: null,
       },
       data: { deletedAt: now, lastSyncedAt: now },
@@ -160,6 +186,7 @@ export async function markMissingSleepEntriesDeleted({
       endTime: { gte: from, lt: to },
       externalId: { notIn: externalIds },
       deletedAt: null,
+      manualOverrideAt: null,
     },
     data: { deletedAt: new Date() },
   });

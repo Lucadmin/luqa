@@ -58,6 +58,7 @@ export function toSleepDTO(e: SleepEntry): SleepEntryDTO {
     deepMinutes: e.deepMinutes,
     remMinutes: e.remMinutes,
     stages: toSleepStages(e.stages),
+    manualOverrideAt: e.manualOverrideAt?.toISOString() ?? null,
   };
 }
 

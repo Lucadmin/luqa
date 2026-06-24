@@ -45,6 +45,7 @@ export interface SleepEntryDTO {
   deepMinutes: number | null;
   remMinutes: number | null;
   stages: SleepStageDTO[];
+  manualOverrideAt: string | null;
 }
 
 export interface SleepDayStatsDTO {

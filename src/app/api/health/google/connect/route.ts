@@ -1,6 +1,10 @@
-import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
+import {
+  createOAuthState,
+  oauthStateCookieName,
+  OAUTH_STATE_MAX_AGE_SECONDS,
+} from "@/lib/oauth-state";
 import {
   GOOGLE_HEALTH_SCOPES,
   makeGoogleHealthOAuthClient,
@@ -12,12 +16,24 @@ export async function GET(request: Request) {
 
   const origin = new URL(request.url).origin;
   const client = makeGoogleHealthOAuthClient(`${origin}/api/health/google/callback`);
+  const state = createOAuthState(userId, "google-health");
   const url = client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
     scope: GOOGLE_HEALTH_SCOPES,
-    state: userId,
+    state,
   });
 
-  return redirect(url);
+  const response = NextResponse.redirect(url);
+  response.cookies.set({
+    name: oauthStateCookieName("google-health"),
+    value: state,
+    httpOnly: true,
+    maxAge: OAUTH_STATE_MAX_AGE_SECONDS,
+    path: "/",
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+
+  return response;
 }

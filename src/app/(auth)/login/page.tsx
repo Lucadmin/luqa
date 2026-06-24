@@ -1,4 +1,5 @@
 import { AuthForm } from "@/components/auth-form";
+import { isSignupEnabled } from "@/lib/security-config";
 
 export const metadata = { title: "Sign in · Luqa" };
 
@@ -9,7 +10,7 @@ export default function LoginPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
         <p className="text-sm text-muted">Sign in to track your day.</p>
       </div>
-      <AuthForm mode="login" />
+      <AuthForm mode="login" signupEnabled={isSignupEnabled()} />
     </div>
   );
 }

@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Moon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EntryEditor, type SaveResult } from "@/components/timeline/entry-editor";
 import { HabitsStrip } from "@/components/timeline/habits-strip";
 import { NowBar } from "@/components/timeline/now-bar";
+import { SleepEditor } from "@/components/timeline/sleep-editor";
 import { Timeline } from "@/components/timeline/timeline";
 import type { EntryDraft, InlineDraft } from "@/components/timeline/types";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/lib/client/use-categories";
 import { useEntries } from "@/lib/client/use-entries";
 import { useSettings } from "@/lib/client/use-settings";
+import { useSleepEntries } from "@/lib/client/use-sleep-entries";
 import {
   formatDuration,
   isoDateKey,
@@ -22,7 +24,7 @@ import {
   startOfLocalDay,
   startOfViewDay,
 } from "@/lib/time";
-import type { TimeEntryDTO } from "@/lib/types";
+import type { SleepEntryDTO, TimeEntryDTO } from "@/lib/types";
 
 function addDays(d: Date, n: number) {
   const c = new Date(d);
@@ -47,6 +49,12 @@ function dayLabel(day: Date, startHour: number): string {
   });
 }
 
+function sleepMinutes(entry: { sleepMinutes: number | null; awakeMinutes: number | null; startTime: string; endTime: string }) {
+  if (entry.sleepMinutes !== null) return entry.sleepMinutes;
+  const duration = (Date.parse(entry.endTime) - Date.parse(entry.startTime)) / 60000;
+  return Math.max(0, duration - (entry.awakeMinutes ?? 0));
+}
+
 export function DayView() {
   const { settings } = useSettings();
   const dayStartHour = settings.dayStartHour;
@@ -55,6 +63,7 @@ export function DayView() {
   const [day, setDay] = useState(() => logicalToday());
   const [draft, setDraft] = useState<EntryDraft | null>(null);
   const [inlineDraft, setInlineDraft] = useState<InlineDraft | null>(null);
+  const [selectedSleep, setSelectedSleep] = useState<SleepEntryDTO | null>(null);
   const [saving, setSaving] = useState(false);
 
   // A single ticking clock; everything time-dependent derives from it so
@@ -77,6 +86,7 @@ export function DayView() {
   const maxEndMin = MINUTES_PER_DAY + overflowMin;
 
   const { entries, createEntry, updateEntry, deleteEntry } = useEntries(day);
+  const { sleepEntries, updateSleepEntry } = useSleepEntries(day, dayStartHour);
   const { categories, mutate: mutateCategories } = useCategories();
 
   const runningEntry = useMemo(
@@ -126,6 +136,11 @@ export function DayView() {
     return total;
   }, [entries, nowTick, day, dayStartHour]);
 
+  const sleepTotal = useMemo(
+    () => sleepEntries.reduce((total, entry) => total + sleepMinutes(entry), 0),
+    [sleepEntries],
+  );
+
   async function handleCreateCategory(name: string) {
     const cat = await createCategory(name);
     await mutateCategories();
@@ -163,6 +178,12 @@ export function DayView() {
       startMin: Math.max(0, startMin),
       endMin: Math.max(0, endMin),
     });
+  }
+
+  function openSleep(entry: SleepEntryDTO) {
+    setDraft(null);
+    setInlineDraft(null);
+    setSelectedSleep(entry);
   }
 
   // ── In-place draft block (drag/tap-to-create) ──────────────────────────────
@@ -290,11 +311,22 @@ export function DayView() {
               </button>
             )}
           </div>
-          <span className="text-sm text-muted">
-            <span className="font-semibold text-foreground tabular-nums">
-              {formatDuration(dayTotal)}
-            </span>{" "}
-            tracked
+          <span className="flex items-center gap-3 text-sm text-muted">
+            <span>
+              <span className="font-semibold text-foreground tabular-nums">
+                {formatDuration(dayTotal)}
+              </span>{" "}
+              tracked
+            </span>
+            {sleepTotal > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <Moon className="h-3.5 w-3.5 text-faint" />
+                <span className="font-semibold text-foreground tabular-nums">
+                  {formatDuration(sleepTotal)}
+                </span>{" "}
+                sleep
+              </span>
+            )}
           </span>
         </div>
 
@@ -318,11 +350,13 @@ export function DayView() {
         <Timeline
           day={day}
           entries={entries}
+          sleepEntries={sleepEntries}
           categories={categories}
           nowMin={nowMin}
           inlineDraft={inlineDraft}
           dayStartHour={dayStartHour}
           onOpenEntry={openEntry}
+          onOpenSleep={openSleep}
           onCreateInline={createInline}
           onChangeInlineRange={changeInlineRange}
           onChangeInlineDescription={changeInlineDescription}
@@ -348,6 +382,16 @@ export function DayView() {
           saving={saving}
         />
       )}
+
+      <SleepEditor
+        entry={selectedSleep}
+        onClose={() => setSelectedSleep(null)}
+        onSave={async (id, patch) => {
+          const updated = await updateSleepEntry(id, patch);
+          setSelectedSleep(updated);
+          return updated;
+        }}
+      />
     </div>
   );
 }

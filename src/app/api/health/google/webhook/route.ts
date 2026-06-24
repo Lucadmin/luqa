@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { syncGoogleHealthSleep } from "@/lib/google-health/sync";
+import {
+  bearerToken,
+  verifyOptionalWebhookToken,
+} from "@/lib/webhook-security";
 
 interface GoogleHealthWebhookBody {
   type?: string;
@@ -40,6 +44,16 @@ function notificationRange(body: GoogleHealthWebhookBody): { from: Date; to: Dat
 }
 
 export async function POST(request: Request) {
+  const url = new URL(request.url);
+  const token =
+    bearerToken(request.headers.get("authorization")) ||
+    request.headers.get("x-luqa-webhook-token") ||
+    url.searchParams.get("token");
+
+  if (!verifyOptionalWebhookToken("GOOGLE_HEALTH_WEBHOOK_TOKEN", token)) {
+    return new NextResponse(null, { status: 401 });
+  }
+
   let body: GoogleHealthWebhookBody;
   try {
     body = await request.json();

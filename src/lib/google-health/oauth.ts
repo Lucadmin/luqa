@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { db } from "@/lib/db";
+import { decryptSecret, encryptSecret } from "@/lib/secret-crypto";
 
 export const GOOGLE_HEALTH_API_BASE = "https://health.googleapis.com/v4";
 
@@ -35,8 +36,8 @@ export async function googleHealthClientForUser(userId: string) {
 
   const client = makeGoogleHealthOAuthClient();
   client.setCredentials({
-    access_token: conn.accessToken,
-    refresh_token: conn.refreshToken,
+    access_token: decryptSecret(conn.accessToken),
+    refresh_token: decryptSecret(conn.refreshToken),
     expiry_date: conn.expiresAt.getTime(),
   });
 
@@ -46,7 +47,9 @@ export async function googleHealthClientForUser(userId: string) {
     await db.googleHealthConnection.update({
       where: { userId },
       data: {
-        accessToken: credentials.access_token ?? conn.accessToken,
+        accessToken: credentials.access_token
+          ? encryptSecret(credentials.access_token)
+          : conn.accessToken,
         expiresAt: credentials.expiry_date
           ? new Date(credentials.expiry_date)
           : conn.expiresAt,

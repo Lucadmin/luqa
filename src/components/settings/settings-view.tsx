@@ -172,7 +172,9 @@ function GoogleHealthPanel() {
       setSyncResult(`Synced: ${res.imported} sleep sessions, ${res.deleted} removed`);
       await mutate();
       await globalMutate(
-        (key) => typeof key === "string" && key.startsWith("/api/reports"),
+        (key) =>
+          typeof key === "string" &&
+          (key.startsWith("/api/reports") || key.startsWith("/api/sleep")),
       );
     } catch {
       setSyncResult("Sync failed. Check Google Health API access and try again.");

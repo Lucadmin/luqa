@@ -6,6 +6,7 @@ export const credentialsSchema = z.object({
 });
 
 export const signupSchema = credentialsSchema.extend({
+  inviteToken: z.string().trim().max(256).optional(),
   name: z.string().trim().min(1).max(80).optional(),
 });
 
@@ -104,6 +105,25 @@ export const importSleepSchema = z.object({
   deletedExternalIds: z.array(z.string().trim().min(1).max(300)).max(1000).optional(),
 });
 
+export const updateSleepSchema = z
+  .object({
+    title: z.string().trim().max(120).nullish(),
+    startTime: isoString.optional(),
+    endTime: isoString.optional(),
+    sleepMinutes: sleepMinutes.nullish(),
+    awakeMinutes: sleepMinutes.nullish(),
+    lightMinutes: sleepMinutes.nullish(),
+    deepMinutes: sleepMinutes.nullish(),
+    remMinutes: sleepMinutes.nullish(),
+  })
+  .refine(
+    (v) =>
+      !v.startTime ||
+      !v.endTime ||
+      Date.parse(v.endTime) > Date.parse(v.startTime),
+    { message: "End must be after start", path: ["endTime"] },
+  );
+
 // --- User settings / preferences ---
 
 export const updateSettingsSchema = z.object({
@@ -178,6 +198,7 @@ export const habitLogSchema = z.object({
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
 export type ImportSleepInput = z.infer<typeof importSleepSchema>;
+export type UpdateSleepInput = z.infer<typeof updateSleepSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 export type CreateHabitInput = z.infer<typeof createHabitSchema>;
 export type UpdateHabitInput = z.infer<typeof updateHabitSchema>;

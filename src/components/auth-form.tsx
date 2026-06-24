@@ -9,7 +9,15 @@ import { Input } from "@/components/ui/input";
 
 type Mode = "login" | "signup";
 
-export function AuthForm({ mode }: { mode: Mode }) {
+export function AuthForm({
+  mode,
+  signupEnabled = false,
+  signupRequiresToken = false,
+}: {
+  mode: Mode;
+  signupEnabled?: boolean;
+  signupRequiresToken?: boolean;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,13 +31,19 @@ export function AuthForm({ mode }: { mode: Mode }) {
     const email = String(form.get("email") ?? "");
     const password = String(form.get("password") ?? "");
     const name = String(form.get("name") ?? "");
+    const inviteToken = String(form.get("inviteToken") ?? "");
 
     try {
       if (mode === "signup") {
         const res = await fetch("/api/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name: name || undefined }),
+          body: JSON.stringify({
+            email,
+            inviteToken: inviteToken || undefined,
+            password,
+            name: name || undefined,
+          }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -65,6 +79,19 @@ export function AuthForm({ mode }: { mode: Mode }) {
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted">Name</span>
           <Input name="name" type="text" placeholder="Your name" autoComplete="name" />
+        </label>
+      )}
+
+      {mode === "signup" && signupRequiresToken && (
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted">Invite code</span>
+          <Input
+            name="inviteToken"
+            type="password"
+            required
+            placeholder="Required"
+            autoComplete="off"
+          />
         </label>
       )}
 
@@ -107,12 +134,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
       <p className="mt-2 text-center text-sm text-muted">
         {mode === "login" ? (
-          <>
-            No account?{" "}
-            <Link href="/signup" className="font-medium text-primary hover:underline">
-              Sign up
-            </Link>
-          </>
+          signupEnabled ? (
+            <>
+              No account?{" "}
+              <Link href="/signup" className="font-medium text-primary hover:underline">
+                Sign up
+              </Link>
+            </>
+          ) : (
+            "Account creation is closed."
+          )
         ) : (
           <>
             Already have an account?{" "}

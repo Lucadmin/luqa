@@ -1,19 +1,37 @@
-import { NextResponse } from "next/server";
 import { google } from "googleapis";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { makeOAuthClient } from "@/lib/google/oauth";
 import { pullSync } from "@/lib/google/pull-sync";
+import {
+  oauthStateCookieName,
+  verifyOAuthState,
+} from "@/lib/oauth-state";
+import { secureCompare } from "@/lib/secure-compare";
+import { encryptSecret } from "@/lib/secret-crypto";
 
-export async function GET(request: Request) {
+const stateCookieName = oauthStateCookieName("google-calendar");
+
+function redirectWithClearedState(url: URL) {
+  const response = NextResponse.redirect(url);
+  response.cookies.delete(stateCookieName);
+  return response;
+}
+
+export async function GET(request: NextRequest) {
   const reqUrl = new URL(request.url);
   const { searchParams } = reqUrl;
   const code = searchParams.get("code");
-  const userId = searchParams.get("state"); // we set state=userId in /connect
+  const state = searchParams.get("state");
   const error = searchParams.get("error");
   const origin = reqUrl.origin;
+  const cookieState = request.cookies.get(stateCookieName)?.value;
+  const stateMatches =
+    Boolean(state && cookieState) && secureCompare(state as string, cookieState as string);
+  const userId = stateMatches ? verifyOAuthState(state, "google-calendar") : null;
 
   if (error || !code || !userId) {
-    return NextResponse.redirect(
+    return redirectWithClearedState(
       new URL("/settings?google=denied", origin),
     );
   }
@@ -36,8 +54,8 @@ export async function GET(request: Request) {
     await db.googleConnection.upsert({
       where: { userId },
       update: {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        accessToken: encryptSecret(tokens.access_token),
+        refreshToken: encryptSecret(tokens.refresh_token),
         expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 3600_000),
         scope: tokens.scope ?? "",
         googleEmail: userInfo.email,
@@ -46,8 +64,8 @@ export async function GET(request: Request) {
       },
       create: {
         userId,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        accessToken: encryptSecret(tokens.access_token),
+        refreshToken: encryptSecret(tokens.refresh_token),
         expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 3600_000),
         scope: tokens.scope ?? "",
         googleEmail: userInfo.email,
@@ -60,12 +78,12 @@ export async function GET(request: Request) {
       console.error("[google-callback] initial pull failed", e),
     );
 
-    return NextResponse.redirect(
+    return redirectWithClearedState(
       new URL("/settings?google=connected", origin),
     );
   } catch (err) {
     console.error("[google-callback] error", err);
-    return NextResponse.redirect(
+    return redirectWithClearedState(
       new URL("/settings?google=error", origin),
     );
   }

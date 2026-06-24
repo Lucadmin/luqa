@@ -122,6 +122,7 @@ model SleepEntry {
   raw    Json?
 
   lastSyncedAt DateTime?
+  manualOverrideAt DateTime?
   deletedAt    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

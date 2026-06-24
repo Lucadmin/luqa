@@ -2,6 +2,12 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+## Production Security
+
+This public deployment is locked to the configured owner email. Before deploying
+to Vercel, review [docs/security-hardening.md](docs/security-hardening.md) and
+set the security environment variables from `.env.example`.
+
 First, run the development server:
 
 ```bash

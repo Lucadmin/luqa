@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
+import { isAllowedEmail, normalizeEmail } from "@/lib/security-config";
+import { verifySignupToken } from "@/lib/signup-security";
 import { signupSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
@@ -19,8 +21,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const { email, password, name } = parsed.data;
-  const normalizedEmail = email.toLowerCase();
+  const { email, inviteToken, password, name } = parsed.data;
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!isAllowedEmail(normalizedEmail) || !verifySignupToken(inviteToken)) {
+    return NextResponse.json(
+      { error: "Account creation is restricted" },
+      { status: 403 },
+    );
+  }
 
   const existing = await db.user.findUnique({
     where: { email: normalizedEmail },

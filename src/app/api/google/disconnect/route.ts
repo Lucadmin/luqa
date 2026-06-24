@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getUserId } from "@/lib/api-auth";
 import { makeOAuthClient } from "@/lib/google/oauth";
+import { decryptSecret } from "@/lib/secret-crypto";
 
 export async function DELETE() {
   const userId = await getUserId();
@@ -12,7 +13,7 @@ export async function DELETE() {
     // Best-effort revoke the token at Google.
     try {
       const client = makeOAuthClient();
-      await client.revokeToken(conn.accessToken);
+      await client.revokeToken(decryptSecret(conn.accessToken));
     } catch {
       // Ignore — token may already be expired.
     }

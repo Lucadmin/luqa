@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Moon, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CategoryDot } from "@/components/timeline/category-picker";
 import { DraftBlock } from "@/components/timeline/draft-block";
@@ -17,20 +17,28 @@ import {
   snapMinutes,
   startOfLocalDay,
 } from "@/lib/time";
-import type { CategoryDTO, TimeEntryDTO } from "@/lib/types";
+import type { CategoryDTO, SleepEntryDTO, TimeEntryDTO } from "@/lib/types";
 
 const GUTTER = 52; // px for hour labels
 const DEFAULT_LEN = 30; // minutes — default size for a tap/click-created block
 const MIN_DRAG = 10; // minutes — shorter drags fall back to the default size
 
+function sleepMinutesFor(entry: SleepEntryDTO): number {
+  if (entry.sleepMinutes !== null) return entry.sleepMinutes;
+  const duration = (Date.parse(entry.endTime) - Date.parse(entry.startTime)) / 60000;
+  return Math.max(0, duration - (entry.awakeMinutes ?? 0));
+}
+
 export function Timeline({
   day,
   entries,
+  sleepEntries = [],
   categories,
   nowMin,
   inlineDraft,
   dayStartHour = DAY_START_HOUR,
   onOpenEntry,
+  onOpenSleep,
   onCreateInline,
   onChangeInlineRange,
   onChangeInlineDescription,
@@ -42,11 +50,13 @@ export function Timeline({
 }: {
   day: Date;
   entries: TimeEntryDTO[];
+  sleepEntries?: SleepEntryDTO[];
   categories: CategoryDTO[];
   nowMin: number | null;
   inlineDraft: InlineDraft | null;
   dayStartHour?: number;
   onOpenEntry: (entry: TimeEntryDTO) => void;
+  onOpenSleep: (entry: SleepEntryDTO) => void;
   onCreateInline: (startMin: number, endMin: number, autoFocus: boolean) => void;
   onChangeInlineRange: (startMin: number, endMin: number) => void;
   onChangeInlineDescription: (value: string) => void;
@@ -88,6 +98,28 @@ export function Timeline({
     () => computeLayout(entries, dayStartMs, nowMin, overflowMin),
     [entries, dayStartMs, nowMin, overflowMin],
   );
+  const sleepLayout = useMemo(
+    () =>
+      sleepEntries
+        .map((entry) => {
+          const rawStartMin = (Date.parse(entry.startTime) - dayStartMs) / 60000;
+          const rawEndMin = (Date.parse(entry.endTime) - dayStartMs) / 60000;
+          const startMin = Math.max(0, Math.min(MINUTES_PER_DAY + overflowMin, rawStartMin));
+          const endMin = Math.max(0, Math.min(MINUTES_PER_DAY + overflowMin, rawEndMin));
+          if (endMin <= 0 || startMin >= MINUTES_PER_DAY + overflowMin || endMin <= startMin) {
+            return null;
+          }
+          return { entry, startMin, endMin, rawStartMin, rawEndMin };
+        })
+        .filter((item): item is {
+          entry: SleepEntryDTO;
+          startMin: number;
+          endMin: number;
+          rawStartMin: number;
+          rawEndMin: number;
+        } => item !== null),
+    [sleepEntries, dayStartMs, overflowMin],
+  );
   const gaps = useMemo(
     () => computeGaps(entries, dayStartMs, nowMin),
     [entries, dayStartMs, nowMin],
@@ -109,7 +141,7 @@ export function Timeline({
 
   function onPointerDown(e: React.PointerEvent) {
     // Let entries, gap pills and the draft block handle their own pointers.
-    if ((e.target as HTMLElement).closest("[data-entry],[data-fill],[data-draft]")) {
+    if ((e.target as HTMLElement).closest("[data-entry],[data-sleep],[data-fill],[data-draft]")) {
       return;
     }
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -255,6 +287,53 @@ export function Timeline({
                 </button>
               )}
             </div>
+          );
+        })}
+
+        {/* sleep sessions — read-only health data, not tracked time */}
+        {sleepLayout.map(({ entry, startMin, endMin, rawStartMin, rawEndMin }) => {
+          const top = startMin * PX_PER_MINUTE;
+          const height = (endMin - startMin) * PX_PER_MINUTE;
+          const compact = height < 38;
+          const asleep = sleepMinutesFor(entry);
+          const source = entry.sourceApp ?? (entry.source === "GOOGLE_HEALTH" ? "Google Health" : "Health Connect");
+
+          return (
+            <button
+              key={entry.id}
+              data-sleep
+              type="button"
+              onClick={() => onOpenSleep(entry)}
+              className={cn(
+                "absolute z-[1] flex overflow-hidden rounded-lg border border-indigo-300/40 bg-indigo-500/[0.08] px-2.5 text-left text-indigo-950 shadow-sm dark:border-indigo-400/20 dark:bg-indigo-400/[0.10] dark:text-indigo-100",
+                "transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                compact ? "items-center" : "flex-col justify-center py-1.5",
+              )}
+              style={{
+                top,
+                height: Math.max(height - 2, 18),
+                left: GUTTER,
+                right: 4,
+              }}
+              title={`${formatClock(rawStartMin)}-${formatClock(rawEndMin)} · ${formatDuration(asleep)} sleep`}
+            >
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Moon className="h-3.5 w-3.5 shrink-0 text-indigo-500 dark:text-indigo-300" />
+                <span className="truncate text-xs font-medium">Sleep</span>
+                <span className="shrink-0 text-[10px] tabular-nums text-indigo-700/80 dark:text-indigo-200/80">
+                  {formatDuration(asleep)}
+                </span>
+              </div>
+              {!compact && (
+                <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-indigo-700/70 dark:text-indigo-200/70">
+                  <span className="tabular-nums">
+                    {formatClock(rawStartMin)}-{formatClock(rawEndMin)}
+                  </span>
+                  <span className="text-indigo-700/40 dark:text-indigo-200/40">·</span>
+                  <span className="truncate">{source}</span>
+                </div>
+              )}
+            </button>
           );
         })}
 

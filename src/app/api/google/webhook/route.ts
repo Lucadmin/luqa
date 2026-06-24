@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { pullSync } from "@/lib/google/pull-sync";
+import { verifyOptionalWebhookToken } from "@/lib/webhook-security";
 
 /**
  * Google Calendar push notification webhook.
@@ -10,15 +11,21 @@ import { pullSync } from "@/lib/google/pull-sync";
  */
 export async function POST(request: Request) {
   const channelId = request.headers.get("x-goog-channel-id");
+  const resourceId = request.headers.get("x-goog-resource-id");
   const state = request.headers.get("x-goog-resource-state");
+  const token = request.headers.get("x-goog-channel-token");
+
+  if (!verifyOptionalWebhookToken("GOOGLE_WEBHOOK_TOKEN", token)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   // Ignore the initial "sync" notification sent when the channel is created.
-  if (!channelId || state === "sync") {
+  if (!channelId || !resourceId || state === "sync") {
     return NextResponse.json({ ok: true });
   }
 
   const conn = await db.googleConnection.findFirst({
-    where: { channelId },
+    where: { channelId, resourceId },
     select: { userId: true },
   });
 

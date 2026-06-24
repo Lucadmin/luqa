@@ -43,6 +43,7 @@ export async function registerWatchChannel(
       id: crypto.randomUUID(),
       type: "web_hook",
       address: webhookUrl,
+      token: process.env.GOOGLE_WEBHOOK_TOKEN?.trim() || undefined,
     },
   });
 

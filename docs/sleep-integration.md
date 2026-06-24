@@ -31,6 +31,7 @@ Environment variables:
 GOOGLE_HEALTH_CLIENT_ID=...
 GOOGLE_HEALTH_CLIENT_SECRET=...
 APP_URL=https://your-domain.example
+GOOGLE_HEALTH_WEBHOOK_TOKEN=...
 ```
 
 If the health-specific client variables are omitted, the app falls back to
@@ -41,7 +42,8 @@ Google Cloud setup still needs to be done outside the repo:
 - Enable/request Google Health API access for the project.
 - Add `/api/health/google/callback` as an OAuth redirect URI.
 - Configure a Google Health webhook subscriber pointing at
-  `/api/health/google/webhook` for automatic change notifications.
+  `/api/health/google/webhook?token=<GOOGLE_HEALTH_WEBHOOK_TOKEN>` for automatic
+  change notifications when a token is configured.
 
 Reference docs:
 

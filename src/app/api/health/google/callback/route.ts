@@ -1,19 +1,37 @@
 import { google } from "googleapis";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { makeGoogleHealthOAuthClient } from "@/lib/google-health/oauth";
 import { fetchGoogleHealthIdentity, syncGoogleHealthSleep } from "@/lib/google-health/sync";
+import {
+  oauthStateCookieName,
+  verifyOAuthState,
+} from "@/lib/oauth-state";
+import { secureCompare } from "@/lib/secure-compare";
+import { encryptSecret } from "@/lib/secret-crypto";
 
-export async function GET(request: Request) {
+const stateCookieName = oauthStateCookieName("google-health");
+
+function redirectWithClearedState(url: URL) {
+  const response = NextResponse.redirect(url);
+  response.cookies.delete(stateCookieName);
+  return response;
+}
+
+export async function GET(request: NextRequest) {
   const reqUrl = new URL(request.url);
   const { searchParams } = reqUrl;
   const code = searchParams.get("code");
-  const userId = searchParams.get("state");
+  const state = searchParams.get("state");
   const error = searchParams.get("error");
   const origin = reqUrl.origin;
+  const cookieState = request.cookies.get(stateCookieName)?.value;
+  const stateMatches =
+    Boolean(state && cookieState) && secureCompare(state as string, cookieState as string);
+  const userId = stateMatches ? verifyOAuthState(state, "google-health") : null;
 
   if (error || !code || !userId) {
-    return NextResponse.redirect(new URL("/settings?health=denied", origin));
+    return redirectWithClearedState(new URL("/settings?health=denied", origin));
   }
 
   try {
@@ -34,8 +52,8 @@ export async function GET(request: Request) {
     await db.googleHealthConnection.upsert({
       where: { userId },
       update: {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        accessToken: encryptSecret(tokens.access_token),
+        refreshToken: encryptSecret(tokens.refresh_token),
         expiresAt: tokens.expiry_date
           ? new Date(tokens.expiry_date)
           : new Date(Date.now() + 3600_000),
@@ -46,8 +64,8 @@ export async function GET(request: Request) {
       },
       create: {
         userId,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        accessToken: encryptSecret(tokens.access_token),
+        refreshToken: encryptSecret(tokens.refresh_token),
         expiresAt: tokens.expiry_date
           ? new Date(tokens.expiry_date)
           : new Date(Date.now() + 3600_000),
@@ -61,9 +79,9 @@ export async function GET(request: Request) {
       console.error("[google-health-callback] initial sleep sync failed", e),
     );
 
-    return NextResponse.redirect(new URL("/settings?health=connected", origin));
+    return redirectWithClearedState(new URL("/settings?health=connected", origin));
   } catch (err) {
     console.error("[google-health-callback] error", err);
-    return NextResponse.redirect(new URL("/settings?health=error", origin));
+    return redirectWithClearedState(new URL("/settings?health=error", origin));
   }
 }
