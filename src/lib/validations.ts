@@ -126,11 +126,52 @@ export const updateSleepSchema = z
 
 // --- User settings / preferences ---
 
+const dateKeyValidation = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+
 export const updateSettingsSchema = z.object({
   name: z.string().trim().max(80).nullish(),
   dayStartHour: z.number().int().min(0).max(23).optional(),
   dailyGoalMinutes: z.number().int().min(0).max(1440).optional(),
   weekStartsOn: z.union([z.literal(0), z.literal(1)]).optional(),
+  birthDate: dateKeyValidation.nullish(),
+  lifeExpectancyYears: z.number().int().min(40).max(150).optional(),
+});
+
+// --- Life overview ---
+
+export const createLifePeriodSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    color: hexColor.optional(),
+    startDate: dateKeyValidation,
+    endDate: dateKeyValidation.nullish(),
+  })
+  .refine((v) => !v.endDate || v.endDate >= v.startDate, {
+    message: "End must be on or after start",
+    path: ["endDate"],
+  });
+
+export const updateLifePeriodSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    color: hexColor.optional(),
+    startDate: dateKeyValidation.optional(),
+    endDate: dateKeyValidation.nullable().optional(),
+  })
+  .refine(
+    (v) => !v.startDate || !v.endDate || v.endDate >= v.startDate,
+    { message: "End must be on or after start", path: ["endDate"] },
+  );
+
+// Upsert one week's review. When every field is empty the row is removed.
+export const upsertWeekNoteSchema = z.object({
+  weekIndex: z.number().int().min(0).max(150 * 52),
+  highlights: z.string().max(4000).optional().default(""),
+  lessons: z.string().max(4000).optional().default(""),
+  rating: z.number().int().min(1).max(5).nullish(),
+  milestone: z.string().trim().max(120).nullish(),
 });
 
 // --- Habits ---
@@ -200,6 +241,9 @@ export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
 export type ImportSleepInput = z.infer<typeof importSleepSchema>;
 export type UpdateSleepInput = z.infer<typeof updateSleepSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
+export type CreateLifePeriodInput = z.infer<typeof createLifePeriodSchema>;
+export type UpdateLifePeriodInput = z.infer<typeof updateLifePeriodSchema>;
+export type UpsertWeekNoteInput = z.infer<typeof upsertWeekNoteSchema>;
 export type CreateHabitInput = z.infer<typeof createHabitSchema>;
 export type UpdateHabitInput = z.infer<typeof updateHabitSchema>;
 export type HabitLogInput = z.infer<typeof habitLogSchema>;

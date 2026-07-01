@@ -89,6 +89,39 @@ export interface SettingsDTO {
   dailyGoalMinutes: number;
   /** 0 = Sunday, 1 = Monday. */
   weekStartsOn: number;
+  /** "YYYY-MM-DD" date of birth, or null until set. Anchors the life grid. */
+  birthDate: string | null;
+  /** Number of year-rows the life grid shows. */
+  lifeExpectancyYears: number;
+}
+
+// --- Life overview ("life in weeks") ---
+
+export interface LifePeriodDTO {
+  id: string;
+  name: string;
+  color: string;
+  /** "YYYY-MM-DD". */
+  startDate: string;
+  /** "YYYY-MM-DD", or null while ongoing. */
+  endDate: string | null;
+}
+
+export interface WeekNoteDTO {
+  /** 0-based age-week index since birth. */
+  weekIndex: number;
+  highlights: string;
+  lessons: string;
+  rating: number | null;
+  milestone: string | null;
+}
+
+/** Everything the life screen needs in one payload. */
+export interface LifeOverviewDTO {
+  birthDate: string | null;
+  lifeExpectancyYears: number;
+  periods: LifePeriodDTO[];
+  notes: WeekNoteDTO[];
 }
 
 // --- Habits ---

@@ -11,6 +11,8 @@ const DEFAULTS: SettingsDTO = {
   dayStartHour: DAY_START_HOUR,
   dailyGoalMinutes: 480,
   weekStartsOn: 1,
+  birthDate: null,
+  lifeExpectancyYears: 90,
 };
 
 const KEY = "/api/settings";

@@ -1,5 +1,21 @@
-import type { Category, Habit, SleepEntry, TimeEntry } from "@/generated/prisma/client";
-import type { CategoryDTO, HabitDTO, SleepEntryDTO, SleepStageDTO, TimeEntryDTO } from "@/lib/types";
+import type {
+  Category,
+  Habit,
+  LifePeriod,
+  SleepEntry,
+  TimeEntry,
+  WeekNote,
+} from "@/generated/prisma/client";
+import type {
+  CategoryDTO,
+  HabitDTO,
+  LifePeriodDTO,
+  SleepEntryDTO,
+  SleepStageDTO,
+  TimeEntryDTO,
+  WeekNoteDTO,
+} from "@/lib/types";
+import { toDateKey } from "@/lib/life";
 
 export function toEntryDTO(e: TimeEntry): TimeEntryDTO {
   return {
@@ -59,6 +75,26 @@ export function toSleepDTO(e: SleepEntry): SleepEntryDTO {
     remMinutes: e.remMinutes,
     stages: toSleepStages(e.stages),
     manualOverrideAt: e.manualOverrideAt?.toISOString() ?? null,
+  };
+}
+
+export function toLifePeriodDTO(p: LifePeriod): LifePeriodDTO {
+  return {
+    id: p.id,
+    name: p.name,
+    color: p.color,
+    startDate: toDateKey(p.startDate),
+    endDate: p.endDate ? toDateKey(p.endDate) : null,
+  };
+}
+
+export function toWeekNoteDTO(n: WeekNote): WeekNoteDTO {
+  return {
+    weekIndex: n.weekIndex,
+    highlights: n.highlights,
+    lessons: n.lessons,
+    rating: n.rating,
+    milestone: n.milestone,
   };
 }
 
