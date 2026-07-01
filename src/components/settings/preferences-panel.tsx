@@ -88,6 +88,10 @@ const GOAL_MIN = 0;
 const GOAL_MAX = 16 * 60;
 const GOAL_STEP = 30;
 
+const LIFE_MIN = 40;
+const LIFE_MAX = 150;
+const LIFE_STEP = 5;
+
 export function PreferencesPanel() {
   const { settings, updateSettings } = useSettings();
 
@@ -165,6 +169,53 @@ export function PreferencesPanel() {
               {label}
             </button>
           ))}
+        </div>
+      </Row>
+
+      <Row
+        label="Date of birth"
+        hint="Anchors your life overview grid."
+      >
+        <input
+          type="date"
+          value={settings.birthDate ?? ""}
+          max={new Date().toISOString().slice(0, 10)}
+          onChange={(e) => updateSettings({ birthDate: e.target.value || null })}
+          className="h-9 rounded-lg border border-border bg-surface px-2 text-sm tabular-nums focus:outline-none focus-visible:border-primary"
+        />
+      </Row>
+
+      <Row label="Life span" hint="How many years the life grid shows.">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Decrease life span"
+            onClick={() =>
+              updateSettings({
+                lifeExpectancyYears: Math.max(LIFE_MIN, settings.lifeExpectancyYears - LIFE_STEP),
+              })
+            }
+            disabled={settings.lifeExpectancyYears <= LIFE_MIN}
+            className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+          >
+            <Minus className="h-3.5 w-3.5" />
+          </button>
+          <span className="w-16 text-center text-sm font-medium tabular-nums">
+            {settings.lifeExpectancyYears} yrs
+          </span>
+          <button
+            type="button"
+            aria-label="Increase life span"
+            onClick={() =>
+              updateSettings({
+                lifeExpectancyYears: Math.min(LIFE_MAX, settings.lifeExpectancyYears + LIFE_STEP),
+              })
+            }
+            disabled={settings.lifeExpectancyYears >= LIFE_MAX}
+            className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
         </div>
       </Row>
 

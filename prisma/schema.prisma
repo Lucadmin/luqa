@@ -24,12 +24,18 @@ model User {
   dailyGoalMinutes Int @default(480) // tracked-time goal per day, for the reports goal line
   weekStartsOn     Int @default(1) // 0 = Sunday, 1 = Monday
 
+  // Life overview ("life in weeks")
+  birthDate           DateTime? @db.Date // anchors the life grid; null until set
+  lifeExpectancyYears Int       @default(90) // number of year-rows the grid shows
+
   categories       Category[]
   timeEntries      TimeEntry[]
   sleepEntries     SleepEntry[]
   googleConnection GoogleConnection?
   googleHealthConnection GoogleHealthConnection?
   habits           Habit[]
+  lifePeriods      LifePeriod[]
+  weekNotes        WeekNote[]
 
   @@map("users")
 }
@@ -250,6 +256,46 @@ model Habit {
   @@index([userId])
   @@index([categoryId])
   @@map("habits")
+}
+
+// A named chapter of life shown as a coloured band on the life grid — e.g.
+// "University", "Relationship with …", a job. Periods may overlap freely, so a
+// relationship that spans university is represented by two overlapping periods.
+model LifePeriod {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  color     String    @default("#6366f1") // hex swatch shown on the grid + legend
+  startDate DateTime  @db.Date
+  endDate   DateTime? @db.Date // null => ongoing
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("life_periods")
+}
+
+// A weekly review attached to one age-week of the user's life. weekIndex is the
+// 0-based number of weeks since birth (week 0 = the week they were born), so
+// notes stay put even if the grid's life-expectancy changes.
+model WeekNote {
+  id         String   @id @default(cuid())
+  userId     String
+  weekIndex  Int
+  highlights String   @default("") // accomplishments / wins
+  lessons    String   @default("") // retrospective / what was learned
+  rating     Int? // optional 1–5 self-rating for the week
+  milestone  String? // optional one-off marker title; draws a dot on the grid
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekIndex])
+  @@index([userId])
+  @@map("week_notes")
 }
 
 // Progress for one habit on one logical day. Created lazily on first interaction.
