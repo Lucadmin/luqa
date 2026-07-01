@@ -83,6 +83,9 @@ export function LifeView() {
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [periodsOpen, setPeriodsOpen] = useState(false);
 
+  const setZoomClamped = (z: number) =>
+    setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100)));
+
   const birthKey = life.birthDate;
   const years = life.lifeExpectancyYears;
   // Captured once at mount (no ticking) — the current week only changes daily.
@@ -164,80 +167,55 @@ export function LifeView() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="shrink-0 border-b border-border px-4 py-4 md:px-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">Life in weeks</h1>
-            <p className="mt-0.5 text-sm text-muted">
-              <span className="font-medium text-foreground">
-                {stats.years} yr {stats.weeksIntoYear} wk
-              </span>{" "}
-              lived · {stats.weeksRemaining.toLocaleString()} weeks left ·{" "}
-              {Math.round(stats.fractionLived * 100)}% of {years}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-lg border border-border">
-              <button
-                type="button"
-                aria-label="Zoom out"
-                onClick={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
-                disabled={zoom <= ZOOM_MIN}
-                className="grid h-8 w-8 place-items-center rounded-l-lg text-muted hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
-              >
-                <ZoomOut className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                aria-label="Reset zoom"
-                onClick={() => setZoom(1)}
-                className="grid h-8 w-8 place-items-center border-x border-border text-muted hover:bg-surface-2 hover:text-foreground"
-              >
-                <Maximize2 className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                aria-label="Zoom in"
-                onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
-                disabled={zoom >= ZOOM_MAX}
-                className="grid h-8 w-8 place-items-center rounded-r-lg text-muted hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
-              >
-                <ZoomIn className="h-4 w-4" />
-              </button>
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => setPeriodsOpen(true)}>
-              <Layers className="h-3.5 w-3.5" /> Periods
-            </Button>
-          </div>
+      {/* Compact toolbar */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
+        <p className="min-w-0 flex-1 truncate text-xs text-muted">
+          <span className="font-medium text-foreground">
+            {stats.years}y {stats.weeksIntoYear}w
+          </span>{" "}
+          lived · {Math.round(stats.fractionLived * 100)}% ·{" "}
+          {stats.weeksRemaining.toLocaleString()} left
+        </p>
+        <div className="flex shrink-0 items-center rounded-lg border border-border">
+          <button
+            type="button"
+            aria-label="Zoom out"
+            onClick={() => setZoomClamped(zoom - ZOOM_STEP)}
+            disabled={zoom <= ZOOM_MIN}
+            className="grid h-7 w-7 place-items-center rounded-l-lg text-muted hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+          >
+            <ZoomOut className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label="Fit to screen"
+            onClick={() => setZoom(1)}
+            className="grid h-7 w-7 place-items-center border-x border-border text-muted hover:bg-surface-2 hover:text-foreground"
+          >
+            <Maximize2 className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            onClick={() => setZoomClamped(zoom + ZOOM_STEP)}
+            disabled={zoom >= ZOOM_MAX}
+            className="grid h-7 w-7 place-items-center rounded-r-lg text-muted hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </button>
         </div>
-
-        {/* Progress bar */}
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-          <div
-            className="h-full rounded-full bg-primary"
-            style={{ width: `${stats.fractionLived * 100}%` }}
-          />
-        </div>
-
-        {/* Legend */}
-        {life.periods.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
-            {life.periods.map((p) => (
-              <span key={p.id} className="flex items-center gap-1.5 text-xs text-muted">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: p.color }}
-                />
-                {p.name}
-              </span>
-            ))}
-          </div>
-        )}
+        <button
+          type="button"
+          aria-label="Life periods"
+          onClick={() => setPeriodsOpen(true)}
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-border text-muted hover:bg-surface-2 hover:text-foreground"
+        >
+          <Layers className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {/* Grid */}
-      <div className="min-h-0 flex-1 p-4 md:p-6">
+      <div className="min-h-0 flex-1 p-2 md:p-4">
         <LifeGrid
           totalWeeks={derived.total}
           currentWeek={stats.currentWeek}
@@ -245,6 +223,7 @@ export function LifeView() {
           noteWeeks={noteWeeks}
           milestoneWeeks={milestoneWeeks}
           zoom={zoom}
+          onZoomChange={setZoomClamped}
           selectedWeek={selectedWeek}
           onSelect={setSelectedWeek}
           labelFor={labelFor}

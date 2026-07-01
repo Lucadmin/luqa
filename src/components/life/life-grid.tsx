@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { WEEKS_PER_YEAR } from "@/lib/life";
 
@@ -15,6 +15,8 @@ interface LifeGridProps {
   milestoneWeeks: Set<number>;
   /** Cell size multiplier over the fit-to-width size. 1 = fit. */
   zoom: number;
+  /** Called with a new (unclamped) zoom during a pinch gesture. */
+  onZoomChange: (zoom: number) => void;
   selectedWeek: number | null;
   onSelect: (weekIndex: number) => void;
   labelFor: (weekIndex: number) => string;
@@ -36,6 +38,12 @@ function useWidth<T extends HTMLElement>() {
   return [ref, width] as const;
 }
 
+function touchDistance(touches: TouchList): number {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+
 export function LifeGrid({
   totalWeeks,
   currentWeek,
@@ -43,11 +51,53 @@ export function LifeGrid({
   noteWeeks,
   milestoneWeeks,
   zoom,
+  onZoomChange,
   selectedWeek,
   onSelect,
   labelFor,
 }: LifeGridProps) {
   const [ref, width] = useWidth<HTMLDivElement>();
+
+  // Two-finger pinch to zoom. Bound as a non-passive native listener so we can
+  // stop the browser's own page zoom while pinching the grid.
+  const zoomRef = useRef(zoom);
+  const onZoomRef = useRef(onZoomChange);
+  useEffect(() => {
+    zoomRef.current = zoom;
+    onZoomRef.current = onZoomChange;
+  });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let startDist = 0;
+    let startZoom = 1;
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        startDist = touchDistance(e.touches);
+        startZoom = zoomRef.current;
+      }
+    };
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && startDist > 0) {
+        e.preventDefault();
+        const ratio = touchDistance(e.touches) / startDist;
+        onZoomRef.current(startZoom * ratio);
+      }
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) startDist = 0;
+    };
+    el.addEventListener("touchstart", onStart, { passive: false });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, [ref]);
 
   const years = Math.ceil(totalWeeks / WEEKS_PER_YEAR);
   const basePitch = width ? Math.max(5, Math.floor((width - GUTTER) / WEEKS_PER_YEAR)) : 10;
@@ -57,7 +107,11 @@ export function LifeGrid({
   const radius = Math.max(1, Math.round(cell * 0.22));
 
   return (
-    <div ref={ref} className="h-full w-full overflow-auto">
+    <div
+      ref={ref}
+      className="h-full w-full overflow-auto"
+      style={{ touchAction: "pan-x pan-y" }}
+    >
       <div
         className="grid w-max"
         style={{
