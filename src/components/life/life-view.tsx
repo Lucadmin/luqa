@@ -215,7 +215,7 @@ export function LifeView() {
       </div>
 
       {/* Grid */}
-      <div className="min-h-0 flex-1 p-2 md:p-4">
+      <div className="min-h-0 flex-1 px-1 pb-1">
         <LifeGrid
           totalWeeks={derived.total}
           currentWeek={stats.currentWeek}
