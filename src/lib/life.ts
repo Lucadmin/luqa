@@ -85,6 +85,28 @@ export interface LifeStats {
   fractionLived: number;
 }
 
+/**
+ * Real calendar age: whole years elapsed, plus whole weeks since the last
+ * birthday. Uses actual dates rather than dividing the age-week count by 52
+ * (which drifts, because a year is ~52.18 weeks and would overstate the age).
+ */
+export function calendarAge(
+  birthKey: string,
+  todayKey: string,
+): { years: number; weeksIntoYear: number } {
+  const [by, bm, bd] = birthKey.split("-").map(Number);
+  const [ty, tm, td] = todayKey.split("-").map(Number);
+  let years = ty - by;
+  if (tm < bm || (tm === bm && td < bd)) years -= 1;
+  if (years < 0) return { years: 0, weeksIntoYear: 0 };
+  const lastBirthday = Date.UTC(by + years, bm - 1, bd);
+  const weeksIntoYear = Math.max(
+    0,
+    Math.floor((dateKeyToUtc(todayKey) - lastBirthday) / MS_PER_WEEK),
+  );
+  return { years, weeksIntoYear };
+}
+
 /** Derive the headline life stats for `birthKey` as of `todayKey`. */
 export function lifeStats(
   birthKey: string,
@@ -95,13 +117,14 @@ export function lifeStats(
   const raw = weekIndexFor(birthKey, todayKey);
   const currentWeek = Math.min(raw, Math.max(0, total - 1));
   const weeksLived = Math.min(raw, total);
+  const { years, weeksIntoYear } = calendarAge(birthKey, todayKey);
   return {
     currentWeek,
     weeksLived,
     weeksRemaining: Math.max(0, total - weeksLived),
     totalWeeks: total,
-    years: Math.floor(raw / WEEKS_PER_YEAR),
-    weeksIntoYear: raw % WEEKS_PER_YEAR,
+    years,
+    weeksIntoYear,
     fractionLived: total > 0 ? Math.min(1, weeksLived / total) : 0,
   };
 }
