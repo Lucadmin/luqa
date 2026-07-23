@@ -2,9 +2,9 @@
 // imports so this can be used from API routes and React components alike.
 //
 // The grid models age-weeks: week 0 is the week the user was born, and every
-// row is one year of 52 weeks. 52×7 = 364 days, so the grid drifts ~1.25 days
-// per year against the calendar — this is the same simplification the classic
-// "Your Life in Weeks" posters make, and it keeps rows aligned to birthdays.
+// row is one calendar year of 52 cells. Each row starts on the user's birthday.
+// Because calendar years are 365 or 366 days, the final cell in a row can cover
+// eight or nine days instead of seven.
 
 export const WEEKS_PER_YEAR = 52;
 const MS_PER_DAY = 86_400_000;
@@ -40,19 +40,58 @@ export function toDateKey(value: Date | number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** UTC timestamp of the birthday that begins a given age-year. */
+function birthdayUtcForAge(birthKey: string, age: number): number {
+  const [birthYear, birthMonth, birthDay] = birthKey.split("-").map(Number);
+  const year = birthYear + age;
+  // Clamp 29 February to 28 February in non-leap years instead of allowing
+  // Date.UTC to roll it into March.
+  const lastDayOfMonth = new Date(Date.UTC(year, birthMonth, 0)).getUTCDate();
+  return Date.UTC(year, birthMonth - 1, Math.min(birthDay, lastDayOfMonth));
+}
+
 /**
  * 0-based age-week index for `dateKey` relative to `birthKey`. Dates before
- * birth clamp to 0. Both arguments are "YYYY-MM-DD".
+ * birth clamp to 0. Each 52-cell row is anchored to the birthday that starts
+ * that age-year; any extra day(s) at the end of the year stay in its last cell.
+ * Both arguments are "YYYY-MM-DD".
  */
 export function weekIndexFor(birthKey: string, dateKey: string): number {
-  const diff = dateKeyToUtc(dateKey) - dateKeyToUtc(birthKey);
-  if (diff <= 0) return 0;
-  return Math.floor(diff / MS_PER_WEEK);
+  const date = dateKeyToUtc(dateKey);
+  const birth = dateKeyToUtc(birthKey);
+  if (date <= birth) return 0;
+
+  const [birthYear] = birthKey.split("-").map(Number);
+  const [year] = dateKey.split("-").map(Number);
+  let age = year - birthYear;
+  if (date < birthdayUtcForAge(birthKey, age)) age -= 1;
+  if (age < 0) return 0;
+
+  const rowStart = birthdayUtcForAge(birthKey, age);
+  const weekInYear = Math.min(
+    WEEKS_PER_YEAR - 1,
+    Math.floor((date - rowStart) / MS_PER_WEEK),
+  );
+  return age * WEEKS_PER_YEAR + weekInYear;
 }
 
 /** UTC-midnight ms of the first day of a given age-week. */
 export function weekStartUtc(birthKey: string, weekIndex: number): number {
-  return dateKeyToUtc(birthKey) + weekIndex * MS_PER_WEEK;
+  const { row, col } = gridPosition(weekIndex);
+  return birthdayUtcForAge(birthKey, row) + col * MS_PER_WEEK;
+}
+
+/**
+ * UTC-midnight ms of the final day represented by an age-week. The last cell
+ * in each row ends the day before the next birthday.
+ */
+export function weekEndUtc(birthKey: string, weekIndex: number): number {
+  const { row, col } = gridPosition(weekIndex);
+  const nominalEnd = weekStartUtc(birthKey, weekIndex) + 6 * MS_PER_DAY;
+  const dayBeforeNextBirthday =
+    birthdayUtcForAge(birthKey, row + 1) - MS_PER_DAY;
+  if (col === WEEKS_PER_YEAR - 1) return dayBeforeNextBirthday;
+  return Math.min(nominalEnd, dayBeforeNextBirthday);
 }
 
 /** Total number of week-cells rendered for a given life expectancy. */
@@ -94,15 +133,16 @@ export function calendarAge(
   birthKey: string,
   todayKey: string,
 ): { years: number; weeksIntoYear: number } {
-  const [by, bm, bd] = birthKey.split("-").map(Number);
-  const [ty, tm, td] = todayKey.split("-").map(Number);
-  let years = ty - by;
-  if (tm < bm || (tm === bm && td < bd)) years -= 1;
+  const [birthYear] = birthKey.split("-").map(Number);
+  const [todayYear] = todayKey.split("-").map(Number);
+  const today = dateKeyToUtc(todayKey);
+  let years = todayYear - birthYear;
+  if (today < birthdayUtcForAge(birthKey, years)) years -= 1;
   if (years < 0) return { years: 0, weeksIntoYear: 0 };
-  const lastBirthday = Date.UTC(by + years, bm - 1, bd);
+  const lastBirthday = birthdayUtcForAge(birthKey, years);
   const weeksIntoYear = Math.max(
     0,
-    Math.floor((dateKeyToUtc(todayKey) - lastBirthday) / MS_PER_WEEK),
+    Math.floor((today - lastBirthday) / MS_PER_WEEK),
   );
   return { years, weeksIntoYear };
 }

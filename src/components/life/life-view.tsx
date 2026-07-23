@@ -1,6 +1,13 @@
 "use client";
 
-import { CalendarHeart, Layers, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  CalendarHeart,
+  Layers,
+  LocateFixed,
+  RefreshCw,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { LifeGrid } from "@/components/life/life-grid";
 import { PeriodsSheet } from "@/components/life/periods-sheet";
@@ -16,6 +23,7 @@ import {
   toDateKey,
   totalWeeks,
   WEEKS_PER_YEAR,
+  weekEndUtc,
   weekIndexFor,
   weekStartUtc,
 } from "@/lib/life";
@@ -60,13 +68,18 @@ function EmptyState({ onSaved }: { onSaved: () => void }) {
           Every week of your life as a single square. Set your date of birth to
           begin.
         </p>
-        <input
-          type="date"
-          value={date}
-          max={new Date().toISOString().slice(0, 10)}
-          onChange={(e) => setDate(e.target.value)}
-          className="mt-4 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm tabular-nums focus-visible:outline-none focus-visible:border-primary"
-        />
+        <label className="mt-4 block text-left">
+          <span className="mb-1.5 block text-xs font-medium text-muted">
+            Date of birth
+          </span>
+          <input
+            type="date"
+            value={date}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setDate(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm tabular-nums focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          />
+        </label>
         <Button onClick={save} disabled={!date || busy} className="mt-3 w-full">
           {busy ? "Saving…" : "Show my life"}
         </Button>
@@ -76,12 +89,22 @@ function EmptyState({ onSaved }: { onSaved: () => void }) {
 }
 
 export function LifeView() {
-  const { life, isLoading, mutate, createPeriod, updatePeriod, deletePeriod, saveNote } =
-    useLife();
+  const {
+    life,
+    isLoading,
+    error,
+    mutate,
+    createPeriod,
+    updatePeriod,
+    deletePeriod,
+    saveNote,
+  } = useLife();
 
   const [zoom, setZoom] = useState(1);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const [previewWeek, setPreviewWeek] = useState<number | null>(null);
   const [periodsOpen, setPeriodsOpen] = useState(false);
+  const [scrollRequest, setScrollRequest] = useState(0);
 
   const setZoomClamped = (z: number) =>
     setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100)));
@@ -122,7 +145,10 @@ export function LifeView() {
       if (!birthKey) return "";
       const start = weekStartUtc(birthKey, i);
       const age = Math.floor(i / WEEKS_PER_YEAR);
-      return `Age ${age} · week ${(i % WEEKS_PER_YEAR) + 1} — ${fmtUtc(start)}`;
+      const week = i % WEEKS_PER_YEAR;
+      return week === 0
+        ? `Birthday · age ${age} — ${fmtUtc(start)}`
+        : `Age ${age} · week ${week + 1} — ${fmtUtc(start)}`;
     };
   }, [birthKey]);
 
@@ -130,6 +156,27 @@ export function LifeView() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="h-40 w-full max-w-3xl animate-pulse rounded-2xl bg-surface-2" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="grid h-full place-items-center p-6">
+        <div className="max-w-sm text-center">
+          <h2 className="text-base font-semibold">Life overview unavailable</h2>
+          <p className="mt-1 text-sm text-muted">
+            We couldn&apos;t load your weeks. Your data is still safe.
+          </p>
+          <Button
+            variant="secondary"
+            className="mt-4"
+            onClick={() => mutate()}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Try again
+          </Button>
+        </div>
       </div>
     );
   }
@@ -156,66 +203,161 @@ export function LifeView() {
 
   const selectedHeadline =
     selectedWeek !== null
-      ? `Age ${Math.floor(selectedWeek / WEEKS_PER_YEAR)}, week ${(selectedWeek % WEEKS_PER_YEAR) + 1}`
+      ? labelFor(selectedWeek).split(" — ")[0]
       : "";
   const selectedRange =
     selectedWeek !== null
       ? `${fmtUtc(weekStartUtc(birthKey, selectedWeek))} – ${fmtUtc(
-          weekStartUtc(birthKey, selectedWeek) + 6 * 86_400_000,
+          weekEndUtc(birthKey, selectedWeek),
         )}`
       : "";
 
+  const inspectedWeek = previewWeek ?? stats.currentWeek;
+  const inspectedLabel = labelFor(inspectedWeek).split(" — ")[0];
+  const inspectedRange = `${fmtUtc(
+    weekStartUtc(birthKey, inspectedWeek),
+  )} – ${fmtUtc(weekEndUtc(birthKey, inspectedWeek))}`;
+
   return (
     <div className="flex h-full flex-col">
-      {/* Compact toolbar */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
-        <p className="min-w-0 flex-1 truncate text-xs text-muted">
-          <span className="font-medium text-foreground">
-            {stats.years}y {stats.weeksIntoYear}w
-          </span>{" "}
-          lived · {Math.round(stats.fractionLived * 100)}% ·{" "}
-          {stats.weeksRemaining.toLocaleString()} left
-        </p>
+      <header className="shrink-0 border-b border-border px-4 py-4 md:px-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight">
+              Life in weeks
+            </h1>
+            <p className="mt-0.5 text-sm text-muted">
+              Each row is one year, starting on your birthday. Select any week
+              to review it.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPeriodsOpen(true)}
+            className="shrink-0"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Periods
+          </Button>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-4 text-xs text-muted">
+          <p>
+            <span className="font-semibold text-foreground">
+              {stats.years} years, {stats.weeksIntoYear} weeks
+            </span>{" "}
+            old
+          </p>
+          <p className="text-right tabular-nums">
+            {stats.weeksRemaining.toLocaleString()} weeks ahead in your{" "}
+            {years}-year view
+          </p>
+        </div>
+        <div
+          className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2"
+          role="progressbar"
+          aria-label="Life view progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(stats.fractionLived * 100)}
+        >
+          <div
+            className="h-full rounded-full bg-primary"
+            style={{ width: `${stats.fractionLived * 100}%` }}
+          />
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-[2px] bg-foreground/30" />
+            Lived
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-[2px] border border-border-strong bg-surface" />
+            Ahead
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-[2px] ring-1 ring-inset ring-primary" />
+            Birthday
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-[2px] ring-2 ring-primary" />
+            This week
+          </span>
+          {life.periods.slice(0, 3).map((period) => (
+            <span
+              key={period.id}
+              className="flex max-w-40 items-center gap-1.5"
+            >
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                style={{ backgroundColor: period.color }}
+              />
+              <span className="truncate">{period.name}</span>
+            </span>
+          ))}
+          {life.periods.length > 3 && (
+            <button
+              type="button"
+              onClick={() => setPeriodsOpen(true)}
+              className="font-medium text-primary hover:text-primary-hover"
+            >
+              +{life.periods.length - 3} more
+            </button>
+          )}
+        </div>
+      </header>
+
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2 md:px-5">
+        <div className="min-w-[12rem] flex-1" aria-live="polite">
+          <p className="truncate text-xs font-medium">{inspectedLabel}</p>
+          <p className="truncate text-[11px] text-muted">{inspectedRange}</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setPreviewWeek(stats.currentWeek);
+            setScrollRequest((request) => request + 1);
+          }}
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium text-muted transition-colors motion-reduce:transition-none hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <LocateFixed className="h-3.5 w-3.5" />
+          Today
+        </button>
+
         <div className="flex shrink-0 items-center rounded-lg border border-border">
           <button
             type="button"
             aria-label="Zoom out"
             onClick={() => setZoomClamped(zoom - ZOOM_STEP)}
             disabled={zoom <= ZOOM_MIN}
-            className="grid h-7 w-7 place-items-center rounded-l-lg text-muted hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+            className="grid h-9 w-9 place-items-center rounded-l-lg text-muted transition-colors motion-reduce:transition-none hover:bg-surface-2 hover:text-foreground focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
           >
             <ZoomOut className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
-            aria-label="Fit to screen"
+            aria-label={`Zoom ${Math.round(zoom * 100)} percent. Reset to fit`}
             onClick={() => setZoom(1)}
-            className="grid h-7 w-7 place-items-center border-x border-border text-muted hover:bg-surface-2 hover:text-foreground"
+            className="h-9 min-w-14 border-x border-border px-2 text-xs font-medium tabular-nums text-muted transition-colors motion-reduce:transition-none hover:bg-surface-2 hover:text-foreground focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Maximize2 className="h-3 w-3" />
+            {Math.round(zoom * 100)}%
           </button>
           <button
             type="button"
             aria-label="Zoom in"
             onClick={() => setZoomClamped(zoom + ZOOM_STEP)}
             disabled={zoom >= ZOOM_MAX}
-            className="grid h-7 w-7 place-items-center rounded-r-lg text-muted hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+            className="grid h-9 w-9 place-items-center rounded-r-lg text-muted transition-colors motion-reduce:transition-none hover:bg-surface-2 hover:text-foreground focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
           >
             <ZoomIn className="h-3.5 w-3.5" />
           </button>
         </div>
-        <button
-          type="button"
-          aria-label="Life periods"
-          onClick={() => setPeriodsOpen(true)}
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-border text-muted hover:bg-surface-2 hover:text-foreground"
-        >
-          <Layers className="h-3.5 w-3.5" />
-        </button>
       </div>
 
-      {/* Grid */}
-      <div className="min-h-0 flex-1 px-1 pb-1">
+      <div className="min-h-0 flex-1 px-2 pb-2">
         <LifeGrid
           totalWeeks={derived.total}
           currentWeek={stats.currentWeek}
@@ -226,7 +368,9 @@ export function LifeView() {
           onZoomChange={setZoomClamped}
           selectedWeek={selectedWeek}
           onSelect={setSelectedWeek}
+          onPreview={setPreviewWeek}
           labelFor={labelFor}
+          scrollRequest={scrollRequest}
         />
       </div>
 
