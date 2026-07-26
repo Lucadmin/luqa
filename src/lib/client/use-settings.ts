@@ -8,6 +8,7 @@ import type { SettingsDTO } from "@/lib/types";
 const DEFAULTS: SettingsDTO = {
   name: null,
   email: "",
+  currency: "EUR",
   dayStartHour: DAY_START_HOUR,
   dailyGoalMinutes: 480,
   weekStartsOn: 1,

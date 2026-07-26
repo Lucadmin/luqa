@@ -83,6 +83,8 @@ export interface SuggestionDTO {
 export interface SettingsDTO {
   name: string | null;
   email: string;
+  /** ISO 4217 code every amount in the money screens is formatted with. */
+  currency: string;
   /** Hour (0–23) at which the logical day flips for stats. */
   dayStartHour: number;
   /** Tracked-time goal per day in minutes (reports goal line). */
@@ -193,4 +195,126 @@ export interface HabitStatDTO {
   completed: number;
   /** Scheduled days in range up to today. */
   scheduled: number;
+}
+
+// --- Shared expenses ---
+//
+// Every amount is integer cents, and every balance is signed from the user's
+// point of view: positive means "this person owes me".
+
+export type SplitMode = "EQUAL" | "PERCENT" | "AMOUNT";
+export type SettlementDirection = "TO_ME" | "FROM_ME";
+
+export interface PersonDTO {
+  id: string;
+  name: string;
+  color: string;
+  emoji: string | null;
+  /** Usual cut of a bill, in whole percent. Null = share equally. */
+  defaultPercent: number | null;
+  order: number;
+  archived: boolean;
+}
+
+/** A person plus the numbers the overview shows next to their name. */
+export interface PersonBalanceDTO extends PersonDTO {
+  /** Positive = they owe you, negative = you owe them, 0 = settled up. */
+  balanceCents: number;
+  /** All-time total you covered for them as a treat. Never part of a balance. */
+  coveredCents: number;
+  /** "YYYY-MM-DD" of their most recent expense or settlement, or null. */
+  lastActivity: string | null;
+}
+
+export interface PersonGroupDTO {
+  id: string;
+  name: string;
+  color: string;
+  emoji: string | null;
+  order: number;
+  archived: boolean;
+  memberIds: string[];
+}
+
+export interface ExpenseShareDTO {
+  personId: string;
+  amountCents: number;
+  /** Basis points of the bill, 10000 = 100%. */
+  percentBp: number | null;
+  /** You covered this slice as a treat — tracked, but not a debt. */
+  gifted: boolean;
+}
+
+export interface ExpenseDTO {
+  id: string;
+  description: string;
+  amountCents: number;
+  /** "YYYY-MM-DD". */
+  date: string;
+  /** Who fronted the money. Null = you did. */
+  paidByPersonId: string | null;
+  groupId: string | null;
+  splitMode: SplitMode;
+  /** Your own slice of the bill. */
+  myShareCents: number;
+  notes: string;
+  shares: ExpenseShareDTO[];
+  createdAt: string;
+}
+
+export interface SettlementDTO {
+  id: string;
+  personId: string;
+  amountCents: number;
+  direction: SettlementDirection;
+  /** "YYYY-MM-DD". */
+  date: string;
+  notes: string;
+  createdAt: string;
+}
+
+/** Everything the money screen needs in one payload. */
+export interface MoneyOverviewDTO {
+  currency: string;
+  people: PersonBalanceDTO[];
+  groups: PersonGroupDTO[];
+  /** Sum of the positive balances. */
+  owedToYouCents: number;
+  /** Sum of the negative balances, as a positive number. */
+  youOweCents: number;
+  /** owedToYou − youOwe. */
+  netCents: number;
+  /** All-time total covered as treats, across everyone. */
+  coveredCents: number;
+  recent: ExpenseDTO[];
+}
+
+/** One row of a person's history. */
+export interface LedgerItemDTO {
+  kind: "expense" | "settlement";
+  id: string;
+  /** "YYYY-MM-DD". */
+  date: string;
+  title: string;
+  /** Effect on the balance: positive raises what they owe you. Gifts are 0. */
+  deltaCents: number;
+  /** Their slice of the bill (expenses) or the amount moved (settlements). */
+  shareCents: number;
+  gifted: boolean;
+  /** The whole bill, for context. Null on settlements. */
+  amountCents: number | null;
+  /** Null = you paid. */
+  paidByPersonId: string | null;
+  direction: SettlementDirection | null;
+  createdAt: string;
+}
+
+export interface PersonLedgerDTO {
+  person: PersonDTO;
+  currency: string;
+  balanceCents: number;
+  coveredCents: number;
+  /** Covered so far in the current calendar year. */
+  coveredThisYearCents: number;
+  items: LedgerItemDTO[];
 }

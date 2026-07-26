@@ -8,6 +8,7 @@ import { updateSettingsSchema } from "@/lib/validations";
 const SELECT = {
   name: true,
   email: true,
+  currency: true,
   dayStartHour: true,
   dailyGoalMinutes: true,
   weekStartsOn: true,
@@ -19,6 +20,7 @@ const SELECT = {
 function toSettingsDTO(user: {
   name: string | null;
   email: string;
+  currency: string;
   dayStartHour: number;
   dailyGoalMinutes: number;
   weekStartsOn: number;
@@ -28,6 +30,7 @@ function toSettingsDTO(user: {
   return {
     name: user.name,
     email: user.email,
+    currency: user.currency,
     dayStartHour: user.dayStartHour,
     dailyGoalMinutes: user.dailyGoalMinutes,
     weekStartsOn: user.weekStartsOn,
@@ -67,7 +70,7 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const { name, birthDate, ...rest } = parsed.data;
+  const { name, birthDate, currency, ...rest } = parsed.data;
   const user = await db.user.update({
     where: { id: userId },
     data: {
@@ -75,6 +78,7 @@ export async function PATCH(request: Request) {
       ...(birthDate !== undefined
         ? { birthDate: birthDate ? new Date(`${birthDate}T00:00:00.000Z`) : null }
         : {}),
+      ...(currency !== undefined ? { currency: currency.toUpperCase() } : {}),
       ...rest,
     },
     select: SELECT,

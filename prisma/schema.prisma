@@ -28,6 +28,9 @@ model User {
   birthDate           DateTime? @db.Date // anchors the life grid; null until set
   lifeExpectancyYears Int       @default(90) // number of year-rows the grid shows
 
+  // Shared expenses
+  currency String @default("EUR") // ISO 4217, used to format every amount
+
   categories       Category[]
   timeEntries      TimeEntry[]
   sleepEntries     SleepEntry[]
@@ -36,6 +39,10 @@ model User {
   habits           Habit[]
   lifePeriods      LifePeriod[]
   weekNotes        WeekNote[]
+  people           Person[]
+  personGroups     PersonGroup[]
+  expenses         Expense[]
+  settlements      Settlement[]
 
   @@map("users")
 }
@@ -296,6 +303,170 @@ model WeekNote {
   @@unique([userId, weekIndex])
   @@index([userId])
   @@map("week_notes")
+}
+
+// --- Shared expenses ---------------------------------------------------------
+//
+// Everything here is expressed from the user's point of view: a positive
+// balance means "this person owes me". Amounts are integer cents so no split
+// ever loses a cent to floating point.
+
+// Someone the user shares expenses with.
+model Person {
+  id     String  @id @default(cuid())
+  userId String
+  name   String
+  color  String  @default("#6366f1")
+  emoji  String? // optional glyph on the avatar, e.g. "🧡"
+
+  // The everyday default: the cut of a bill this person carries, in percent.
+  // Null means "share equally with everyone else on the expense", which is the
+  // right answer for most people. Set it for the ones who differ — a flatmate
+  // who always takes 30%, a sibling you always cover at 0%.
+  defaultPercent Int?
+
+  order      Int       @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberships  GroupMember[]
+  shares       ExpenseShare[]
+  paidExpenses Expense[]      @relation("ExpensePayer")
+  settlements  Settlement[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("people")
+}
+
+// A named set of people — the friend group, the flat, a trip. Picking one on an
+// expense pre-selects its members; balances stay strictly per person.
+model PersonGroup {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  color      String    @default("#6366f1")
+  emoji      String?
+  order      Int       @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members  GroupMember[]
+  expenses Expense[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("person_groups")
+}
+
+model GroupMember {
+  groupId  String
+  personId String
+
+  group  PersonGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  person Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, personId])
+  @@index([personId])
+  @@map("group_members")
+}
+
+// How the per-person shares of an expense were arrived at. Stored so reopening
+// an expense shows the same editor state it was saved with.
+enum SplitMode {
+  EQUAL // everyone on the expense carries the same amount
+  PERCENT // explicit percentages
+  AMOUNT // explicit amounts typed per person
+}
+
+// One bill. The user's own slice lives on the expense (myShareCents); every
+// other participant's slice is an ExpenseShare row.
+model Expense {
+  id          String @id @default(cuid())
+  userId      String
+  description String @default("")
+  amountCents Int
+
+  date DateTime @db.Date
+
+  // Who fronted the money. Null = the user paid, which is the common case.
+  // When someone else paid, only the user's own share moves a balance: what
+  // the others owe in that case is between them and the payer.
+  paidByPersonId String?
+
+  groupId   String?
+  splitMode SplitMode @default(EQUAL)
+
+  // The user's own slice, in cents. Shares + myShareCents == amountCents.
+  myShareCents Int    @default(0)
+  notes        String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payer  Person?      @relation("ExpensePayer", fields: [paidByPersonId], references: [id], onDelete: Cascade)
+  group  PersonGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  shares ExpenseShare[]
+
+  @@index([userId, date])
+  @@index([groupId])
+  @@map("expenses")
+}
+
+// What one participant carries on one expense.
+model ExpenseShare {
+  id          String @id @default(cuid())
+  expenseId   String
+  personId    String
+  amountCents Int
+
+  // What this slice is as a percentage of the bill, in basis points
+  // (10000 = 100%): the figure that was typed in PERCENT mode, derived from
+  // the amount otherwise. Null only on a zero-amount bill.
+  percentBp Int?
+
+  // A treat: the user covered this slice as a gift. The amount is still
+  // recorded and totalled per person, but it never becomes a debt.
+  gifted Boolean @default(false)
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  person  Person  @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseId, personId])
+  @@index([personId])
+  @@map("expense_shares")
+}
+
+// Which way the money moved when a debt was paid off.
+enum SettlementDirection {
+  TO_ME // they paid the user back
+  FROM_ME // the user paid them
+}
+
+// A payback. Settles part or all of a person's balance without touching the
+// expenses it came from.
+model Settlement {
+  id          String              @id @default(cuid())
+  userId      String
+  personId    String
+  amountCents Int
+  direction   SettlementDirection @default(TO_ME)
+  date        DateTime            @db.Date
+  notes       String              @default("")
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([personId])
+  @@map("settlements")
 }
 
 // Progress for one habit on one logical day. Created lazily on first interaction.

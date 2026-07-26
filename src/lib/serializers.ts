@@ -1,15 +1,25 @@
 import type {
   Category,
+  Expense,
+  ExpenseShare,
+  GroupMember,
   Habit,
   LifePeriod,
+  Person,
+  PersonGroup,
+  Settlement,
   SleepEntry,
   TimeEntry,
   WeekNote,
 } from "@/generated/prisma/client";
 import type {
   CategoryDTO,
+  ExpenseDTO,
   HabitDTO,
   LifePeriodDTO,
+  PersonDTO,
+  PersonGroupDTO,
+  SettlementDTO,
   SleepEntryDTO,
   SleepStageDTO,
   TimeEntryDTO,
@@ -95,6 +105,63 @@ export function toWeekNoteDTO(n: WeekNote): WeekNoteDTO {
     lessons: n.lessons,
     rating: n.rating,
     milestone: n.milestone,
+  };
+}
+
+export function toPersonDTO(p: Person): PersonDTO {
+  return {
+    id: p.id,
+    name: p.name,
+    color: p.color,
+    emoji: p.emoji,
+    defaultPercent: p.defaultPercent,
+    order: p.order,
+    archived: p.archivedAt !== null,
+  };
+}
+
+export function toGroupDTO(g: PersonGroup & { members: GroupMember[] }): PersonGroupDTO {
+  return {
+    id: g.id,
+    name: g.name,
+    color: g.color,
+    emoji: g.emoji,
+    order: g.order,
+    archived: g.archivedAt !== null,
+    memberIds: g.members.map((m) => m.personId),
+  };
+}
+
+export function toExpenseDTO(e: Expense & { shares: ExpenseShare[] }): ExpenseDTO {
+  return {
+    id: e.id,
+    description: e.description,
+    amountCents: e.amountCents,
+    date: toDateKey(e.date),
+    paidByPersonId: e.paidByPersonId,
+    groupId: e.groupId,
+    splitMode: e.splitMode,
+    myShareCents: e.myShareCents,
+    notes: e.notes,
+    shares: e.shares.map((s) => ({
+      personId: s.personId,
+      amountCents: s.amountCents,
+      percentBp: s.percentBp,
+      gifted: s.gifted,
+    })),
+    createdAt: e.createdAt.toISOString(),
+  };
+}
+
+export function toSettlementDTO(s: Settlement): SettlementDTO {
+  return {
+    id: s.id,
+    personId: s.personId,
+    amountCents: s.amountCents,
+    direction: s.direction,
+    date: toDateKey(s.date),
+    notes: s.notes,
+    createdAt: s.createdAt.toISOString(),
   };
 }
 

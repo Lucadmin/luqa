@@ -120,6 +120,22 @@ export function isoDateKey(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+const MONTH_LABELS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/**
+ * "2026-07-12" → "12 Jul", or "12 Jul 2025" once it is not this year. Parsed by
+ * hand rather than through Date so the label never shifts a timezone.
+ */
+export function formatDayLabel(key: string, today = new Date()): string {
+  const [year, month, day] = key.split("-").map(Number);
+  if (!year || !month || !day) return key;
+  const label = `${day} ${MONTH_LABELS[month - 1] ?? ""}`.trim();
+  return year === today.getFullYear() ? label : `${label} ${year}`;
+}
+
 /**
  * Logical day key for stats: shifts the time back by `startHour` so that
  * entries starting before that hour are attributed to the previous calendar

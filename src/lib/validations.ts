@@ -132,6 +132,11 @@ const dateKeyValidation = z
 
 export const updateSettingsSchema = z.object({
   name: z.string().trim().max(80).nullish(),
+  currency: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{3}$/, "Expected a 3-letter currency code")
+    .optional(),
   dayStartHour: z.number().int().min(0).max(23).optional(),
   dailyGoalMinutes: z.number().int().min(0).max(1440).optional(),
   weekStartsOn: z.union([z.literal(0), z.literal(1)]).optional(),
@@ -235,6 +240,91 @@ export const habitLogSchema = z.object({
   ]),
   value: z.number().int().optional(),
 });
+
+// --- Shared expenses ---
+
+// Cents throughout. The ceiling is a sanity rail, not a real limit.
+const cents = z.number().int().min(0).max(1_000_000_00);
+const positiveCents = cents.refine((v) => v > 0, "Amount must be more than zero");
+const percentBp = z.number().int().min(0).max(10000);
+
+const splitMode = z.enum(["EQUAL", "PERCENT", "AMOUNT"]);
+const settlementDirection = z.enum(["TO_ME", "FROM_ME"]);
+
+export const createPersonSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  color: hexColor.optional(),
+  emoji: z.string().trim().max(8).nullish(),
+  // Whole percent; null means "share equally".
+  defaultPercent: z.number().int().min(0).max(100).nullish(),
+});
+
+export const updatePersonSchema = createPersonSchema.partial().extend({
+  order: z.number().int().min(0).optional(),
+  archived: z.boolean().optional(),
+});
+
+export const createGroupSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  color: hexColor.optional(),
+  emoji: z.string().trim().max(8).nullish(),
+  memberIds: z.array(z.string()).max(50).optional().default([]),
+});
+
+export const updateGroupSchema = createGroupSchema.partial().extend({
+  order: z.number().int().min(0).optional(),
+  archived: z.boolean().optional(),
+});
+
+// One other participant on a bill. Which field matters depends on splitMode;
+// the server re-runs the split either way, so extra fields are harmless.
+const expenseParticipantSchema = z.object({
+  personId: z.string().min(1),
+  percentBp: percentBp.nullish(),
+  amountCents: cents.nullish(),
+  gifted: z.boolean().optional(),
+});
+
+export const createExpenseSchema = z.object({
+  description: z.string().trim().max(200).optional().default(""),
+  amountCents: positiveCents,
+  date: dateKey.optional(),
+  // Null / omitted = the user paid.
+  paidByPersonId: z.string().nullish(),
+  groupId: z.string().nullish(),
+  splitMode: splitMode.optional().default("EQUAL"),
+  // EQUAL only: whether the user is one of the equal parts.
+  includeMe: z.boolean().optional().default(true),
+  participants: z.array(expenseParticipantSchema).max(50).optional().default([]),
+  notes: z.string().trim().max(2000).optional().default(""),
+});
+
+export const updateExpenseSchema = createExpenseSchema.partial();
+
+export const createSettlementSchema = z.object({
+  personId: z.string().min(1),
+  amountCents: positiveCents,
+  direction: settlementDirection.optional().default("TO_ME"),
+  date: dateKey.optional(),
+  notes: z.string().trim().max(500).optional().default(""),
+});
+
+export const updateSettlementSchema = createSettlementSchema.partial().omit({
+  personId: true,
+});
+
+export const reorderPeopleSchema = z.object({
+  ids: z.array(z.string()).min(1).max(200),
+});
+
+export type CreatePersonInput = z.infer<typeof createPersonSchema>;
+export type UpdatePersonInput = z.infer<typeof updatePersonSchema>;
+export type CreateGroupInput = z.infer<typeof createGroupSchema>;
+export type UpdateGroupInput = z.infer<typeof updateGroupSchema>;
+export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
+export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
+export type CreateSettlementInput = z.infer<typeof createSettlementSchema>;
+export type UpdateSettlementInput = z.infer<typeof updateSettlementSchema>;
 
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;

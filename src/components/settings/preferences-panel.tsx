@@ -92,6 +92,15 @@ const LIFE_MIN = 40;
 const LIFE_MAX = 150;
 const LIFE_STEP = 5;
 
+const CURRENCIES = [
+  { code: "EUR", label: "€ Euro" },
+  { code: "USD", label: "$ US dollar" },
+  { code: "GBP", label: "£ Pound" },
+  { code: "CHF", label: "CHF Swiss franc" },
+  { code: "SEK", label: "kr Swedish krona" },
+  { code: "PLN", label: "zł Złoty" },
+];
+
 export function PreferencesPanel() {
   const { settings, updateSettings } = useSettings();
 
@@ -147,6 +156,20 @@ export function PreferencesPanel() {
             <Plus className="h-3.5 w-3.5" />
           </button>
         </div>
+      </Row>
+
+      <Row label="Currency" hint="Used everywhere amounts are shown.">
+        <select
+          value={settings.currency}
+          onChange={(e) => updateSettings({ currency: e.target.value })}
+          className="h-9 rounded-lg border border-border bg-surface px-2 text-sm focus:outline-none focus-visible:border-primary"
+        >
+          {CURRENCIES.map(({ code, label }) => (
+            <option key={code} value={code}>
+              {label}
+            </option>
+          ))}
+        </select>
       </Row>
 
       <Row label="Week starts on">
