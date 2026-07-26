@@ -77,7 +77,6 @@ export function ExercisePicker({
       <div className="flex flex-col gap-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
-          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
           <Input
             autoFocus
             value={query}

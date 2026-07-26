@@ -284,7 +284,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       <div>
         <p className="text-sm font-medium">No sessions yet</p>
         <p className="mt-0.5 text-xs text-faint">
-          Log today's and the history builds itself from there.
+          Log today&apos;s and the history builds itself from there.
         </p>
       </div>
       <button
