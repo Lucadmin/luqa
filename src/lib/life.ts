@@ -170,27 +170,127 @@ export function lifeStats(
 }
 
 export interface PeriodRange {
+  id: string;
+  name: string;
   color: string;
   startWeek: number;
   endWeek: number; // inclusive; clamped to the grid
 }
 
 /**
- * Build a per-cell colour map. For overlapping periods the one that starts
- * latest wins the cell colour (its band sits "on top"), which reads well while
- * the legend still lists every period.
+ * Every period covering each week in [0, total), oldest-start first. Most
+ * weeks have zero or one entry; more than one means overlapping periods,
+ * which the caller renders as a blended tint (whole-life wall) or as
+ * hard-edged colour bands (cells roomy enough to read one).
  */
-export function buildCellColors(
+export function buildCellPeriods(
   ranges: PeriodRange[],
   total: number,
-): (string | null)[] {
-  const colors = new Array<string | null>(total).fill(null);
-  // Sort so later-starting periods are applied last and therefore win.
+): PeriodRange[][] {
+  const cells: PeriodRange[][] = Array.from({ length: total }, () => []);
   const ordered = [...ranges].sort((a, b) => a.startWeek - b.startWeek);
   for (const r of ordered) {
     const from = Math.max(0, r.startWeek);
     const to = Math.min(total - 1, r.endWeek);
-    for (let i = from; i <= to; i++) colors[i] = r.color;
+    for (let i = from; i <= to; i++) cells[i].push(r);
   }
-  return colors;
+  return cells;
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+  }
+  return [h * 360, s, l];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hue = (((h % 360) + 360) % 360) / 360;
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  let r: number;
+  let g: number;
+  let b: number;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, hue + 1 / 3);
+    g = hue2rgb(p, q, hue);
+    b = hue2rgb(p, q, hue - 1 / 3);
+  }
+  const toHex = (x: number) => Math.round(x * 255).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+/**
+ * Merge several period colours into one tint, for cells too small to render
+ * as distinct bands. Hue is averaged circularly (as points on the colour
+ * wheel) rather than as raw RGB, so e.g. pink + sky lands on a real
+ * violet-blue instead of a muddy grey-brown.
+ */
+export function blendPeriodColor(colors: string[]): string | null {
+  if (colors.length === 0) return null;
+  if (colors.length === 1) return colors[0];
+  let sx = 0;
+  let sy = 0;
+  let sSat = 0;
+  let sLig = 0;
+  for (const hex of colors) {
+    const [r, g, b] = hexToRgb(hex);
+    const [h, s, l] = rgbToHsl(r, g, b);
+    const rad = (h * Math.PI) / 180;
+    sx += Math.cos(rad);
+    sy += Math.sin(rad);
+    sSat += s;
+    sLig += l;
+  }
+  const avgHue = (Math.atan2(sy / colors.length, sx / colors.length) * 180) / Math.PI;
+  const avgSat = Math.min(1, (sSat / colors.length) * 1.08);
+  const avgLig = sLig / colors.length;
+  return hslToHex(avgHue, avgSat, avgLig);
+}
+
+/**
+ * Hard-edged colour bands for cells roomy enough to read as "more than one
+ * colour" — oldest period on the left, like a timeline. A single period (the
+ * common case) renders as a flat colour, unchanged from before.
+ */
+export function periodStripeBackground(colors: string[]): string | null {
+  if (colors.length === 0) return null;
+  if (colors.length === 1) return colors[0];
+  const n = colors.length;
+  const stops = colors.flatMap((hex, idx) => [
+    `${hex} ${((idx / n) * 100).toFixed(2)}%`,
+    `${hex} ${(((idx + 1) / n) * 100).toFixed(2)}%`,
+  ]);
+  return `linear-gradient(90deg, ${stops.join(", ")})`;
 }

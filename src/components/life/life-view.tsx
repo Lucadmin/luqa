@@ -1,37 +1,36 @@
 "use client";
 
-import {
-  CalendarHeart,
-  Layers,
-  LocateFixed,
-  RefreshCw,
-  ZoomIn,
-  ZoomOut,
-} from "lucide-react";
-import { useMemo, useState } from "react";
-import { LifeGrid } from "@/components/life/life-grid";
-import { PeriodsSheet } from "@/components/life/periods-sheet";
-import { WeekNoteSheet } from "@/components/life/week-note-sheet";
+import { CalendarHeart, Layers, RefreshCw } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useMemo, useRef, useState } from "react";
+import { LifeWall, type LifeWallHandle } from "@/components/life/life-wall";
+import { WeekFilmstrip } from "@/components/life/week-filmstrip";
 import { Button } from "@/components/ui/button";
 import { apiSend } from "@/lib/client/fetcher";
 import { useLife } from "@/lib/client/use-life";
 import { useNow } from "@/lib/client/use-now";
+import { useSettings } from "@/lib/client/use-settings";
 import {
-  buildCellColors,
+  buildCellPeriods,
   lifeStats,
   type PeriodRange,
-  toDateKey,
   totalWeeks,
   WEEKS_PER_YEAR,
   weekEndUtc,
   weekIndexFor,
   weekStartUtc,
 } from "@/lib/life";
+import { isoDateKey, startOfViewDay } from "@/lib/time";
 import type { WeekNoteDTO } from "@/lib/types";
 
-const ZOOM_MIN = 1;
-const ZOOM_MAX = 6;
-const ZOOM_STEP = 0.5;
+// Modals only matter once opened — load them on demand instead of paying
+// for their JS on every visit to the life tab.
+const PeriodsSheet = dynamic(() =>
+  import("@/components/life/periods-sheet").then((m) => m.PeriodsSheet),
+);
+const WeekReviewPanel = dynamic(() =>
+  import("@/components/life/week-review-panel").then((m) => m.WeekReviewPanel),
+);
 
 function fmtUtc(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, {
@@ -99,15 +98,13 @@ export function LifeView() {
     deletePeriod,
     saveNote,
   } = useLife();
+  const { settings } = useSettings();
+  const { dayStartHour } = settings;
 
-  const [zoom, setZoom] = useState(1);
-  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
-  const [previewWeek, setPreviewWeek] = useState<number | null>(null);
+  const [openWeek, setOpenWeek] = useState<number | null>(null);
+  const [jump, setJump] = useState<{ week: number; token: number } | null>(null);
   const [periodsOpen, setPeriodsOpen] = useState(false);
-  const [scrollRequest, setScrollRequest] = useState(0);
-
-  const setZoomClamped = (z: number) =>
-    setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100)));
+  const wallRef = useRef<LifeWallHandle>(null);
 
   const birthKey = life.birthDate;
   const years = life.lifeExpectancyYears;
@@ -116,17 +113,22 @@ export function LifeView() {
 
   const derived = useMemo(() => {
     if (!birthKey) return null;
-    const todayKey = toDateKey(now);
+    // Local calendar day, not UTC — matches the logical-day cutoff used
+    // everywhere else (habits, timeline). Using UTC here made the birthday
+    // row flip a few hours early or late for anyone outside UTC.
+    const todayKey = isoDateKey(startOfViewDay(new Date(now), dayStartHour));
     const total = totalWeeks(years);
     const stats = lifeStats(birthKey, years, todayKey);
 
     const ranges: PeriodRange[] = life.periods.map((p) => ({
+      id: p.id,
+      name: p.name,
       color: p.color,
       startWeek: weekIndexFor(birthKey, p.startDate),
       // Ongoing periods run up to the current week.
       endWeek: p.endDate ? weekIndexFor(birthKey, p.endDate) : stats.currentWeek,
     }));
-    const cellColors = buildCellColors(ranges, total);
+    const cellPeriods = buildCellPeriods(ranges, total);
 
     const notesByIndex = new Map<number, WeekNoteDTO>();
     const noteWeeks = new Set<number>();
@@ -137,8 +139,8 @@ export function LifeView() {
       if (n.milestone) milestoneWeeks.add(n.weekIndex);
     }
 
-    return { total, stats, cellColors, notesByIndex, noteWeeks, milestoneWeeks };
-  }, [birthKey, years, life.periods, life.notes, now]);
+    return { total, stats, cellPeriods, notesByIndex, noteWeeks, milestoneWeeks };
+  }, [birthKey, years, life.periods, life.notes, now, dayStartHour]);
 
   const labelFor = useMemo(() => {
     return (i: number) => {
@@ -151,6 +153,17 @@ export function LifeView() {
         : `Age ${age} · week ${week + 1} — ${fmtUtc(start)}`;
     };
   }, [birthKey]);
+
+  // Shorter label for the wall's drag magnifier — names of any overlapping
+  // periods matter more there than the exact date range.
+  const magnifierLabelFor = useMemo(() => {
+    return (i: number) => {
+      if (!derived) return "";
+      const age = Math.floor(i / WEEKS_PER_YEAR);
+      const names = (derived.cellPeriods[i] ?? []).map((p) => p.name);
+      return names.length ? `Age ${age} · ${names.join(" + ")}` : `Age ${age}`;
+    };
+  }, [derived]);
 
   if (isLoading && !birthKey) {
     return (
@@ -185,38 +198,27 @@ export function LifeView() {
     return <EmptyState onSaved={() => mutate()} />;
   }
 
-  const { stats, cellColors, notesByIndex, noteWeeks, milestoneWeeks } = derived;
+  const { stats, cellPeriods, notesByIndex, noteWeeks, milestoneWeeks, total } = derived;
+  const maxYear = Math.ceil(total / WEEKS_PER_YEAR) - 1;
 
-  const selectedNote =
-    selectedWeek !== null ? notesByIndex.get(selectedWeek) : undefined;
+  function focusWeek(weekIndex: number, opts?: { flash?: boolean }) {
+    setJump((j) => ({ week: weekIndex, token: (j?.token ?? 0) + 1 }));
+    if (opts?.flash) wallRef.current?.flashRow(Math.floor(weekIndex / WEEKS_PER_YEAR));
+  }
 
+  const activeWeek = jump?.week ?? stats.currentWeek;
+  const activeYear = Math.floor(activeWeek / WEEKS_PER_YEAR);
+  const focusCol = activeWeek % WEEKS_PER_YEAR;
+  const jumpToken = jump?.token ?? 0;
+
+  const selectedNote = openWeek !== null ? notesByIndex.get(openWeek) : undefined;
   const selectedPeriodNames =
-    selectedWeek !== null
-      ? life.periods
-          .filter((p) => {
-            const s = weekIndexFor(birthKey, p.startDate);
-            const e = p.endDate ? weekIndexFor(birthKey, p.endDate) : stats.currentWeek;
-            return selectedWeek >= s && selectedWeek <= e;
-          })
-          .map((p) => p.name)
-      : [];
-
-  const selectedHeadline =
-    selectedWeek !== null
-      ? labelFor(selectedWeek).split(" — ")[0]
-      : "";
+    openWeek !== null ? (cellPeriods[openWeek] ?? []).map((p) => p.name) : [];
+  const selectedHeadline = openWeek !== null ? labelFor(openWeek).split(" — ")[0] : "";
   const selectedRange =
-    selectedWeek !== null
-      ? `${fmtUtc(weekStartUtc(birthKey, selectedWeek))} – ${fmtUtc(
-          weekEndUtc(birthKey, selectedWeek),
-        )}`
+    openWeek !== null
+      ? `${fmtUtc(weekStartUtc(birthKey, openWeek))} – ${fmtUtc(weekEndUtc(birthKey, openWeek))}`
       : "";
-
-  const inspectedWeek = previewWeek ?? stats.currentWeek;
-  const inspectedLabel = labelFor(inspectedWeek).split(" — ")[0];
-  const inspectedRange = `${fmtUtc(
-    weekStartUtc(birthKey, inspectedWeek),
-  )} – ${fmtUtc(weekEndUtc(birthKey, inspectedWeek))}`;
 
   return (
     <div className="flex h-full flex-col">
@@ -227,8 +229,7 @@ export function LifeView() {
               Life in weeks
             </h1>
             <p className="mt-0.5 text-sm text-muted">
-              Each row is one year, starting on your birthday. Select any week
-              to review it.
+              Each row is one year, starting on your birthday.
             </p>
           </div>
           <Button
@@ -269,118 +270,80 @@ export function LifeView() {
         </div>
 
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-[2px] bg-foreground/30" />
-            Lived
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-[2px] border border-border-strong bg-surface" />
-            Ahead
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-[2px] ring-1 ring-inset ring-primary" />
-            Birthday
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-[2px] ring-2 ring-primary" />
-            This week
-          </span>
-          {life.periods.slice(0, 3).map((period) => (
-            <span
+          {life.periods.slice(0, 4).map((period) => (
+            <button
               key={period.id}
-              className="flex max-w-40 items-center gap-1.5"
+              type="button"
+              onClick={() =>
+                focusWeek(weekIndexFor(birthKey, period.startDate), { flash: true })
+              }
+              className="flex max-w-40 items-center gap-1.5 hover:text-foreground"
             >
               <span
-                className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                className="h-2.5 w-2.5 shrink-0 rounded-xs"
                 style={{ backgroundColor: period.color }}
               />
               <span className="truncate">{period.name}</span>
-            </span>
+            </button>
           ))}
-          {life.periods.length > 3 && (
+          {life.periods.length > 4 && (
             <button
               type="button"
               onClick={() => setPeriodsOpen(true)}
               className="font-medium text-primary hover:text-primary-hover"
             >
-              +{life.periods.length - 3} more
+              +{life.periods.length - 4} more
+            </button>
+          )}
+          {life.periods.length === 0 && (
+            <button
+              type="button"
+              onClick={() => setPeriodsOpen(true)}
+              className="font-medium text-primary hover:text-primary-hover"
+            >
+              Mark the chapters of your life →
             </button>
           )}
         </div>
       </header>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2 md:px-5">
-        <div className="min-w-[12rem] flex-1" aria-live="polite">
-          <p className="truncate text-xs font-medium">{inspectedLabel}</p>
-          <p className="truncate text-[11px] text-muted">{inspectedRange}</p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            setPreviewWeek(stats.currentWeek);
-            setScrollRequest((request) => request + 1);
-          }}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium text-muted transition-colors motion-reduce:transition-none hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <LocateFixed className="h-3.5 w-3.5" />
-          Today
-        </button>
-
-        <div className="flex shrink-0 items-center rounded-lg border border-border">
-          <button
-            type="button"
-            aria-label="Zoom out"
-            onClick={() => setZoomClamped(zoom - ZOOM_STEP)}
-            disabled={zoom <= ZOOM_MIN}
-            className="grid h-9 w-9 place-items-center rounded-l-lg text-muted transition-colors motion-reduce:transition-none hover:bg-surface-2 hover:text-foreground focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
-          >
-            <ZoomOut className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            aria-label={`Zoom ${Math.round(zoom * 100)} percent. Reset to fit`}
-            onClick={() => setZoom(1)}
-            className="h-9 min-w-14 border-x border-border px-2 text-xs font-medium tabular-nums text-muted transition-colors motion-reduce:transition-none hover:bg-surface-2 hover:text-foreground focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-          <button
-            type="button"
-            aria-label="Zoom in"
-            onClick={() => setZoomClamped(zoom + ZOOM_STEP)}
-            disabled={zoom >= ZOOM_MAX}
-            className="grid h-9 w-9 place-items-center rounded-r-lg text-muted transition-colors motion-reduce:transition-none hover:bg-surface-2 hover:text-foreground focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
-          >
-            <ZoomIn className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 px-2 pb-2">
-        <LifeGrid
-          totalWeeks={derived.total}
+      <div className="min-h-0 flex-1 px-2 pt-2">
+        <LifeWall
+          ref={wallRef}
+          totalWeeks={total}
           currentWeek={stats.currentWeek}
-          cellColors={cellColors}
+          cellPeriods={cellPeriods}
           noteWeeks={noteWeeks}
           milestoneWeeks={milestoneWeeks}
-          zoom={zoom}
-          onZoomChange={setZoomClamped}
-          selectedWeek={selectedWeek}
-          onSelect={setSelectedWeek}
-          onPreview={setPreviewWeek}
-          labelFor={labelFor}
-          scrollRequest={scrollRequest}
+          onFocusWeek={focusWeek}
+          labelFor={magnifierLabelFor}
         />
       </div>
 
-      <WeekNoteSheet
-        weekIndex={selectedWeek}
+      <WeekFilmstrip
+        year={activeYear}
+        focusCol={focusCol}
+        jumpToken={jumpToken}
+        totalWeeks={total}
+        currentWeek={stats.currentWeek}
+        cellPeriods={cellPeriods}
+        noteWeeks={noteWeeks}
+        milestoneWeeks={milestoneWeeks}
+        labelFor={labelFor}
+        onOpenWeek={setOpenWeek}
+        onPrevYear={() => focusWeek(Math.max(0, activeYear - 1) * WEEKS_PER_YEAR)}
+        onNextYear={() => focusWeek(Math.min(maxYear, activeYear + 1) * WEEKS_PER_YEAR)}
+        onToday={() => focusWeek(stats.currentWeek, { flash: true })}
+        maxYear={maxYear}
+      />
+
+      <WeekReviewPanel
+        weekIndex={openWeek}
         note={selectedNote}
         headline={selectedHeadline}
         dateRange={selectedRange}
         periodNames={selectedPeriodNames}
-        onClose={() => setSelectedWeek(null)}
+        onClose={() => setOpenWeek(null)}
         onSave={saveNote}
       />
 

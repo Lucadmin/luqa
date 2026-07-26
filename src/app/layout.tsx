@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SwrProvider } from "@/components/swr-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
@@ -53,7 +54,9 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
       <body className="min-h-full">
-        <ThemeProvider>{children}</ThemeProvider>
+        <SwrProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+        </SwrProvider>
       </body>
     </html>
   );

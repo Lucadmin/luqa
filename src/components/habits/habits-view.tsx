@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarCheck, ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { useHabitDay, useHabits, useHabitStats } from "@/lib/client/use-habits";
 import { useSettings } from "@/lib/client/use-settings";
@@ -10,8 +11,13 @@ import { addDays, parseDateKey } from "@/lib/habits";
 import { isoDateKey, startOfViewDay } from "@/lib/time";
 import type { HabitDTO } from "@/lib/types";
 import { HabitCard } from "./habit-card";
-import { HabitForm } from "./habit-form";
-import { HabitInsights } from "./habit-insights";
+
+// Modals/tabs only matter once opened — load them on demand instead of
+// paying for their JS on every visit to the habits tab.
+const HabitForm = dynamic(() => import("./habit-form").then((m) => m.HabitForm));
+const HabitInsights = dynamic(() =>
+  import("./habit-insights").then((m) => m.HabitInsights),
+);
 
 const WEEKDAY = ["S", "M", "T", "W", "T", "F", "S"];
 

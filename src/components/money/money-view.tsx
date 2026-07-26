@@ -1,16 +1,27 @@
 "use client";
 
 import { Gift, Plus, Users, Wallet } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/money/avatar";
-import { ExpenseSheet } from "@/components/money/expense-sheet";
-import { GroupsSheet } from "@/components/money/groups-sheet";
-import { balanceLabel, PersonSheet } from "@/components/money/person-sheet";
+import { balanceLabel } from "@/components/money/person-sheet";
 import { useExpenses, useMoneyOverview } from "@/lib/client/use-money";
 import { cn } from "@/lib/cn";
 import { formatMoney } from "@/lib/money";
 import { formatDayLabel } from "@/lib/time";
 import type { ExpenseDTO, PersonBalanceDTO } from "@/lib/types";
+
+// Modals only matter once opened — load them on demand instead of paying
+// for their JS on every visit to the money tab.
+const ExpenseSheet = dynamic(() =>
+  import("@/components/money/expense-sheet").then((m) => m.ExpenseSheet),
+);
+const GroupsSheet = dynamic(() =>
+  import("@/components/money/groups-sheet").then((m) => m.GroupsSheet),
+);
+const PersonSheet = dynamic(() =>
+  import("@/components/money/person-sheet").then((m) => m.PersonSheet),
+);
 
 export function MoneyView() {
   const { overview, isLoading } = useMoneyOverview();

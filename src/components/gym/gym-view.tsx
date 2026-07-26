@@ -1,15 +1,25 @@
 "use client";
 
 import { Dumbbell, MapPin, Plus, Search } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { ExerciseHistorySheet } from "@/components/gym/exercise-history";
-import { LocationsSheet } from "@/components/gym/locations-sheet";
-import { SessionSheet } from "@/components/gym/session-sheet";
 import { Input } from "@/components/ui/input";
 import { useGymOverview, useGymSessions } from "@/lib/client/use-gym";
 import { cn } from "@/lib/cn";
 import { formatDayLabel } from "@/lib/time";
 import type { ExerciseDTO, GymSessionDTO } from "@/lib/types";
+
+// Modals only matter once opened — load them on demand instead of paying
+// for their JS on every visit to the gym tab.
+const ExerciseHistorySheet = dynamic(() =>
+  import("@/components/gym/exercise-history").then((m) => m.ExerciseHistorySheet),
+);
+const LocationsSheet = dynamic(() =>
+  import("@/components/gym/locations-sheet").then((m) => m.LocationsSheet),
+);
+const SessionSheet = dynamic(() =>
+  import("@/components/gym/session-sheet").then((m) => m.SessionSheet),
+);
 
 type Tab = "sessions" | "exercises";
 
