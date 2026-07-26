@@ -1,20 +1,31 @@
 "use client";
 
 import { Dumbbell, MapPin, Plus, Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExerciseHistorySheet } from "@/components/gym/exercise-history";
 import { LocationsSheet } from "@/components/gym/locations-sheet";
 import { SessionSheet } from "@/components/gym/session-sheet";
 import { Input } from "@/components/ui/input";
-import { useGymOverview } from "@/lib/client/use-gym";
+import { useGymOverview, useGymSessions } from "@/lib/client/use-gym";
 import { cn } from "@/lib/cn";
 import { formatDayLabel } from "@/lib/time";
 import type { ExerciseDTO, GymSessionDTO } from "@/lib/types";
 
 type Tab = "sessions" | "exercises";
 
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function GymView() {
-  const { overview, isLoading } = useGymOverview();
+  const { overview, isLoading: isLoadingOverview } = useGymOverview();
+  const {
+    sessions,
+    isLoading: isLoadingSessions,
+    isLoadingMore,
+    hasMore,
+    loadMore,
+  } = useGymSessions();
 
   const [tab, setTab] = useState<Tab>("sessions");
   const [sessionOpen, setSessionOpen] = useState(false);
@@ -25,18 +36,60 @@ export function GymView() {
 
   const locations = overview?.locations ?? [];
   const exercises = overview?.exercises ?? [];
-  const sessions = overview?.sessions ?? [];
   const locationById = new Map(locations.map((l) => [l.id, l]));
 
+  // Sessions load newest first, so if today's exists it's always the first
+  // page's first row — no need to wait for the rest of the history.
+  const todaySession = sessions.find((s) => s.date === todayKey()) ?? null;
+
+  // Land on /gym mid-workout and it picks up right where it was left — once
+  // per fresh app open, not on every tab switch back to Gym. `autoOpenedId`
+  // just makes sure this runs at most once per distinct session, the same
+  // render-phase-reset idiom the sheets below use for their own props.
+  const [autoOpenedId, setAutoOpenedId] = useState<string | null>(null);
+  if (todaySession && todaySession.id !== autoOpenedId) {
+    setAutoOpenedId(todaySession.id);
+    const flagKey = `gym-auto-opened-${todaySession.id}`;
+    if (!sessionStorage.getItem(flagKey)) {
+      sessionStorage.setItem(flagKey, "1");
+      setEditing(todaySession);
+      setSessionOpen(true);
+    }
+  }
+
   function newSession() {
-    setEditing(null);
+    // Tapping "+" continues today's session if one's already going, rather
+    // than starting a second one for the same day.
+    if (todaySession) sessionStorage.setItem(`gym-auto-opened-${todaySession.id}`, "1");
+    setEditing(todaySession);
     setSessionOpen(true);
   }
 
   function editSession(session: GymSessionDTO) {
+    if (session.date === todayKey()) {
+      sessionStorage.setItem(`gym-auto-opened-${session.id}`, "1");
+    }
     setEditing(session);
     setSessionOpen(true);
   }
+
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasMore || isLoadingMore) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        observer.disconnect();
+        void loadMore();
+      },
+      { rootMargin: "300px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, loadMore]);
 
   const q = query.trim().toLowerCase();
   const shownExercises = exercises
@@ -97,7 +150,7 @@ export function GymView() {
 
       {tab === "sessions" ? (
         <div className="mt-4">
-          {isLoading && sessions.length === 0 ? (
+          {isLoadingSessions ? (
             <div className="flex flex-col gap-2">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="h-16 animate-pulse rounded-2xl bg-surface-2" />
@@ -106,22 +159,39 @@ export function GymView() {
           ) : sessions.length === 0 ? (
             <EmptyState onCreate={newSession} />
           ) : (
-            <ul className="flex flex-col gap-1.5">
-              {sessions.map((session) => (
-                <li key={session.id}>
-                  <SessionRow
-                    session={session}
-                    location={session.locationId ? locationById.get(session.locationId) : undefined}
-                    onOpen={() => editSession(session)}
-                  />
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="flex flex-col gap-1.5">
+                {sessions.map((session) => (
+                  <li key={session.id}>
+                    <SessionRow
+                      session={session}
+                      location={
+                        session.locationId ? locationById.get(session.locationId) : undefined
+                      }
+                      onOpen={() => editSession(session)}
+                    />
+                  </li>
+                ))}
+              </ul>
+
+              {hasMore && (
+                <div ref={loadMoreRef} className="flex justify-center py-3">
+                  <button
+                    type="button"
+                    onClick={() => void loadMore()}
+                    disabled={isLoadingMore}
+                    className="rounded-full px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-foreground disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isLoadingMore ? "Loading…" : "Load more sessions"}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       ) : (
         <div className="mt-4">
-          {exercises.length > 0 && (
+          {isLoadingOverview && exercises.length === 0 ? null : exercises.length > 0 && (
             <div className="relative mb-3">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
               <Input
@@ -215,22 +285,26 @@ function SessionRow({
 }) {
   const names = session.exercises.map((e) => e.name);
   const preview = names.slice(0, 3).join(", ") + (names.length > 3 ? `, +${names.length - 3}` : "");
+  const isToday = session.date === todayKey();
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-3 rounded-2xl border border-border bg-surface px-3.5 py-3 text-left transition-colors hover:bg-surface-2"
+      className={cn(
+        "flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-colors hover:bg-surface-2",
+        isToday ? "border-primary/40 bg-primary/5" : "border-border bg-surface",
+      )}
     >
       <div className="flex w-14 shrink-0 flex-col items-center">
         <span className="text-xs font-medium tabular-nums text-faint">
-          {formatDayLabel(session.date)}
+          {isToday ? "Today" : formatDayLabel(session.date)}
         </span>
       </div>
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">
-          {preview || "No exercises logged"}
+          {preview || (isToday ? "In progress — tap to add exercises" : "No exercises logged")}
         </p>
         {session.notes && (
           <p className="truncate text-xs text-faint">{session.notes}</p>

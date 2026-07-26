@@ -152,6 +152,7 @@ export function LocationsSheet({
               size="sm"
               onClick={submit}
               disabled={busy || !code.trim()}
+              aria-label={editingId ? undefined : "Add gym"}
               className="ml-auto"
             >
               {editingId ? "Save" : <Plus className="h-4 w-4" />}

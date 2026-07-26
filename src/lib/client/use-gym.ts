@@ -1,15 +1,17 @@
 "use client";
 
 import useSWR, { mutate as globalMutate } from "swr";
+import useSWRInfinite from "swr/infinite";
 import { apiSend, fetcher } from "@/lib/client/fetcher";
 import type {
   ExerciseDTO,
   ExerciseHistoryDTO,
-  GymImportResultDTO,
   GymLocationDTO,
   GymOverviewDTO,
   GymSessionDTO,
 } from "@/lib/types";
+
+const SESSIONS_PAGE_SIZE = 20;
 
 /**
  * Saving a session can rename nothing but changes several things at once —
@@ -29,6 +31,55 @@ export function useGymOverview() {
   );
 
   return { overview: data?.overview ?? null, isLoading, error, mutate };
+}
+
+interface SessionsPage {
+  sessions: GymSessionDTO[];
+  nextCursor: string | null;
+}
+
+/**
+ * Sessions, newest first, loaded a page at a time. `loadMore` is meant to be
+ * called from an IntersectionObserver at the bottom of the list — the point is
+ * that scrolling into three years of history never has to wait on all of it
+ * arriving up front.
+ */
+export function useGymSessions() {
+  const { data, error, isLoading, size, setSize, mutate } =
+    useSWRInfinite<SessionsPage>(
+      (_pageIndex, previousPage: SessionsPage | null) => {
+        if (previousPage && previousPage.nextCursor === null) return null;
+
+        const params = new URLSearchParams({ limit: String(SESSIONS_PAGE_SIZE) });
+        if (previousPage?.nextCursor) params.set("cursor", previousPage.nextCursor);
+        return `/api/gym/sessions?${params.toString()}`;
+      },
+      fetcher,
+    );
+
+  const seen = new Set<string>();
+  const sessions =
+    data?.flatMap((page) =>
+      page.sessions.filter((session) => {
+        if (seen.has(session.id)) return false;
+        seen.add(session.id);
+        return true;
+      }),
+    ) ?? [];
+  const hasMore = Boolean(data?.at(-1)?.nextCursor);
+  const isLoadingMore =
+    isLoading ||
+    (size > 0 && data !== undefined && typeof data[size - 1] === "undefined");
+
+  return {
+    sessions,
+    error,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    loadMore: () => setSize(size + 1),
+    mutate,
+  };
 }
 
 /**
@@ -55,10 +106,16 @@ export function useExerciseHistory(
 
 // --- sessions ----------------------------------------------------------------
 
+export interface SessionSetInput {
+  weight: number | null;
+  reps: number | null;
+  note: string | null;
+}
+
 export interface SessionExerciseInput {
   exerciseId?: string;
   name?: string;
-  raw?: string;
+  sets?: SessionSetInput[];
   notes?: string;
 }
 
@@ -86,6 +143,22 @@ export async function updateSession(id: string, patch: SessionInput) {
     patch,
   );
   await revalidateGym();
+  return session;
+}
+
+/**
+ * Same write as `updateSession`, but skips the namespace-wide revalidate.
+ * Meant for the debounced auto-save while a session is actively being
+ * edited — refetching the whole gym namespace every ~600ms while someone is
+ * mid-set would be wasteful and would jostle anything else on screen. The
+ * editor flushes with a real `updateSession` once, when it closes.
+ */
+export async function patchSessionSilently(id: string, patch: SessionInput) {
+  const { session } = await apiSend<{ session: GymSessionDTO }>(
+    `/api/gym/sessions/${id}`,
+    "PATCH",
+    patch,
+  );
   return session;
 }
 
@@ -154,21 +227,5 @@ export async function deleteExercise(id: string) {
     "DELETE",
   );
   await revalidateGym();
-  return res;
-}
-
-// --- import ------------------------------------------------------------------
-
-export async function importGym(input: {
-  markdown: string;
-  dryRun?: boolean;
-  replaceExisting?: boolean;
-}) {
-  const res = await apiSend<{ result: GymImportResultDTO; imported: boolean }>(
-    "/api/gym/import",
-    "POST",
-    input,
-  );
-  if (res.imported) await revalidateGym();
   return res;
 }

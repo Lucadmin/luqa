@@ -4,7 +4,7 @@ import {
   best1RM,
   estimate1RM,
   exerciseKey,
-  parseSetLine,
+  formatSetLine,
   topWeight,
   totalReps,
   totalVolume,
@@ -20,11 +20,18 @@ export const sessionInclude = {
   },
 } satisfies Prisma.GymSessionInclude;
 
-/** One exercise as it arrives from the editor or the importer. */
+/** One structured set as entered through the weight/reps inputs. */
+export interface SetInput {
+  weight?: number | null;
+  reps?: number | null;
+  note?: string | null;
+}
+
+/** One exercise as it arrives from the editor. */
 export interface ExerciseInput {
   exerciseId?: string;
   name?: string;
-  raw?: string;
+  sets?: SetInput[];
   notes?: string;
 }
 
@@ -69,9 +76,9 @@ export async function resolveExerciseIds(
 }
 
 /**
- * Replaces a session's exercises with `inputs`. Set lines are parsed here — the
- * one place it happens — so the editor and the importer can never disagree
- * about what a line means.
+ * Replaces a session's exercises with `inputs`. `raw` — the display line shown
+ * in history and "last time" hints — is derived from the structured sets here,
+ * the one place it happens, so it always reads the way the editor wrote it.
  */
 export async function writeSessionExercises(
   tx: Prisma.TransactionClient,
@@ -86,22 +93,25 @@ export async function writeSessionExercises(
       input.exerciseId ?? (input.name ? idByKey.get(exerciseKey(input.name)) : undefined);
     if (!exerciseId) continue;
 
-    const raw = input.raw ?? "";
-    const { sets } = parseSetLine(raw);
+    // Drop rows the user added but never filled in — an empty set carries no
+    // information and shouldn't get written just because a row existed.
+    const sets = (input.sets ?? []).filter(
+      (s) => s.weight != null || s.reps != null || (s.note && s.note.trim()),
+    );
 
     await tx.sessionExercise.create({
       data: {
         sessionId,
         exerciseId,
         order: index,
-        raw,
+        raw: formatSetLine(sets.map((s) => ({ weight: s.weight ?? null, reps: s.reps ?? null, note: s.note ?? null }))),
         notes: input.notes ?? "",
         sets: {
           create: sets.map((s, order) => ({
             order,
-            weight: s.weight,
-            reps: s.reps,
-            note: s.note,
+            weight: s.weight ?? null,
+            reps: s.reps ?? null,
+            note: s.note ?? null,
           })),
         },
       },

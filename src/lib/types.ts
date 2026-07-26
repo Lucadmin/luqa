@@ -420,14 +420,3 @@ export interface ExerciseHistoryDTO {
   /** Heaviest weight handled within the current filter. */
   heaviest: number | null;
 }
-
-/** What an import would do / did. */
-export interface GymImportResultDTO {
-  sessions: number;
-  exercises: number;
-  sets: number;
-  newExercises: string[];
-  newLocations: string[];
-  /** Dates already in the log that the import skipped or replaced. */
-  duplicateDates: string[];
-}

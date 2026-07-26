@@ -9,16 +9,19 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExerciseHistory } from "@/components/gym/exercise-history";
 import { ExercisePicker } from "@/components/gym/exercise-picker";
+import { SetInputList } from "@/components/gym/set-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import {
   createSession,
   deleteSession,
+  patchSessionSilently,
   updateSession,
+  type SessionInput,
 } from "@/lib/client/use-gym";
 import { cn } from "@/lib/cn";
 import { parseSetLine, summarizeSets } from "@/lib/gym";
@@ -27,7 +30,10 @@ import type {
   ExerciseDTO,
   GymLocationDTO,
   GymSessionDTO,
+  GymSetDTO,
 } from "@/lib/types";
+
+const AUTOSAVE_DELAY_MS = 600;
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -38,7 +44,7 @@ interface Row {
   key: string;
   exerciseId?: string;
   name: string;
-  raw: string;
+  sets: GymSetDTO[];
   notes: string;
   showNotes: boolean;
   showHistory: boolean;
@@ -48,7 +54,7 @@ let rowSeq = 0;
 function newRow(init: Partial<Row> & { name: string }): Row {
   return {
     key: `row-${rowSeq++}`,
-    raw: "",
+    sets: [],
     notes: "",
     showNotes: false,
     showHistory: false,
@@ -57,12 +63,13 @@ function newRow(init: Partial<Row> & { name: string }): Row {
 }
 
 /**
- * Log a session.
+ * Log a session — designed to just be left open on a phone at the gym.
  *
- * The whole design goal is that this never becomes homework: the date is
- * already right, the gym is one tap, and every exercise is a single free-text
- * line in the notation the user already writes by hand. Structure is read out
- * of that line — it is never demanded up front.
+ * There is no save button that matters: opening on a blank session creates it
+ * immediately, and every edit after that — a set, a note, a new exercise —
+ * autosaves a moment later. Closing the sheet, backgrounding the app, or the
+ * phone locking mid-set all flush whatever hasn't landed yet, so nothing is
+ * ever lost between reps.
  */
 export function SessionSheet({
   open,
@@ -88,10 +95,22 @@ export function SessionSheet({
   const [locationId, setLocationId] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showNotesField, setShowNotesField] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [saveState, setSaveState] = useState<"saving" | "saved">("saved");
+
+  // Whether this open created its own session (vs. editing one that already
+  // existed) — only a session we started ourselves gets silently discarded
+  // if it's closed empty.
+  const eagerlyCreated = useRef(false);
+  // Skips the autosave effect's very first run after (re)opening, which fires
+  // from resetting form state rather than from a real edit.
+  const hydrating = useRef(true);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirty = useRef(false);
 
   // Re-arm the form each time it opens, from the session being edited or from
   // whatever was tapped to get here.
@@ -102,22 +121,29 @@ export function SessionSheet({
       setError(null);
       setPickerOpen(false);
       if (session) {
+        setSessionId(session.id);
         setDateKey(session.date);
         setLocationId(session.locationId);
         setNotes(session.notes);
         setShowNotesField(Boolean(session.notes));
         setRows(
-          session.exercises.map((e) =>
-            newRow({
+          session.exercises.map((e) => {
+            // Older entries can carry a remark the notation didn't capture
+            // ("Nicht machen -> Knie broken"). Surface it as a note rather
+            // than dropping it once editing moves it out of the raw line.
+            const leftover =
+              !e.notes && e.raw ? parseSetLine(e.raw).leftover : "";
+            return newRow({
               exerciseId: e.exerciseId,
               name: e.name,
-              raw: e.raw,
-              notes: e.notes,
-              showNotes: Boolean(e.notes),
-            }),
-          ),
+              sets: e.sets,
+              notes: e.notes || leftover,
+              showNotes: Boolean(e.notes || leftover),
+            });
+          }),
         );
       } else {
+        setSessionId(null);
         setDateKey(todayKey());
         setLocationId(presetLocationId);
         setNotes("");
@@ -127,13 +153,121 @@ export function SessionSheet({
     }
   }
 
+  // The autosave bookkeeping (refs) resets alongside the form state above.
+  // Refs can only be touched from an effect, not during render, so this runs
+  // as a companion effect keyed to the same `open` transition.
+  useEffect(() => {
+    if (!open) return;
+    hydrating.current = true;
+    dirty.current = false;
+    eagerlyCreated.current = false;
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+  }, [open]);
+
+  // Create the session the instant a blank sheet opens, so there's a real,
+  // resumable record from the first tap rather than only on an eventual save.
+  useEffect(() => {
+    if (!open || sessionId || session) return;
+    let cancelled = false;
+    createSession({ date: dateKey, locationId, notes: "" })
+      .then((created) => {
+        if (cancelled) return;
+        eagerlyCreated.current = true;
+        setSessionId(created.id);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Could not start session");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Only the open/session/sessionId transition should trigger creation —
+    // dateKey/locationId are read once at that moment, not re-triggered on
+    // every subsequent edit (autosave carries those forward instead).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, session, sessionId]);
+
+  function buildPayload(): SessionInput {
+    return {
+      date: dateKey,
+      locationId,
+      notes: notes.trim(),
+      exercises: rows
+        .filter((r) => r.name.trim())
+        .map((r) => ({
+          ...(r.exerciseId ? { exerciseId: r.exerciseId } : { name: r.name.trim() }),
+          sets: r.sets,
+          notes: r.notes.trim(),
+        })),
+    };
+  }
+
+  function flush(): Promise<unknown> {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    if (!sessionId || !dirty.current) return Promise.resolve();
+    dirty.current = false;
+    setSaveState("saving");
+    return patchSessionSilently(sessionId, buildPayload())
+      .then(() => setSaveState("saved"))
+      .catch(() => {
+        dirty.current = true; // retry on the next edit, or the next close/hide
+      });
+  }
+
+  // Debounced autosave: any edit reschedules a save a moment later, so rapid
+  // typing doesn't fire a request per keystroke. The "saving" indicator flips
+  // once the timer actually fires, not on every keystroke.
+  useEffect(() => {
+    if (!open) return;
+    if (hydrating.current) {
+      hydrating.current = false;
+      return;
+    }
+    if (!sessionId) return; // creation still in flight; this effect re-runs once it resolves
+    dirty.current = true;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      setSaveState("saving");
+      void flush();
+    }, AUTOSAVE_DELAY_MS);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateKey, locationId, notes, rows, sessionId, open]);
+
+  // Flush immediately when the tab/app is hidden — the realistic shape of
+  // "closing the app" mid-set is backgrounding it, not a clean unmount. The
+  // ref is kept current via its own effect, since refs can't be written
+  // during render.
+  const flushRef = useRef(flush);
+  useEffect(() => {
+    flushRef.current = flush;
+  });
+  useEffect(() => {
+    if (!open) return;
+    function onVisibilityChange() {
+      if (document.hidden) void flushRef.current();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [open]);
+
   const exerciseById = new Map(exercises.map((e) => [e.id, e]));
   const activeLocations = locations.filter((l) => !l.archived || l.id === locationId);
 
   // The last session at the gym currently selected — the basis for "repeat".
   const lastHere = sessions.find(
     (s) =>
-      s.id !== session?.id &&
+      s.id !== sessionId &&
       s.exercises.length > 0 &&
       (locationId ? s.locationId === locationId : true),
   );
@@ -159,39 +293,31 @@ export function SessionSheet({
     );
   }
 
-  async function save() {
-    setBusy(true);
-    setError(null);
-    try {
-      const payload = {
-        date: dateKey,
-        locationId,
-        notes: notes.trim(),
-        exercises: rows
-          .filter((r) => r.name.trim())
-          .map((r) => ({
-            ...(r.exerciseId ? { exerciseId: r.exerciseId } : { name: r.name.trim() }),
-            raw: r.raw.trim(),
-            notes: r.notes.trim(),
-          })),
-      };
-
-      if (session) await updateSession(session.id, payload);
-      else await createSession(payload);
-
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save");
-    } finally {
-      setBusy(false);
+  // Closing never blocks on the network: whatever's pending flushes and the
+  // sheet dismisses right away. A session we started ourselves and left
+  // completely empty is quietly discarded rather than left as clutter.
+  function handleClose() {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (sessionId) {
+      const payload = buildPayload();
+      const isEmpty = (payload.exercises?.length ?? 0) === 0 && !payload.notes;
+      if (isEmpty && eagerlyCreated.current) {
+        deleteSession(sessionId).catch(() => {});
+      } else if (dirty.current) {
+        dirty.current = false;
+        updateSession(sessionId, payload).catch(() => {});
+      }
     }
+    onClose();
   }
 
   async function remove() {
-    if (!session) return;
+    if (!sessionId) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    dirty.current = false;
     setBusy(true);
     try {
-      await deleteSession(session.id);
+      await deleteSession(sessionId);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete");
@@ -204,11 +330,18 @@ export function SessionSheet({
     <>
       <Sheet
         open={open}
-        onClose={onClose}
-        title={session ? "Session" : "New session"}
+        onClose={handleClose}
+        title={
+          <span className="flex items-center gap-2">
+            Session
+            <span className="text-xs font-normal text-faint">
+              {!sessionId ? "Starting…" : saveState === "saving" ? "Saving…" : "Saved"}
+            </span>
+          </span>
+        }
         footer={
           <div className="flex items-center gap-2">
-            {session && (
+            {sessionId && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -220,8 +353,8 @@ export function SessionSheet({
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
-            <Button onClick={save} disabled={busy} className="flex-1">
-              {busy ? "Saving…" : "Save"}
+            <Button onClick={handleClose} disabled={busy} className="flex-1">
+              Done
             </Button>
           </div>
         }
@@ -360,8 +493,7 @@ function ExerciseRow({
   onPatch: (patch: Partial<Row>) => void;
   onRemove: () => void;
 }) {
-  const parsed = parseSetLine(row.raw);
-  const summary = summarizeSets(parsed.sets);
+  const summary = summarizeSets(row.sets);
 
   const lastGym = exercise?.lastLocationId
     ? locations.find((l) => l.id === exercise.lastLocationId)
@@ -413,31 +545,21 @@ function ExerciseRow({
         </button>
       </div>
 
-      <input
-        value={row.raw}
-        onChange={(e) => onPatch({ raw: e.target.value })}
-        inputMode="text"
-        placeholder={exercise?.lastRaw || "40-10 57-10 77-8 77-8"}
-        className="mt-1 w-full bg-transparent text-sm tabular-nums placeholder:text-faint/60 focus:outline-none"
-      />
+      <div className="mt-1.5">
+        <SetInputList sets={row.sets} onChange={(sets) => onPatch({ sets })} />
+      </div>
 
-      {/* what the app made of the line — never a blocker, just a read-out */}
-      {(summary || parsed.leftover) && (
-        <p className="mt-0.5 text-[11px] text-faint">
-          {summary}
-          {summary && parsed.leftover && " · "}
-          {parsed.leftover && (
-            <span className="italic">{parsed.leftover}</span>
-          )}
-        </p>
-      )}
+      {/* what's logged so far — never a blocker, just a read-out */}
+      {summary && <p className="mt-1 text-[11px] text-faint">{summary}</p>}
 
-      {/* last time, one tap away from being reused */}
-      {!row.raw && exercise?.lastRaw && (
+      {/* last time, one tap away from being reused as a starting point */}
+      {row.sets.length === 0 && exercise?.lastRaw && (
         <button
           type="button"
-          onClick={() => onPatch({ raw: exercise.lastRaw ?? "" })}
-          className="mt-1 flex w-full items-baseline gap-1.5 text-left text-[11px] text-faint transition-colors hover:text-foreground"
+          onClick={() =>
+            onPatch({ sets: parseSetLine(exercise.lastRaw ?? "").sets })
+          }
+          className="mt-1.5 flex w-full items-baseline gap-1.5 text-left text-[11px] text-faint transition-colors hover:text-foreground"
         >
           <RotateCcw className="h-3 w-3 shrink-0" />
           <span className="min-w-0 flex-1 truncate tabular-nums">
