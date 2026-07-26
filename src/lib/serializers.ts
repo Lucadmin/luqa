@@ -1,12 +1,17 @@
 import type {
   Category,
+  Exercise,
   Expense,
   ExpenseShare,
   GroupMember,
+  GymLocation,
+  GymSession,
+  GymSet,
   Habit,
   LifePeriod,
   Person,
   PersonGroup,
+  SessionExercise,
   Settlement,
   SleepEntry,
   TimeEntry,
@@ -15,10 +20,13 @@ import type {
 import type {
   CategoryDTO,
   ExpenseDTO,
+  GymLocationDTO,
+  GymSessionDTO,
   HabitDTO,
   LifePeriodDTO,
   PersonDTO,
   PersonGroupDTO,
+  SessionExerciseDTO,
   SettlementDTO,
   SleepEntryDTO,
   SleepStageDTO,
@@ -186,5 +194,54 @@ export function toHabitDTO(h: Habit): HabitDTO {
     dates: h.dates,
     excludedDates: h.excludedDates,
     createdAt: h.createdAt.toISOString(),
+  };
+}
+
+// --- Gym log ---
+
+export function toGymLocationDTO(l: GymLocation): GymLocationDTO {
+  return {
+    id: l.id,
+    code: l.code,
+    name: l.name,
+    color: l.color,
+    order: l.order,
+    archived: l.archivedAt !== null,
+  };
+}
+
+export type SessionExerciseWithRelations = SessionExercise & {
+  exercise: Exercise;
+  sets: GymSet[];
+};
+
+export function toSessionExerciseDTO(
+  e: SessionExerciseWithRelations,
+): SessionExerciseDTO {
+  return {
+    id: e.id,
+    exerciseId: e.exerciseId,
+    name: e.exercise.name,
+    order: e.order,
+    raw: e.raw,
+    notes: e.notes,
+    sets: [...e.sets]
+      .sort((a, b) => a.order - b.order)
+      .map((s) => ({ weight: s.weight, reps: s.reps, note: s.note })),
+  };
+}
+
+export function toGymSessionDTO(
+  s: GymSession & { exercises: SessionExerciseWithRelations[] },
+): GymSessionDTO {
+  return {
+    id: s.id,
+    date: toDateKey(s.date),
+    locationId: s.locationId,
+    notes: s.notes,
+    exercises: [...s.exercises]
+      .sort((a, b) => a.order - b.order)
+      .map(toSessionExerciseDTO),
+    createdAt: s.createdAt.toISOString(),
   };
 }

@@ -326,6 +326,71 @@ export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
 export type CreateSettlementInput = z.infer<typeof createSettlementSchema>;
 export type UpdateSettlementInput = z.infer<typeof updateSettlementSchema>;
 
+// --- Gym log ---
+//
+// The client only ever sends the set line as text; the server parses it. That
+// keeps one parser in charge of what a set means, whether the line arrived from
+// the editor or from an imported notes file.
+
+export const createGymLocationSchema = z.object({
+  code: z.string().trim().min(1).max(12),
+  name: z.string().trim().min(1).max(60),
+  color: hexColor.optional(),
+});
+
+export const updateGymLocationSchema = createGymLocationSchema.partial().extend({
+  order: z.number().int().min(0).optional(),
+  archived: z.boolean().optional(),
+});
+
+// One exercise inside a session. `exerciseId` picks a known one; `name`
+// find-or-creates, which is what typing a new name in the picker does.
+const sessionExerciseSchema = z
+  .object({
+    exerciseId: z.string().min(1).optional(),
+    name: z.string().trim().min(1).max(80).optional(),
+    raw: z.string().max(500).optional().default(""),
+    notes: z.string().trim().max(2000).optional().default(""),
+  })
+  .refine((v) => Boolean(v.exerciseId || v.name), {
+    message: "Needs an exercise id or a name",
+    path: ["name"],
+  });
+
+export const createGymSessionSchema = z.object({
+  date: dateKey.optional(),
+  locationId: z.string().nullish(),
+  notes: z.string().trim().max(4000).optional().default(""),
+  exercises: z.array(sessionExerciseSchema).max(60).optional().default([]),
+});
+
+// Omitting `exercises` leaves the session's exercises alone; sending it
+// replaces them wholesale, which is how the editor saves.
+export const updateGymSessionSchema = createGymSessionSchema.partial();
+
+export const updateExerciseSchema = z.object({
+  // Renaming onto a name that already exists merges the two, which is the fix
+  // for years of "Lat Pulldown" / "Lat Puldown" drift.
+  name: z.string().trim().min(1).max(80).optional(),
+  notes: z.string().trim().max(2000).optional(),
+  archived: z.boolean().optional(),
+});
+
+export const importGymSchema = z.object({
+  markdown: z.string().min(1).max(1_000_000),
+  /** Preview only: report what would happen without writing anything. */
+  dryRun: z.boolean().optional().default(false),
+  /** Overwrite sessions already logged on the same date instead of skipping. */
+  replaceExisting: z.boolean().optional().default(false),
+});
+
+export type CreateGymLocationInput = z.infer<typeof createGymLocationSchema>;
+export type UpdateGymLocationInput = z.infer<typeof updateGymLocationSchema>;
+export type CreateGymSessionInput = z.infer<typeof createGymSessionSchema>;
+export type UpdateGymSessionInput = z.infer<typeof updateGymSessionSchema>;
+export type UpdateExerciseInput = z.infer<typeof updateExerciseSchema>;
+export type ImportGymInput = z.infer<typeof importGymSchema>;
+
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
 export type ImportSleepInput = z.infer<typeof importSleepSchema>;

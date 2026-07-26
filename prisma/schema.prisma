@@ -31,18 +31,21 @@ model User {
   // Shared expenses
   currency String @default("EUR") // ISO 4217, used to format every amount
 
-  categories       Category[]
-  timeEntries      TimeEntry[]
-  sleepEntries     SleepEntry[]
-  googleConnection GoogleConnection?
+  categories             Category[]
+  timeEntries            TimeEntry[]
+  sleepEntries           SleepEntry[]
+  googleConnection       GoogleConnection?
   googleHealthConnection GoogleHealthConnection?
-  habits           Habit[]
-  lifePeriods      LifePeriod[]
-  weekNotes        WeekNote[]
-  people           Person[]
-  personGroups     PersonGroup[]
-  expenses         Expense[]
-  settlements      Settlement[]
+  habits                 Habit[]
+  lifePeriods            LifePeriod[]
+  weekNotes              WeekNote[]
+  people                 Person[]
+  personGroups           PersonGroup[]
+  expenses               Expense[]
+  settlements            Settlement[]
+  gymLocations           GymLocation[]
+  exercises              Exercise[]
+  gymSessions            GymSession[]
 
   @@map("users")
 }
@@ -134,11 +137,11 @@ model SleepEntry {
   stages Json?
   raw    Json?
 
-  lastSyncedAt DateTime?
+  lastSyncedAt     DateTime?
   manualOverrideAt DateTime?
-  deletedAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -180,8 +183,8 @@ model GoogleConnection {
 // OAuth tokens for the Google Health API. Kept separate from Google Calendar
 // because the scopes, approval process, and sync lifecycle are different.
 model GoogleHealthConnection {
-  id           String   @id @default(cuid())
-  userId       String   @unique
+  id           String    @id @default(cuid())
+  userId       String    @unique
   googleEmail  String?
   healthUserId String?
   accessToken  String
@@ -189,8 +192,8 @@ model GoogleHealthConnection {
   expiresAt    DateTime
   scope        String
   lastSyncedAt DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -257,8 +260,8 @@ model Habit {
   excludedDates  String[] // any schedule: dates to skip
 
   logs     HabitLog[]
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([categoryId])
@@ -408,9 +411,9 @@ model Expense {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  payer  Person?      @relation("ExpensePayer", fields: [paidByPersonId], references: [id], onDelete: Cascade)
-  group  PersonGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payer  Person?        @relation("ExpensePayer", fields: [paidByPersonId], references: [id], onDelete: Cascade)
+  group  PersonGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
   shares ExpenseShare[]
 
   @@index([userId, date])
@@ -485,4 +488,108 @@ model HabitLog {
 
   @@unique([habitId, date])
   @@map("habit_logs")
+}
+
+// --- Gym log -----------------------------------------------------------------
+//
+// Modelled on how the user already writes their notes: a session is a date, a
+// gym, and a list of exercises, each with one free-text line of sets. That line
+// is kept verbatim in `raw` and *also* parsed into GymSet rows, so nothing the
+// user types is ever rejected or lost — the parse is a bonus that powers the
+// history graphs, not a gate on saving.
+
+// One gym. `code` is the short form used while logging ("STR"); `name` is what
+// it expands to on screen.
+model GymLocation {
+  id         String    @id @default(cuid())
+  userId     String
+  code       String
+  name       String
+  color      String    @default("#6366f1")
+  order      Int       @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions GymSession[]
+
+  @@unique([userId, code])
+  @@index([userId])
+  @@map("gym_locations")
+}
+
+// A movement, identified by whatever the user calls it. The list grows as they
+// log; the picker offers it back so spelling stays consistent over the years.
+model Exercise {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  notes      String    @default("") // standing cues, e.g. "Sitz 4, Griff eng"
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries SessionExercise[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("exercises")
+}
+
+// One visit to the gym.
+model GymSession {
+  id         String   @id @default(cuid())
+  userId     String
+  date       DateTime @db.Date
+  locationId String?
+  notes      String   @default("") // how the whole session felt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location  GymLocation?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  exercises SessionExercise[]
+
+  @@index([userId, date])
+  @@index([locationId])
+  @@map("gym_sessions")
+}
+
+// One exercise as performed in one session.
+model SessionExercise {
+  id         String   @id @default(cuid())
+  sessionId  String
+  exerciseId String
+  order      Int      @default(0)
+  raw        String   @default("") // the sets line exactly as typed
+  notes      String   @default("") // "Bizeps kaputt", "nimm nächstes Mal 20"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  session  GymSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exercise Exercise   @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  sets     GymSet[]
+
+  @@index([sessionId])
+  @@index([exerciseId])
+  @@map("session_exercises")
+}
+
+// One set, parsed out of the raw line. Both fields are nullable because plenty
+// of real entries only have one of them — bodyweight pull-ups record reps, a
+// note-only line records neither.
+model GymSet {
+  id                String  @id @default(cuid())
+  sessionExerciseId String
+  order             Int     @default(0)
+  weight            Float? // as typed; unit is whatever that gym's stack says
+  reps              Int?
+  note              String? // per-set marker, e.g. "lf" / "rf"
+
+  sessionExercise SessionExercise @relation(fields: [sessionExerciseId], references: [id], onDelete: Cascade)
+
+  @@index([sessionExerciseId])
+  @@map("gym_sets")
 }

@@ -318,3 +318,109 @@ export interface PersonLedgerDTO {
   coveredThisYearCents: number;
   items: LedgerItemDTO[];
 }
+
+// --- Gym log ---
+
+export interface GymLocationDTO {
+  id: string;
+  /** Short form typed while logging, e.g. "STR". */
+  code: string;
+  name: string;
+  color: string;
+  order: number;
+  archived: boolean;
+}
+
+export interface GymSetDTO {
+  weight: number | null;
+  reps: number | null;
+  note: string | null;
+}
+
+export interface SessionExerciseDTO {
+  id: string;
+  exerciseId: string;
+  /** Resolved name, so a row never needs a second lookup to render. */
+  name: string;
+  order: number;
+  /** The set line exactly as typed. */
+  raw: string;
+  notes: string;
+  /** Read out of `raw` by the server — the client never sends these. */
+  sets: GymSetDTO[];
+}
+
+export interface GymSessionDTO {
+  id: string;
+  /** "YYYY-MM-DD". */
+  date: string;
+  locationId: string | null;
+  notes: string;
+  exercises: SessionExerciseDTO[];
+  createdAt: string;
+}
+
+export interface ExerciseDTO {
+  id: string;
+  name: string;
+  notes: string;
+  archived: boolean;
+  /** How many sessions it appears in. */
+  sessionCount: number;
+  /** "YYYY-MM-DD" it was last done, or null. */
+  lastPerformed: string | null;
+  /** Gyms it has been done at — what makes the location filter worth showing. */
+  locationIds: string[];
+  /** The set line from the last time it was done, ready to be reused. */
+  lastRaw: string | null;
+  /** Which gym that last time was at. */
+  lastLocationId: string | null;
+}
+
+/** Everything the gym screen needs in one payload. */
+export interface GymOverviewDTO {
+  locations: GymLocationDTO[];
+  exercises: ExerciseDTO[];
+  /** Newest first. */
+  sessions: GymSessionDTO[];
+  totalSessions: number;
+}
+
+/** One past performance of an exercise, for the history sheet and its graph. */
+export interface ExercisePointDTO {
+  sessionId: string;
+  /** "YYYY-MM-DD". */
+  date: string;
+  locationId: string | null;
+  raw: string;
+  notes: string;
+  sets: GymSetDTO[];
+  topWeight: number | null;
+  /** Epley estimate, so a heavy triple compares against a light twelve. */
+  best1RM: number | null;
+  totalReps: number;
+  volume: number;
+  /** Beat every e1RM before it. */
+  isPr: boolean;
+}
+
+export interface ExerciseHistoryDTO {
+  exercise: ExerciseDTO;
+  /** Oldest first, so the graph reads left to right. */
+  points: ExercisePointDTO[];
+  /** Best e1RM within the current filter. */
+  bestEver: number | null;
+  /** Heaviest weight handled within the current filter. */
+  heaviest: number | null;
+}
+
+/** What an import would do / did. */
+export interface GymImportResultDTO {
+  sessions: number;
+  exercises: number;
+  sets: number;
+  newExercises: string[];
+  newLocations: string[];
+  /** Dates already in the log that the import skipped or replaced. */
+  duplicateDates: string[];
+}
