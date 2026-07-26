@@ -16,8 +16,7 @@ import {
 } from "@/lib/time";
 import type { CategoryDTO } from "@/lib/types";
 
-const GUTTER = 52; // keep in sync with timeline.tsx
-const TOOLBAR_H = 52;
+const GUTTER = 52; // keep in sync with day-pane.tsx
 
 type DragMode = "start" | "end" | "move";
 
@@ -117,10 +116,9 @@ export function DraftBlock({
     drag.current.mode = null;
   }
 
-  // Anchor the toolbar below the block, flipping above it near the day's end.
-  const nearBottom = endMin > maxEndMin - 200;
-  const aboveTop = top - TOOLBAR_H - 8;
-  const toolbarTop = nearBottom && aboveTop > 4 ? aboveTop : top + height + 8;
+  // The timeline scrolls on past midnight, so the toolbar always sits below
+  // the block — there's no end of the day to run out of.
+  const toolbarTop = top + height + 8;
 
   return (
     <div data-draft>

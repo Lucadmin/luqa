@@ -16,6 +16,9 @@ export const DAY_START_HOUR = 3;
 export const HOUR_HEIGHT = 64;
 export const PX_PER_MINUTE = HOUR_HEIGHT / 60;
 
+/** Height of one day on the continuous timeline. */
+export const DAY_HEIGHT = MINUTES_PER_DAY * PX_PER_MINUTE;
+
 /** Round a minute value to the nearest 5-minute block. */
 export function snapMinutes(minutes: number, snap = SNAP_MINUTES): number {
   return Math.round(minutes / snap) * snap;
@@ -37,6 +40,24 @@ export function endOfLocalDay(d: Date): Date {
   const c = startOfLocalDay(d);
   c.setDate(c.getDate() + 1);
   return c;
+}
+
+/** Calendar-safe day arithmetic — survives DST shifts and month ends. */
+export function addDays(d: Date, n: number): Date {
+  const c = new Date(d);
+  c.setDate(c.getDate() + n);
+  return c;
+}
+
+/**
+ * Stable integer index for a calendar date, independent of timezone and DST.
+ * Differences between two `dayNumber`s are exact day counts, which is what the
+ * infinite timeline uses to map dates onto scroll offsets.
+ */
+export function dayNumber(d: Date): number {
+  return Math.floor(
+    Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000,
+  );
 }
 
 /** Minutes since local midnight for an instant. */

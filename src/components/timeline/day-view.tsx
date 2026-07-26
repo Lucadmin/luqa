@@ -1,21 +1,24 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Moon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EntryEditor, type SaveResult } from "@/components/timeline/entry-editor";
 import { HabitsStrip } from "@/components/timeline/habits-strip";
 import { NowBar } from "@/components/timeline/now-bar";
 import { SleepEditor } from "@/components/timeline/sleep-editor";
-import { Timeline } from "@/components/timeline/timeline";
+import { Timeline, type TimelineHandle } from "@/components/timeline/timeline";
 import type { EntryDraft, InlineDraft } from "@/components/timeline/types";
 import {
   createCategory,
   useCategories,
 } from "@/lib/client/use-categories";
-import { useEntries } from "@/lib/client/use-entries";
+import { useDebounced } from "@/lib/client/use-debounced";
+import { useEntriesRange } from "@/lib/client/use-entries";
 import { useSettings } from "@/lib/client/use-settings";
-import { useSleepEntries } from "@/lib/client/use-sleep-entries";
+import { useSleepRange } from "@/lib/client/use-sleep-entries";
 import {
+  addDays,
+  dayNumber,
   formatDuration,
   isoDateKey,
   logicalDayKey,
@@ -25,12 +28,6 @@ import {
   startOfViewDay,
 } from "@/lib/time";
 import type { SleepEntryDTO, TimeEntryDTO } from "@/lib/types";
-
-function addDays(d: Date, n: number) {
-  const c = new Date(d);
-  c.setDate(c.getDate() + n);
-  return c;
-}
 
 /** The logical "today" respects the day-start cutoff: before it we're still yesterday. */
 function logicalToday(startHour?: number): Date {
@@ -42,6 +39,7 @@ function dayLabel(day: Date, startHour: number): string {
   const key = isoDateKey(day);
   if (key === isoDateKey(today)) return "Today";
   if (key === isoDateKey(addDays(today, -1))) return "Yesterday";
+  if (key === isoDateKey(addDays(today, 1))) return "Tomorrow";
   return day.toLocaleDateString(undefined, {
     weekday: "long",
     month: "short",
@@ -59,12 +57,21 @@ export function DayView() {
   const { settings } = useSettings();
   const dayStartHour = settings.dayStartHour;
 
-  // Initialize to the logical day (before the cutoff we're still on yesterday).
+  const timelineRef = useRef<TimelineHandle>(null);
+
+  // The day at the top of the timeline. The timeline reports it while
+  // scrolling; the header controls scroll it back the other way.
   const [day, setDay] = useState(() => logicalToday());
   const [draft, setDraft] = useState<EntryDraft | null>(null);
   const [inlineDraft, setInlineDraft] = useState<InlineDraft | null>(null);
   const [selectedSleep, setSelectedSleep] = useState<SleepEntryDTO | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Keep the identity stable while the same day stays on top, so everything
+  // downstream (fetch windows, habit strip) only reacts to real day changes.
+  const handleDayChange = useCallback((next: Date) => {
+    setDay((prev) => (isoDateKey(prev) === isoDateKey(next) ? prev : next));
+  }, []);
 
   // A single ticking clock; everything time-dependent derives from it so
   // render stays pure (no Date.now()/new Date() during render).
@@ -74,20 +81,26 @@ export function DayView() {
     return () => clearInterval(id);
   }, []);
 
-  // Use the cutoff-shifted logical day so that "today" at 01:00am is still yesterday.
   const isToday = isoDateKey(day) === logicalDayKey(new Date(nowTick), dayStartHour);
-  // Minutes since midnight of the *displayed calendar day* (can exceed 1440 when
-  // we're past midnight but still in the logical same day).
-  const nowMin = isToday
-    ? (nowTick - startOfLocalDay(day).getTime()) / 60_000
-    : null;
 
-  const overflowMin = Math.max(1, dayStartHour) * 60;
-  const maxEndMin = MINUTES_PER_DAY + overflowMin;
+  // Data is fetched in three-week windows quantised to whole weeks, so the key
+  // only changes every seventh day of scrolling and always keeps a week of
+  // slack on either side of what's on screen.
+  const windowFrom = useMemo(() => {
+    const weekday = ((dayNumber(day) % 7) + 7) % 7;
+    return addDays(startOfLocalDay(day), -weekday - 7);
+  }, [day]);
+  const windowTo = useMemo(() => addDays(windowFrom, 21), [windowFrom]);
 
-  const { entries, createEntry, updateEntry, deleteEntry } = useEntries(day);
-  const { sleepEntries, updateSleepEntry } = useSleepEntries(day, dayStartHour);
+  const { entries, createEntry, updateEntry, deleteEntry } = useEntriesRange(
+    windowFrom,
+    windowTo,
+  );
+  const { sleepEntries, updateSleepEntry } = useSleepRange(windowFrom, windowTo);
   const { categories, mutate: mutateCategories } = useCategories();
+
+  // Habits refetch per day; let fast scrolling settle before asking.
+  const habitsDay = useDebounced(day, 250);
 
   const runningEntry = useMemo(
     () => entries.find((e) => e.endTime === null) ?? null,
@@ -99,14 +112,15 @@ export function DayView() {
     [categories],
   );
 
-  // Completed entries as colored bands for the editor dial (context: where the
-  // day is already filled). Computed once; the editor excludes the active one.
+  // Completed entries on the draft's day as colored bands for the editor dial
+  // (context: where the day is already filled). The editor excludes the active one.
+  const draftDayMs = draft ? startOfLocalDay(draft.day).getTime() : null;
   const daySegments = useMemo(() => {
-    const dayStartMs = startOfLocalDay(day).getTime();
+    if (draftDayMs === null) return [];
     return entries.flatMap((e) => {
       if (!e.endTime) return [];
-      const startMin = (Date.parse(e.startTime) - dayStartMs) / 60000;
-      const endMin = (Date.parse(e.endTime) - dayStartMs) / 60000;
+      const startMin = (Date.parse(e.startTime) - draftDayMs) / 60000;
+      const endMin = (Date.parse(e.endTime) - draftDayMs) / 60000;
       if (endMin <= 0 || startMin >= MINUTES_PER_DAY) return [];
       const color = e.categoryId
         ? (categoryById.get(e.categoryId)?.color ?? "#9aa0aa")
@@ -120,14 +134,14 @@ export function DayView() {
         },
       ];
     });
-  }, [entries, categoryById, day]);
+  }, [entries, categoryById, draftDayMs]);
 
   const dayTotal = useMemo(() => {
     const displayedKey = isoDateKey(day);
     let total = 0;
     for (const e of entries) {
-      // Only count entries whose logical day matches the displayed calendar day,
-      // so cross-midnight entries aren't double-counted on both adjacent days.
+      // Only count entries whose logical day matches the displayed day, so
+      // cross-midnight entries aren't double-counted on both adjacent days.
       if (logicalDayKey(new Date(e.startTime), dayStartHour) !== displayedKey) continue;
       const start = Date.parse(e.startTime);
       const end = e.endTime ? Date.parse(e.endTime) : nowTick;
@@ -136,10 +150,17 @@ export function DayView() {
     return total;
   }, [entries, nowTick, day, dayStartHour]);
 
-  const sleepTotal = useMemo(
-    () => sleepEntries.reduce((total, entry) => total + sleepMinutes(entry), 0),
-    [sleepEntries],
-  );
+  // Sleep is attributed to the logical day it woke up in.
+  const sleepTotal = useMemo(() => {
+    const displayedKey = isoDateKey(day);
+    return sleepEntries.reduce(
+      (total, entry) =>
+        logicalDayKey(new Date(entry.endTime), dayStartHour) === displayedKey
+          ? total + sleepMinutes(entry)
+          : total,
+      0,
+    );
+  }, [sleepEntries, day, dayStartHour]);
 
   async function handleCreateCategory(name: string) {
     const cat = await createCategory(name);
@@ -168,15 +189,17 @@ export function DayView() {
   function openEntry(entry: TimeEntryDTO) {
     if (entry.endTime === null) return; // running entry is managed by the timer
     setInlineDraft(null);
-    const dayStartMs = startOfLocalDay(day).getTime();
-    const startMin = Math.round((Date.parse(entry.startTime) - dayStartMs) / 60000);
-    const endMin = Math.round((Date.parse(entry.endTime) - dayStartMs) / 60000);
+    // Anchor on the day the entry *starts*, so editing the tail of a
+    // cross-midnight entry can't silently truncate its front half.
+    const refDay = startOfLocalDay(new Date(entry.startTime));
+    const base = refDay.getTime();
     setDraft({
       id: entry.id,
+      day: refDay,
       description: entry.description,
       categoryId: entry.categoryId,
-      startMin: Math.max(0, startMin),
-      endMin: Math.max(0, endMin),
+      startMin: Math.round((Date.parse(entry.startTime) - base) / 60000),
+      endMin: Math.round((Date.parse(entry.endTime) - base) / 60000),
     });
   }
 
@@ -187,9 +210,9 @@ export function DayView() {
   }
 
   // ── In-place draft block (drag/tap-to-create) ──────────────────────────────
-  function createInline(startMin: number, endMin: number, autoFocus: boolean) {
+  function createInline(day: Date, startMin: number, endMin: number, autoFocus: boolean) {
     setDraft(null);
-    setInlineDraft({ description: "", categoryId: null, startMin, endMin, autoFocus });
+    setInlineDraft({ day, description: "", categoryId: null, startMin, endMin, autoFocus });
   }
 
   function changeInlineRange(startMin: number, endMin: number) {
@@ -212,8 +235,8 @@ export function DayView() {
       await createEntry({
         description: inlineDraft.description,
         categoryId: inlineDraft.categoryId,
-        startTime: minutesToDate(day, inlineDraft.startMin).toISOString(),
-        endTime: minutesToDate(day, inlineDraft.endMin).toISOString(),
+        startTime: minutesToDate(inlineDraft.day, inlineDraft.startMin).toISOString(),
+        endTime: minutesToDate(inlineDraft.day, inlineDraft.endMin).toISOString(),
       });
       setInlineDraft(null);
     } finally {
@@ -225,6 +248,7 @@ export function DayView() {
   function expandInline() {
     if (!inlineDraft) return;
     setDraft({
+      day: inlineDraft.day,
       description: inlineDraft.description,
       categoryId: inlineDraft.categoryId,
       startMin: inlineDraft.startMin,
@@ -234,15 +258,16 @@ export function DayView() {
   }
 
   async function handleSave(result: SaveResult) {
+    if (!draft) return;
     setSaving(true);
     try {
       const payload = {
         description: result.description,
         categoryId: result.categoryId,
-        startTime: minutesToDate(day, result.startMin).toISOString(),
-        endTime: minutesToDate(day, result.endMin).toISOString(),
+        startTime: minutesToDate(draft.day, result.startMin).toISOString(),
+        endTime: minutesToDate(draft.day, result.endMin).toISOString(),
       };
-      if (draft?.id) {
+      if (draft.id) {
         await updateEntry(draft.id, payload);
       } else {
         await createEntry(payload);
@@ -251,6 +276,7 @@ export function DayView() {
       // Chain gap-filling: the freed space below becomes the next entry.
       if (result.nextGap) {
         setDraft({
+          day: draft.day,
           description: "",
           categoryId: null,
           startMin: result.nextGap.startMin,
@@ -276,27 +302,52 @@ export function DayView() {
     }
   }
 
+  function jumpToDate(value: string) {
+    const [y, m, d] = value.split("-").map(Number);
+    if (!y || !m || !d) return;
+    timelineRef.current?.goToDay(new Date(y, m - 1, d));
+  }
+
   return (
-    <div className="pb-24 md:pb-10">
-      {/* sticky header + timer */}
-      <div className="sticky top-0 z-20 border-b border-border bg-background/90 px-4 pb-3 pt-4 backdrop-blur md:px-8 md:pt-6">
+    <div className="flex h-full flex-col">
+      {/* header + timer */}
+      <div className="z-20 shrink-0 border-b border-border bg-background px-4 pb-3 pt-4 md:px-8 md:pt-6">
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between">
           <div className="flex items-center gap-1">
             <button
               type="button"
               aria-label="Previous day"
-              onClick={() => setDay((d) => addDays(d, -1))}
+              onClick={() => timelineRef.current?.shiftDays(-1)}
               className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <h1 className="min-w-[7rem] text-center text-base font-semibold">
-              {dayLabel(day, dayStartHour)}
-            </h1>
+
+            {/* the label doubles as a date picker — picking scrolls there */}
+            <div className="relative">
+              <h1 className="min-w-28 text-center text-base font-semibold">
+                {dayLabel(day, dayStartHour)}
+              </h1>
+              <input
+                type="date"
+                aria-label="Jump to date"
+                value={isoDateKey(day)}
+                onClick={(e) => {
+                  try {
+                    e.currentTarget.showPicker();
+                  } catch {
+                    /* not supported — the native control handles it */
+                  }
+                }}
+                onChange={(e) => jumpToDate(e.target.value)}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              />
+            </div>
+
             <button
               type="button"
               aria-label="Next day"
-              onClick={() => setDay((d) => addDays(d, 1))}
+              onClick={() => timelineRef.current?.shiftDays(1)}
               className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
             >
               <ChevronRight className="h-4 w-4" />
@@ -304,7 +355,7 @@ export function DayView() {
             {!isToday && (
               <button
                 type="button"
-                onClick={() => setDay(logicalToday(dayStartHour))}
+                onClick={() => timelineRef.current?.goToNow()}
                 className="ml-2 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-2"
               >
                 Today
@@ -341,40 +392,42 @@ export function DayView() {
         </div>
 
         <div className="mx-auto mt-3 w-full max-w-3xl">
-          <HabitsStrip day={day} />
+          <HabitsStrip day={habitsDay} />
         </div>
       </div>
 
-      {/* timeline */}
-      <div className="mx-auto w-full max-w-3xl px-4 pt-4 md:px-8">
-        <Timeline
-          day={day}
-          entries={entries}
-          sleepEntries={sleepEntries}
-          categories={categories}
-          nowMin={nowMin}
-          inlineDraft={inlineDraft}
-          dayStartHour={dayStartHour}
-          onOpenEntry={openEntry}
-          onOpenSleep={openSleep}
-          onCreateInline={createInline}
-          onChangeInlineRange={changeInlineRange}
-          onChangeInlineDescription={changeInlineDescription}
-          onApplyInlineSuggestion={applyInlineSuggestion}
-          onSaveInline={saveInline}
-          onExpandInline={expandInline}
-          onCancelInline={() => setInlineDraft(null)}
-          saving={saving}
-        />
-      </div>
+      {/* the timeline owns its own scroller — it runs forever in both directions */}
+      <Timeline
+        ref={timelineRef}
+        dayStartHour={dayStartHour}
+        nowMs={nowTick}
+        entries={entries}
+        sleepEntries={sleepEntries}
+        categories={categories}
+        inlineDraft={inlineDraft}
+        onDayChange={handleDayChange}
+        onOpenEntry={openEntry}
+        onOpenSleep={openSleep}
+        onCreateInline={createInline}
+        onChangeInlineRange={changeInlineRange}
+        onChangeInlineDescription={changeInlineDescription}
+        onApplyInlineSuggestion={applyInlineSuggestion}
+        onSaveInline={saveInline}
+        onExpandInline={expandInline}
+        onCancelInline={() => setInlineDraft(null)}
+        saving={saving}
+      />
 
       {draft && (
         <EntryEditor
-          key={draft.id ?? `${draft.startMin}-${draft.endMin}`}
+          key={draft.id ?? `${isoDateKey(draft.day)}-${draft.startMin}-${draft.endMin}`}
           draft={draft}
           categories={categories}
           segments={daySegments.filter((s) => s.id !== draft.id)}
-          maxEndMin={maxEndMin}
+          maxEndMin={Math.max(
+            MINUTES_PER_DAY + Math.max(1, dayStartHour) * 60,
+            draft.endMin,
+          )}
           onSave={handleSave}
           onDelete={draft.id ? handleDelete : undefined}
           onClose={() => setDraft(null)}

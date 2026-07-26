@@ -1,9 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { apiSend, fetcher } from "@/lib/client/fetcher";
-import { endOfLocalDay, startOfLocalDay } from "@/lib/time";
 import type { TimeEntryDTO } from "@/lib/types";
 
 export interface EntryInput {
@@ -13,21 +11,25 @@ export interface EntryInput {
   endTime?: string | null; // ISO or null (running)
 }
 
-/** Entries for the local day that `day` falls on. */
-export function useEntries(day: Date) {
-  const { from, to } = useMemo(() => {
-    return {
-      from: startOfLocalDay(day).toISOString(),
-      to: endOfLocalDay(day).toISOString(),
-    };
-  }, [day]);
+const PREFIX = "/api/entries?";
 
-  const key = `/api/entries?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+/**
+ * Entries overlapping [from, to). The infinite timeline slides this window as
+ * it scrolls, so a write has to refresh *every* cached window rather than just
+ * the one currently on screen.
+ */
+export function useEntriesRange(from: Date, to: Date) {
+  const { mutate: mutateAll } = useSWRConfig();
+
+  const key = `${PREFIX}from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`;
   const { data, error, isLoading, mutate } = useSWR<{
     entries: TimeEntryDTO[];
-  }>(key, fetcher, { revalidateOnFocus: true });
+  }>(key, fetcher, { revalidateOnFocus: true, keepPreviousData: true });
 
-  const entries = data?.entries ?? [];
+  /** Revalidate all cached windows — a write can land in any of them. */
+  function refresh() {
+    return mutateAll((k) => typeof k === "string" && k.startsWith(PREFIX));
+  }
 
   async function createEntry(input: EntryInput) {
     const res = await apiSend<{ entry: TimeEntryDTO }>(
@@ -35,7 +37,7 @@ export function useEntries(day: Date) {
       "POST",
       input,
     );
-    await mutate();
+    await refresh();
     return res.entry;
   }
 
@@ -45,17 +47,17 @@ export function useEntries(day: Date) {
       "PATCH",
       patch,
     );
-    await mutate();
+    await refresh();
     return res.entry;
   }
 
   async function deleteEntry(id: string) {
     await apiSend(`/api/entries/${id}`, "DELETE");
-    await mutate();
+    await refresh();
   }
 
   return {
-    entries,
+    entries: data?.entries ?? [],
     isLoading,
     error,
     mutate,

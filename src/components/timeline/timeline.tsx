@@ -1,42 +1,63 @@
 "use client";
 
-import { Moon, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CategoryDot } from "@/components/timeline/category-picker";
-import { DraftBlock } from "@/components/timeline/draft-block";
-import type { InlineDraft } from "@/components/timeline/types";
-import { computeGaps, computeLayout } from "@/lib/timeline-layout";
-import { cn } from "@/lib/cn";
 import {
-  DAY_START_HOUR,
-  formatClock,
-  formatDuration,
-  HOUR_HEIGHT,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { DayPane } from "@/components/timeline/day-pane";
+import type { InlineDraft } from "@/components/timeline/types";
+import {
+  addDays,
+  DAY_HEIGHT,
+  dayNumber,
+  isoDateKey,
   MINUTES_PER_DAY,
   PX_PER_MINUTE,
-  snapMinutes,
   startOfLocalDay,
 } from "@/lib/time";
 import type { CategoryDTO, SleepEntryDTO, TimeEntryDTO } from "@/lib/types";
 
-const GUTTER = 52; // px for hour labels
-const DEFAULT_LEN = 30; // minutes — default size for a tap/click-created block
-const MIN_DRAG = 10; // minutes — shorter drags fall back to the default size
+// How far the timeline reaches in each direction. Bounded so the scroll height
+// (~6M px) stays comfortably inside every browser's maximum element height.
+const DAYS_BEFORE = 3650; // ~10 years
+const DAYS_AFTER = 400;
+const TOTAL_DAYS = DAYS_BEFORE + DAYS_AFTER + 1;
+const SCROLL_HEIGHT = TOTAL_DAYS * DAY_HEIGHT;
 
-function sleepMinutesFor(entry: SleepEntryDTO): number {
-  if (entry.sleepMinutes !== null) return entry.sleepMinutes;
-  const duration = (Date.parse(entry.endTime) - Date.parse(entry.startTime)) / 60000;
-  return Math.max(0, duration - (entry.awakeMinutes ?? 0));
+/** Animate rather than teleport for short hops. */
+const SMOOTH_LIMIT = 3 * DAY_HEIGHT;
+
+const clampOffset = (n: number) => Math.max(0, Math.min(TOTAL_DAYS - 1, n));
+
+export interface TimelineHandle {
+  /** Move by whole days, keeping the same time-of-day in view. */
+  shiftDays: (n: number) => void;
+  /** Jump to a date, keeping the same time-of-day in view. */
+  goToDay: (day: Date) => void;
+  /** Centre the current moment. */
+  goToNow: () => void;
 }
 
+/**
+ * A continuous, scrollable timeline: one absolutely-positioned pane per
+ * calendar day inside a single tall scroller, with only the visible days (plus
+ * a pane of buffer either side) mounted. Scrolling reports the day at the top
+ * of the viewport; the imperative handle scrolls back the other way.
+ */
 export function Timeline({
-  day,
+  ref,
+  dayStartHour,
+  nowMs,
   entries,
-  sleepEntries = [],
+  sleepEntries,
   categories,
-  nowMin,
   inlineDraft,
-  dayStartHour = DAY_START_HOUR,
+  onDayChange,
   onOpenEntry,
   onOpenSleep,
   onCreateInline,
@@ -48,16 +69,17 @@ export function Timeline({
   onCancelInline,
   saving,
 }: {
-  day: Date;
+  ref?: React.Ref<TimelineHandle>;
+  dayStartHour: number;
+  nowMs: number;
   entries: TimeEntryDTO[];
-  sleepEntries?: SleepEntryDTO[];
+  sleepEntries: SleepEntryDTO[];
   categories: CategoryDTO[];
-  nowMin: number | null;
   inlineDraft: InlineDraft | null;
-  dayStartHour?: number;
+  onDayChange: (day: Date) => void;
   onOpenEntry: (entry: TimeEntryDTO) => void;
   onOpenSleep: (entry: SleepEntryDTO) => void;
-  onCreateInline: (startMin: number, endMin: number, autoFocus: boolean) => void;
+  onCreateInline: (day: Date, startMin: number, endMin: number, autoFocus: boolean) => void;
   onChangeInlineRange: (startMin: number, endMin: number) => void;
   onChangeInlineDescription: (value: string) => void;
   onApplyInlineSuggestion: (description: string, categoryId: string | null) => void;
@@ -66,377 +88,222 @@ export function Timeline({
   onCancelInline: () => void;
   saving: boolean;
 }) {
-  const focusRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dayStartMs = startOfLocalDay(day).getTime();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Pending programmatic scroll. Repeated day-steps chain off this rather than
+  // off a mid-animation scrollTop, so holding the chevron doesn't lose days.
+  const targetRef = useRef<number | null>(null);
+  const frameRef = useRef(0);
+  const reportedRef = useRef<number | null>(null);
 
-  // The grid runs midnight→midnight plus an "overflow" tail so entries that
-  // run into the early hours (and still count to this day) stay visible.
-  const overflowHours = Math.max(1, dayStartHour);
-  const overflowMin = overflowHours * 60;
-  const totalHeight = (MINUTES_PER_DAY + overflowMin) * PX_PER_MINUTE;
-
-  // Drag-to-create bookkeeping (mouse) / tap-to-create (touch).
-  const createRef = useRef<{
-    pointerId: number;
-    type: string;
-    anchorMin: number;
-    startClientY: number;
-    engaged: boolean;
-  } | null>(null);
-  const [preview, setPreview] = useState<{ startMin: number; endMin: number } | null>(
-    null,
+  // Day 0 of the virtual range. Fixed for the lifetime of the view so scroll
+  // offsets never shift under the user.
+  const [epochDay] = useState(() =>
+    addDays(startOfLocalDay(new Date()), -DAYS_BEFORE),
+  );
+  const offsetOf = useCallback(
+    (day: Date) => dayNumber(day) - dayNumber(epochDay),
+    [epochDay],
   );
 
-  const categoryById = useMemo(() => {
-    const map = new Map<string, CategoryDTO>();
-    for (const c of categories) map.set(c.id, c);
-    return map;
-  }, [categories]);
+  const [range, setRange] = useState(() => {
+    const today = clampOffset(DAYS_BEFORE);
+    return { first: today - 1, last: today + 1 };
+  });
 
-  const layout = useMemo(
-    () => computeLayout(entries, dayStartMs, nowMin, overflowMin),
-    [entries, dayStartMs, nowMin, overflowMin],
-  );
-  const sleepLayout = useMemo(
-    () =>
-      sleepEntries
-        .map((entry) => {
-          const rawStartMin = (Date.parse(entry.startTime) - dayStartMs) / 60000;
-          const rawEndMin = (Date.parse(entry.endTime) - dayStartMs) / 60000;
-          const startMin = Math.max(0, Math.min(MINUTES_PER_DAY + overflowMin, rawStartMin));
-          const endMin = Math.max(0, Math.min(MINUTES_PER_DAY + overflowMin, rawEndMin));
-          if (endMin <= 0 || startMin >= MINUTES_PER_DAY + overflowMin || endMin <= startMin) {
-            return null;
-          }
-          return { entry, startMin, endMin, rawStartMin, rawEndMin };
-        })
-        .filter((item): item is {
-          entry: SleepEntryDTO;
-          startMin: number;
-          endMin: number;
-          rawStartMin: number;
-          rawEndMin: number;
-        } => item !== null),
-    [sleepEntries, dayStartMs, overflowMin],
-  );
-  const gaps = useMemo(
-    () => computeGaps(entries, dayStartMs, nowMin),
-    [entries, dayStartMs, nowMin],
+  /** Scroll position of an instant, in the virtual coordinate space. */
+  const yForInstant = useCallback(
+    (ms: number) => {
+      const at = new Date(ms);
+      const minutes = (ms - startOfLocalDay(at).getTime()) / 60000;
+      return offsetOf(at) * DAY_HEIGHT + minutes * PX_PER_MINUTE;
+    },
+    [offsetOf],
   );
 
-  const clientYToMin = useCallback((clientY: number) => {
-    const el = containerRef.current;
-    if (!el) return 0;
-    const rect = el.getBoundingClientRect();
-    const raw = (clientY - rect.top) / PX_PER_MINUTE;
-    return Math.max(0, Math.min(MINUTES_PER_DAY + overflowMin, raw));
-  }, [overflowMin]);
+  /** The logical day (day-start cutoff applied) shown at a scroll position. */
+  const logicalOffsetAt = useCallback(
+    (px: number) => {
+      const minutes = px / PX_PER_MINUTE;
+      const offset = Math.floor(minutes / MINUTES_PER_DAY);
+      const intoDay = minutes - offset * MINUTES_PER_DAY;
+      return intoDay < dayStartHour * 60 ? offset - 1 : offset;
+    },
+    [dayStartHour],
+  );
 
-  // On mount, bring the interesting part of the day into view.
-  const focusMin = nowMin ?? layout[0]?.startMin ?? 8 * 60;
-  useEffect(() => {
-    focusRef.current?.scrollIntoView({ block: "center" });
+  const sync = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = el.scrollTop;
+
+    if (targetRef.current !== null && Math.abs(top - targetRef.current) < 1) {
+      targetRef.current = null;
+    }
+
+    const first = clampOffset(Math.floor(top / DAY_HEIGHT) - 1);
+    const last = clampOffset(Math.floor((top + el.clientHeight) / DAY_HEIGHT) + 1);
+    setRange((prev) =>
+      prev.first === first && prev.last === last ? prev : { first, last },
+    );
+
+    const logical = clampOffset(logicalOffsetAt(top));
+    if (logical !== reportedRef.current) {
+      reportedRef.current = logical;
+      onDayChange(addDays(epochDay, logical));
+    }
+  }, [epochDay, logicalOffsetAt, onDayChange]);
+
+  function handleScroll() {
+    if (frameRef.current) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = 0;
+      sync();
+    });
+  }
+
+  /** Any hands-on scrolling abandons an in-flight programmatic one. */
+  function handleUserInput() {
+    targetRef.current = null;
+  }
+
+  const scrollToPx = useCallback((y: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const target = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, y));
+    targetRef.current = target;
+    el.scrollTo({
+      top: target,
+      behavior: Math.abs(target - el.scrollTop) <= SMOOTH_LIMIT ? "smooth" : "auto",
+    });
   }, []);
 
-  function onPointerDown(e: React.PointerEvent) {
-    // Let entries, gap pills and the draft block handle their own pointers.
-    if ((e.target as HTMLElement).closest("[data-entry],[data-sleep],[data-fill],[data-draft]")) {
-      return;
+  const shiftDays = useCallback(
+    (n: number) => {
+      const el = scrollRef.current;
+      if (!el) return;
+      scrollToPx((targetRef.current ?? el.scrollTop) + n * DAY_HEIGHT);
+    },
+    [scrollToPx],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      shiftDays,
+      goToDay(day) {
+        const el = scrollRef.current;
+        if (!el) return;
+        const base = targetRef.current ?? el.scrollTop;
+        shiftDays(clampOffset(offsetOf(day)) - logicalOffsetAt(base));
+      },
+      goToNow() {
+        const el = scrollRef.current;
+        if (!el) return;
+        scrollToPx(yForInstant(Date.now()) - el.clientHeight / 2);
+      },
+    }),
+    [logicalOffsetAt, offsetOf, scrollToPx, shiftDays, yForInstant],
+  );
+
+  // Open on the current moment, before the first paint.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = Math.max(0, yForInstant(Date.now()) - el.clientHeight / 2);
+    sync();
+    // Mount-only: later scrolls are driven by the user or the header.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-derive the visible window whenever the viewport or the day-start
+  // cutoff changes (the latter arrives with the user's settings).
+  useEffect(() => {
+    reportedRef.current = null;
+    sync();
+
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => sync());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [sync]);
+
+  useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
+
+  // Split the fetched window into the days actually on screen. Anything
+  // crossing midnight lands in both panes and is clipped by each.
+  const panes = useMemo(() => {
+    const out: {
+      offset: number;
+      day: Date;
+      entries: TimeEntryDTO[];
+      sleepEntries: SleepEntryDTO[];
+    }[] = [];
+
+    for (let offset = range.first; offset <= range.last; offset++) {
+      const day = addDays(epochDay, offset);
+      const startMs = startOfLocalDay(day).getTime();
+      const endMs = startOfLocalDay(addDays(day, 1)).getTime();
+      out.push({
+        offset,
+        day,
+        entries: entries.filter((e) => {
+          const start = Date.parse(e.startTime);
+          const end = e.endTime ? Date.parse(e.endTime) : nowMs;
+          return start < endMs && Math.max(end, start + 1) > startMs;
+        }),
+        sleepEntries: sleepEntries.filter(
+          (s) =>
+            Date.parse(s.startTime) < endMs && Date.parse(s.endTime) > startMs,
+        ),
+      });
     }
-    if (e.pointerType === "mouse" && e.button !== 0) return;
+    return out;
+  }, [range, epochDay, entries, sleepEntries, nowMs]);
 
-    createRef.current = {
-      pointerId: e.pointerId,
-      type: e.pointerType,
-      anchorMin: clientYToMin(e.clientY),
-      startClientY: e.clientY,
-      engaged: false,
-    };
-
-    // Mouse: capture so a drag draws a box. Touch: stay passive so a vertical
-    // swipe still scrolls the timeline; only a stationary tap creates.
-    if (e.pointerType === "mouse") {
-      e.preventDefault();
-      containerRef.current?.setPointerCapture(e.pointerId);
-    }
-  }
-
-  function onPointerMove(e: React.PointerEvent) {
-    const st = createRef.current;
-    if (!st || st.pointerId !== e.pointerId) return;
-
-    if (st.type === "mouse") {
-      if (!st.engaged && Math.abs(e.clientY - st.startClientY) > 3) {
-        st.engaged = true;
-      }
-      if (st.engaged) {
-        const cur = snapMinutes(clientYToMin(e.clientY));
-        const anchor = snapMinutes(st.anchorMin);
-        setPreview({
-          startMin: Math.min(anchor, cur),
-          endMin: Math.max(anchor, cur),
-        });
-      }
-    } else if (Math.abs(e.clientY - st.startClientY) > 8) {
-      // Treated as a scroll — bail out of create.
-      createRef.current = null;
-    }
-  }
-
-  function onPointerUp(e: React.PointerEvent) {
-    const st = createRef.current;
-    if (!st || st.pointerId !== e.pointerId) return;
-    createRef.current = null;
-    setPreview(null);
-
-    const cur = snapMinutes(clientYToMin(e.clientY));
-    const anchor = snapMinutes(st.anchorMin);
-
-    let start: number;
-    let end: number;
-    if (st.engaged && st.type === "mouse" && Math.abs(cur - anchor) >= MIN_DRAG) {
-      start = Math.min(anchor, cur);
-      end = Math.max(anchor, cur);
-    } else {
-      start = anchor;
-      end = anchor + DEFAULT_LEN;
-    }
-    if (end > MINUTES_PER_DAY + overflowMin) {
-      end = MINUTES_PER_DAY + overflowMin;
-      start = Math.max(0, end - DEFAULT_LEN);
-    }
-    onCreateInline(start, end, st.type === "mouse");
-  }
-
-  function onPointerCancel() {
-    createRef.current = null;
-    setPreview(null);
-  }
+  const draftKey = inlineDraft ? isoDateKey(inlineDraft.day) : null;
 
   return (
-    <div className="relative">
-      <div
-        ref={containerRef}
-        className="relative select-none"
-        style={{ height: totalHeight }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
-      >
-        {/* scroll anchor */}
+    <div
+      ref={scrollRef}
+      onScroll={handleScroll}
+      onWheel={handleUserInput}
+      onPointerDown={handleUserInput}
+      className="scrollbar-none min-h-0 flex-1 overflow-y-auto overscroll-contain"
+    >
+      <div className="mx-auto w-full max-w-3xl px-4 md:px-8">
+        {/* Panes mount and unmount as they scroll past; nothing reflows, and
+            scroll anchoring stays out of the way. */}
         <div
-          ref={focusRef}
-          className="pointer-events-none absolute"
-          style={{ top: focusMin * PX_PER_MINUTE }}
-        />
-        {/* hour grid — 24 normal hours + overflow zone past midnight */}
-        {Array.from({ length: 24 + overflowHours }).map((_, h) => {
-          const past = h >= 24;
-          const label = h === 0 ? "" : `${String(h % 24).padStart(2, "0")}:00`;
-          return (
-            <div
-              key={h}
-              className="pointer-events-none absolute inset-x-0 flex items-start"
-              style={{ top: h * HOUR_HEIGHT, height: HOUR_HEIGHT }}
-            >
-              <span
-                className={`w-[52px] shrink-0 -translate-y-2 pr-2 text-right text-[11px] tabular-nums ${past ? "text-faint/40" : "text-faint"}`}
-              >
-                {label}
-              </span>
-              <div
-                className={`flex-1 border-t ${past ? "border-dashed border-grid-line/30" : "border-grid-line"}`}
-              />
-            </div>
-          );
-        })}
-
-        {/* midnight divider — bold line with "next day" label */}
-        <div
-          className="pointer-events-none absolute inset-x-0 flex items-center"
-          style={{ top: MINUTES_PER_DAY * PX_PER_MINUTE }}
+          className="relative"
+          style={{ height: SCROLL_HEIGHT, overflowAnchor: "none" }}
         >
-          <span className="w-[52px] shrink-0 -translate-y-2.5 pr-2 text-right text-[10px] text-faint/50">
-            00:00
-          </span>
-          <div className="flex-1 border-t-2 border-border/50" />
+          {panes.map((pane) => (
+            <DayPane
+              key={pane.offset}
+              day={pane.day}
+              offsetY={pane.offset * DAY_HEIGHT}
+              dayStartHour={dayStartHour}
+              entries={pane.entries}
+              sleepEntries={pane.sleepEntries}
+              categories={categories}
+              nowMs={nowMs}
+              inlineDraft={
+                draftKey === isoDateKey(pane.day) ? inlineDraft : null
+              }
+              onOpenEntry={onOpenEntry}
+              onOpenSleep={onOpenSleep}
+              onCreateInline={onCreateInline}
+              onChangeInlineRange={onChangeInlineRange}
+              onChangeInlineDescription={onChangeInlineDescription}
+              onApplyInlineSuggestion={onApplyInlineSuggestion}
+              onSaveInline={onSaveInline}
+              onExpandInline={onExpandInline}
+              onCancelInline={onCancelInline}
+              saving={saving}
+            />
+          ))}
         </div>
-
-        {/* gaps — dashed hint with a small "fill whole gap" pill */}
-        {gaps.map((gap) => {
-          const top = gap.startMin * PX_PER_MINUTE;
-          const height = (gap.endMin - gap.startMin) * PX_PER_MINUTE;
-          const showPill = gap.endMin - gap.startMin >= 15;
-          return (
-            <div
-              key={`gap-${gap.startMin}`}
-              className="pointer-events-none absolute rounded-lg border border-dashed border-border/70"
-              style={{ top, height, left: GUTTER, right: 4 }}
-            >
-              {showPill && (
-                <button
-                  data-fill
-                  type="button"
-                  onClick={() => onCreateInline(gap.startMin, gap.endMin, true)}
-                  className="pointer-events-auto absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm transition-colors hover:border-primary/50 hover:text-primary"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Fill {formatDuration(gap.endMin - gap.startMin)}
-                </button>
-              )}
-            </div>
-          );
-        })}
-
-        {/* sleep sessions — read-only health data, not tracked time */}
-        {sleepLayout.map(({ entry, startMin, endMin, rawStartMin, rawEndMin }) => {
-          const top = startMin * PX_PER_MINUTE;
-          const height = (endMin - startMin) * PX_PER_MINUTE;
-          const compact = height < 38;
-          const asleep = sleepMinutesFor(entry);
-          const source = entry.sourceApp ?? (entry.source === "GOOGLE_HEALTH" ? "Google Health" : "Health Connect");
-
-          return (
-            <button
-              key={entry.id}
-              data-sleep
-              type="button"
-              onClick={() => onOpenSleep(entry)}
-              className={cn(
-                "absolute z-[1] flex overflow-hidden rounded-lg border border-indigo-300/40 bg-indigo-500/[0.08] px-2.5 text-left text-indigo-950 shadow-sm dark:border-indigo-400/20 dark:bg-indigo-400/[0.10] dark:text-indigo-100",
-                "transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                compact ? "items-center" : "flex-col justify-center py-1.5",
-              )}
-              style={{
-                top,
-                height: Math.max(height - 2, 18),
-                left: GUTTER,
-                right: 4,
-              }}
-              title={`${formatClock(rawStartMin)}-${formatClock(rawEndMin)} · ${formatDuration(asleep)} sleep`}
-            >
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Moon className="h-3.5 w-3.5 shrink-0 text-indigo-500 dark:text-indigo-300" />
-                <span className="truncate text-xs font-medium">Sleep</span>
-                <span className="shrink-0 text-[10px] tabular-nums text-indigo-700/80 dark:text-indigo-200/80">
-                  {formatDuration(asleep)}
-                </span>
-              </div>
-              {!compact && (
-                <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-indigo-700/70 dark:text-indigo-200/70">
-                  <span className="tabular-nums">
-                    {formatClock(rawStartMin)}-{formatClock(rawEndMin)}
-                  </span>
-                  <span className="text-indigo-700/40 dark:text-indigo-200/40">·</span>
-                  <span className="truncate">{source}</span>
-                </div>
-              )}
-            </button>
-          );
-        })}
-
-        {/* entries */}
-        {layout.map(({ entry, startMin, endMin, running, lane, lanes }) => {
-          const top = startMin * PX_PER_MINUTE;
-          const height = (endMin - startMin) * PX_PER_MINUTE;
-          const category = entry.categoryId
-            ? categoryById.get(entry.categoryId)
-            : null;
-          const color = category?.color ?? "#9aa0aa";
-          const laneWidth = `calc((100% - ${GUTTER}px) / ${lanes})`;
-          const compact = height < 34;
-
-          return (
-            <button
-              key={entry.id}
-              data-entry
-              type="button"
-              onClick={() => onOpenEntry(entry)}
-              className={cn(
-                "absolute flex flex-col overflow-hidden rounded-lg border-l-2 px-2.5 text-left transition-shadow hover:shadow-md",
-                compact ? "justify-center py-0" : "py-1.5",
-              )}
-              style={{
-                top,
-                height: Math.max(height - 2, 16),
-                left: `calc(${GUTTER}px + ${lane} * ${laneWidth})`,
-                width: `calc(${laneWidth} - 4px)`,
-                backgroundColor: `${color}1f`,
-                borderLeftColor: color,
-              }}
-            >
-              <div className="flex w-full items-center gap-1.5">
-                {running && (
-                  <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-now-line" />
-                )}
-                <span className="truncate text-xs font-medium text-foreground">
-                  {entry.description || "Untitled"}
-                </span>
-              </div>
-              {!compact && (
-                <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted">
-                  {category && <CategoryDot color={category.color} className="h-1.5 w-1.5" />}
-                  <span className="tabular-nums">
-                    {formatClock(startMin)}–{running ? "now" : formatClock(endMin)}
-                  </span>
-                  <span className="text-faint">·</span>
-                  <span>{formatDuration(endMin - startMin)}</span>
-                </div>
-              )}
-            </button>
-          );
-        })}
-
-        {/* drag-create preview (mouse) */}
-        {preview && !inlineDraft && (
-          <div
-            className="pointer-events-none absolute z-20 rounded-lg border-2 border-dashed border-primary bg-primary/10"
-            style={{
-              top: preview.startMin * PX_PER_MINUTE,
-              height: Math.max((preview.endMin - preview.startMin) * PX_PER_MINUTE, 2),
-              left: GUTTER,
-              right: 4,
-            }}
-          >
-            <span className="block px-2 py-1 text-[11px] font-semibold tabular-nums text-primary">
-              {formatClock(preview.startMin)}–{formatClock(preview.endMin)}
-            </span>
-          </div>
-        )}
-
-        {/* in-place draft block */}
-        {inlineDraft && (
-          <DraftBlock
-            startMin={inlineDraft.startMin}
-            endMin={inlineDraft.endMin}
-            description={inlineDraft.description}
-            categoryId={inlineDraft.categoryId}
-            categories={categories}
-            autoFocus={inlineDraft.autoFocus}
-            maxEndMin={MINUTES_PER_DAY + overflowMin}
-            clientYToMin={clientYToMin}
-            onChangeRange={onChangeInlineRange}
-            onChangeDescription={onChangeInlineDescription}
-            onApplySuggestion={onApplyInlineSuggestion}
-            onSave={onSaveInline}
-            onExpand={onExpandInline}
-            onCancel={onCancelInline}
-            saving={saving}
-          />
-        )}
-
-        {/* now line */}
-        {nowMin !== null && (
-          <div
-            className="pointer-events-none absolute inset-x-0 z-10 flex items-center"
-            style={{ top: nowMin * PX_PER_MINUTE }}
-          >
-            <span className="ml-[46px] h-2 w-2 rounded-full bg-now-line" />
-            <div className="h-px flex-1 bg-now-line" />
-          </div>
-        )}
       </div>
     </div>
   );

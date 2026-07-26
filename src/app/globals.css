@@ -87,6 +87,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* For scrollers whose position is meaningless — the infinite timeline, the
+   habit strip — a scrollbar is just noise. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Thin, unobtrusive scrollbars to keep the timeline calm. */
 @media (pointer: fine) {
   ::-webkit-scrollbar {

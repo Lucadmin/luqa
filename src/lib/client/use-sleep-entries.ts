@@ -1,9 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { apiSend, fetcher } from "@/lib/client/fetcher";
-import { minutesToDate } from "@/lib/time";
 import type { SleepEntryDTO } from "@/lib/types";
 
 export interface SleepEntryPatch {
@@ -17,19 +15,16 @@ export interface SleepEntryPatch {
   remMinutes?: number | null;
 }
 
-/** Sleep sessions whose wake time falls inside the displayed logical day. */
-export function useSleepEntries(day: Date, dayStartHour: number) {
-  const { from, to } = useMemo(() => {
-    const start = minutesToDate(day, dayStartHour * 60);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
-    return { from: start.toISOString(), to: end.toISOString() };
-  }, [day, dayStartHour]);
+const PREFIX = "/api/sleep?";
 
-  const key = `/api/sleep?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+/** Sleep sessions whose wake time falls inside [from, to). */
+export function useSleepRange(from: Date, to: Date) {
+  const { mutate: mutateAll } = useSWRConfig();
+
+  const key = `${PREFIX}from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`;
   const { data, error, isLoading, mutate } = useSWR<{
     entries: SleepEntryDTO[];
-  }>(key, fetcher, { revalidateOnFocus: true });
+  }>(key, fetcher, { revalidateOnFocus: true, keepPreviousData: true });
 
   async function updateSleepEntry(id: string, patch: SleepEntryPatch) {
     const res = await apiSend<{ entry: SleepEntryDTO }>(
@@ -37,7 +32,7 @@ export function useSleepEntries(day: Date, dayStartHour: number) {
       "PATCH",
       patch,
     );
-    await mutate();
+    await mutateAll((k) => typeof k === "string" && k.startsWith(PREFIX));
     return res.entry;
   }
 
