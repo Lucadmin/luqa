@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { toDateKey } from "@/lib/life";
-import { toPersonDTO } from "@/lib/serializers";
+import { toExpenseDTO, toPersonDTO } from "@/lib/serializers";
 import type { LedgerItemDTO, PersonLedgerDTO } from "@/lib/types";
 
 // GET /api/money/people/[id]/ledger — one person's whole history with the
@@ -60,6 +60,7 @@ export async function GET(
         amountCents: e.amountCents,
         paidByPersonId: e.paidByPersonId,
         direction: null,
+        expense: toExpenseDTO(e),
         createdAt: e.createdAt.toISOString(),
       });
       continue;
@@ -88,6 +89,7 @@ export async function GET(
       amountCents: e.amountCents,
       paidByPersonId: null,
       direction: null,
+      expense: toExpenseDTO(e),
       createdAt: e.createdAt.toISOString(),
     });
   }
@@ -104,6 +106,7 @@ export async function GET(
       amountCents: null,
       paidByPersonId: null,
       direction: s.direction,
+      expense: null,
       createdAt: s.createdAt.toISOString(),
     });
   }

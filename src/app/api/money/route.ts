@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { toExpenseDTO, toGroupDTO } from "@/lib/serializers";
+import { toGroupDTO } from "@/lib/serializers";
 import { loadPersonTotals } from "@/lib/server/money";
 import type { MoneyOverviewDTO, PersonBalanceDTO } from "@/lib/types";
 
-const RECENT_EXPENSES = 25;
-
 // GET /api/money — the whole overview screen in one payload: everyone's
-// balance, the groups, the headline totals and the latest expenses.
+// balance, the groups and the headline totals. Expenses are paginated by their
+// dedicated endpoint so the screen can keep loading the full history.
 export async function GET() {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [user, people, groups, recent, totals] = await Promise.all([
+  const [user, people, groups, totals] = await Promise.all([
     db.user.findUnique({ where: { id: userId }, select: { currency: true } }),
     db.person.findMany({
       where: { userId },
@@ -23,12 +22,6 @@ export async function GET() {
       where: { userId, archivedAt: null },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       include: { members: true },
-    }),
-    db.expense.findMany({
-      where: { userId },
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-      take: RECENT_EXPENSES,
-      include: { shares: true },
     }),
     loadPersonTotals(userId),
   ]);
@@ -76,7 +69,6 @@ export async function GET() {
     youOweCents,
     netCents: owedToYouCents - youOweCents,
     coveredCents: balances.reduce((sum, p) => sum + p.coveredCents, 0),
-    recent: recent.map(toExpenseDTO),
   };
 
   return NextResponse.json({ overview });

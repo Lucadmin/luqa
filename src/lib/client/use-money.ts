@@ -1,9 +1,11 @@
 "use client";
 
 import useSWR, { mutate as globalMutate } from "swr";
+import useSWRInfinite from "swr/infinite";
 import { apiSend, fetcher } from "@/lib/client/fetcher";
 import type {
   ExpenseDTO,
+  ExpensePageDTO,
   MoneyOverviewDTO,
   PersonDTO,
   PersonGroupDTO,
@@ -28,6 +30,51 @@ export function useMoneyOverview() {
   );
 
   return { overview: data?.overview ?? null, isLoading, error, mutate };
+}
+
+const EXPENSE_PAGE_SIZE = 20;
+
+export function useExpenses() {
+  const { data, error, isLoading, isValidating, size, setSize, mutate } =
+    useSWRInfinite<ExpensePageDTO>(
+      (_pageIndex, previousPage) => {
+        if (previousPage && previousPage.nextCursor === null) return null;
+
+        const params = new URLSearchParams({
+          limit: String(EXPENSE_PAGE_SIZE),
+        });
+        if (previousPage?.nextCursor) {
+          params.set("cursor", previousPage.nextCursor);
+        }
+        return `/api/money/expenses?${params.toString()}`;
+      },
+      fetcher,
+    );
+
+  const seen = new Set<string>();
+  const expenses =
+    data?.flatMap((page) =>
+      page.expenses.filter((expense) => {
+        if (seen.has(expense.id)) return false;
+        seen.add(expense.id);
+        return true;
+      }),
+    ) ?? [];
+  const hasMore = Boolean(data?.at(-1)?.nextCursor);
+  const isLoadingMore =
+    isLoading ||
+    (size > 0 && data !== undefined && typeof data[size - 1] === "undefined");
+
+  return {
+    expenses,
+    error,
+    isLoading,
+    isLoadingMore,
+    isValidating,
+    hasMore,
+    loadMore: () => setSize(size + 1),
+    mutate,
+  };
 }
 
 export function usePersonLedger(personId: string | null) {

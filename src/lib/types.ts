@@ -262,6 +262,12 @@ export interface ExpenseDTO {
   createdAt: string;
 }
 
+/** One cursor-paginated page of expenses, newest first. */
+export interface ExpensePageDTO {
+  expenses: ExpenseDTO[];
+  nextCursor: string | null;
+}
+
 export interface SettlementDTO {
   id: string;
   personId: string;
@@ -286,7 +292,6 @@ export interface MoneyOverviewDTO {
   netCents: number;
   /** All-time total covered as treats, across everyone. */
   coveredCents: number;
-  recent: ExpenseDTO[];
 }
 
 /** One row of a person's history. */
@@ -306,6 +311,8 @@ export interface LedgerItemDTO {
   /** Null = you paid. */
   paidByPersonId: string | null;
   direction: SettlementDirection | null;
+  /** Full editor state for expense rows. Null on settlements. */
+  expense: ExpenseDTO | null;
   createdAt: string;
 }
 

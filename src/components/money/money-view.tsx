@@ -1,12 +1,12 @@
 "use client";
 
 import { Gift, Plus, Users, Wallet } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/money/avatar";
 import { ExpenseSheet } from "@/components/money/expense-sheet";
 import { GroupsSheet } from "@/components/money/groups-sheet";
 import { balanceLabel, PersonSheet } from "@/components/money/person-sheet";
-import { useMoneyOverview } from "@/lib/client/use-money";
+import { useExpenses, useMoneyOverview } from "@/lib/client/use-money";
 import { cn } from "@/lib/cn";
 import { formatMoney } from "@/lib/money";
 import { formatDayLabel } from "@/lib/time";
@@ -14,6 +14,16 @@ import type { ExpenseDTO, PersonBalanceDTO } from "@/lib/types";
 
 export function MoneyView() {
   const { overview, isLoading } = useMoneyOverview();
+  const {
+    expenses,
+    error: expensesError,
+    isLoading: expensesLoading,
+    isLoadingMore,
+    hasMore,
+    loadMore,
+    mutate: reloadExpenses,
+  } = useExpenses();
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseDTO | null>(null);
@@ -44,6 +54,22 @@ export function MoneyView() {
     setPresetGroup(null);
     setExpenseOpen(true);
   }
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasMore || isLoadingMore) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        observer.disconnect();
+        void loadMore();
+      },
+      { rootMargin: "300px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, loadMore]);
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-5 md:px-8 md:py-7">
@@ -166,24 +192,69 @@ export function MoneyView() {
         )}
       </div>
 
-      {/* the last few bills, for a quick correction */}
-      {(overview?.recent.length ?? 0) > 0 && (
+      {/* every bill, loaded a page at a time as the user reaches the end */}
+      {(expenses.length > 0 || expensesLoading || expensesError) && (
         <div className="mt-7">
           <p className="text-xs font-medium uppercase tracking-wide text-faint">
-            Recent
+            Expenses
           </p>
-          <ul className="mt-1 divide-y divide-border">
-            {overview?.recent.slice(0, 8).map((expense) => (
-              <li key={expense.id}>
-                <ExpenseRow
-                  expense={expense}
-                  currency={currency}
-                  nameOf={(id) => byId.get(id)?.name ?? "someone"}
-                  onOpen={() => editExpense(expense)}
-                />
-              </li>
-            ))}
-          </ul>
+          {expensesLoading && expenses.length === 0 ? (
+            <div className="mt-2 flex flex-col gap-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-14 animate-pulse rounded-xl bg-surface-2" />
+              ))}
+            </div>
+          ) : expensesError && expenses.length === 0 ? (
+            <div className="mt-2 rounded-xl border border-border px-4 py-5 text-center">
+              <p className="text-sm text-muted">Couldn&rsquo;t load expenses.</p>
+              <button
+                type="button"
+                onClick={() => void reloadExpenses()}
+                className="mt-2 text-sm font-medium text-primary hover:underline"
+              >
+                Try again
+              </button>
+            </div>
+          ) : (
+            <>
+              <ul className="mt-1 divide-y divide-border">
+                {expenses.map((expense) => (
+                  <li key={expense.id}>
+                    <ExpenseRow
+                      expense={expense}
+                      currency={currency}
+                      nameOf={(id) => byId.get(id)?.name ?? "someone"}
+                      onOpen={() => editExpense(expense)}
+                    />
+                  </li>
+                ))}
+              </ul>
+              {hasMore && (
+                <div ref={loadMoreRef} className="flex justify-center py-3">
+                  <button
+                    type="button"
+                    onClick={() => void loadMore()}
+                    disabled={isLoadingMore}
+                    className="rounded-full px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-foreground disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isLoadingMore ? "Loading…" : "Load more expenses"}
+                  </button>
+                </div>
+              )}
+              {expensesError && expenses.length > 0 && (
+                <div className="py-3 text-center">
+                  <p className="text-xs text-muted">More expenses couldn&rsquo;t load.</p>
+                  <button
+                    type="button"
+                    onClick={() => void reloadExpenses()}
+                    className="mt-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -205,6 +276,10 @@ export function MoneyView() {
         onAddExpense={(id) => {
           setOpenPersonId(null);
           newExpense([id]);
+        }}
+        onEditExpense={(expense) => {
+          setOpenPersonId(null);
+          editExpense(expense);
         }}
       />
 

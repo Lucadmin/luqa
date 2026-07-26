@@ -27,7 +27,7 @@ import {
   PERSON_PALETTE,
 } from "@/lib/money";
 import { formatDayLabel } from "@/lib/time";
-import type { LedgerItemDTO, PersonDTO } from "@/lib/types";
+import type { ExpenseDTO, LedgerItemDTO, PersonDTO } from "@/lib/types";
 
 type Mode = "ledger" | "settle" | "edit";
 
@@ -43,11 +43,13 @@ export function PersonSheet({
   onClose,
   currency,
   onAddExpense,
+  onEditExpense,
 }: {
   personId: string | null;
   onClose: () => void;
   currency: string;
   onAddExpense: (personId: string) => void;
+  onEditExpense: (expense: ExpenseDTO) => void;
 }) {
   const { ledger, isLoading } = usePersonLedger(personId);
   const [mode, setMode] = useState<Mode>("ledger");
@@ -178,6 +180,7 @@ export function PersonSheet({
                     key={`${item.kind}-${item.id}`}
                     item={item}
                     currency={currency}
+                    onEditExpense={onEditExpense}
                   />
                 ))}
               </ul>
@@ -192,9 +195,11 @@ export function PersonSheet({
 function LedgerRow({
   item,
   currency,
+  onEditExpense,
 }: {
   item: LedgerItemDTO;
   currency: string;
+  onEditExpense: (expense: ExpenseDTO) => void;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -217,8 +222,8 @@ function LedgerRow({
     }
   }
 
-  return (
-    <li className="flex items-center gap-3 py-2.5">
+  const content = (
+    <>
       <span className="w-12 shrink-0 text-xs tabular-nums text-faint">
         {formatDayLabel(item.date)}
       </span>
@@ -241,17 +246,38 @@ function LedgerRow({
           ? formatMoney(item.shareCents, currency, { compact: true })
           : formatMoney(item.deltaCents, currency, { signed: true, compact: true })}
       </span>
-      {item.kind === "settlement" && (
+    </>
+  );
+
+  const expense = item.expense;
+  if (item.kind === "expense" && expense) {
+    return (
+      <li>
         <button
           type="button"
-          onClick={undo}
-          disabled={busy}
-          aria-label="Undo this payback"
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-faint hover:bg-surface-2 hover:text-red-500"
+          onClick={() => onEditExpense(expense)}
+          aria-label={`Edit ${item.title}`}
+          className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-surface-2"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          {content}
+          <Pencil className="h-3.5 w-3.5 shrink-0 text-faint" />
         </button>
-      )}
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-center gap-3 py-2.5">
+      {content}
+      <button
+        type="button"
+        onClick={undo}
+        disabled={busy}
+        aria-label="Undo this payback"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-faint hover:bg-surface-2 hover:text-red-500"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </li>
   );
 }
