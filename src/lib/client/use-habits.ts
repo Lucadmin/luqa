@@ -95,7 +95,7 @@ export function useHabitDay(date: Date) {
           : cur,
       { revalidate: false },
     );
-    await revalidateTracking();
+    void revalidateTracking().catch(() => {});
     return res.habit;
   }
 

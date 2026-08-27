@@ -81,12 +81,15 @@ export function HabitsStrip({ day }: { day: Date }) {
         </button>
       </div>
 
-      <HabitForm
-        open={formOpen}
-        habit={editing}
-        defaultDate={isoDateKey(day)}
-        onClose={() => setFormOpen(false)}
-      />
+      {formOpen && (
+        <HabitForm
+          key={editing?.id ?? "new"}
+          open
+          habit={editing}
+          defaultDate={isoDateKey(day)}
+          onClose={() => setFormOpen(false)}
+        />
+      )}
     </>
   );
 }

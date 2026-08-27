@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { DailyBarChart } from "@/components/reports/daily-bar-chart";
 import { DonutChart } from "@/components/reports/donut-chart";
 import { HabitGlyph } from "@/components/habits/habit-glyph";
+import { AppPage, AppPageHeader } from "@/components/ui/app-page";
 import {
   computeRange,
   type RangeMode,
@@ -177,29 +178,33 @@ export function ReportsView() {
   const hasSleep = data.sleep.totalMinutes > 0;
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-8">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Reports</h1>
-        <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-surface p-0.5">
-          {MODES.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => {
-                setMode(value);
-                setOffset(0);
-                setSelectedDayKey(null);
-              }}
-              className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                mode === value ? "bg-surface-2 text-foreground" : "text-faint hover:text-muted",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <AppPage width="wide" className="py-6 md:py-8">
+      <AppPageHeader
+        title="Reports"
+        actions={
+          <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-surface p-0.5">
+            {MODES.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  setMode(value);
+                  setOffset(0);
+                  setSelectedDayKey(null);
+                }}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                  mode === value
+                    ? "bg-surface-2 text-foreground"
+                    : "text-faint hover:text-muted",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {/* range navigation */}
       <div className="mt-4 flex items-center gap-1">
@@ -384,7 +389,7 @@ export function ReportsView() {
           )}
         </div>
       )}
-    </div>
+    </AppPage>
   );
 }
 

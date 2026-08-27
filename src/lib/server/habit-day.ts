@@ -82,7 +82,6 @@ async function trackedByCategory(
     },
   });
 
-  const now = Date.now();
   for (const e of entries) {
     if (!e.categoryId) continue;
     const cur = out.get(e.categoryId) ?? { seconds: 0, runningSince: null };
@@ -108,7 +107,7 @@ async function trackedByCategoryRange(
   const out = new Map<string, number>();
   if (categoryIds.length === 0) return out;
 
-  const [startDate, endDate] = dayWindow(from, dayStartHour);
+  const [startDate] = dayWindow(from, dayStartHour);
   const [, periodEnd] = dayWindow(to, dayStartHour);
   const entries = await db.timeEntry.findMany({
     where: {

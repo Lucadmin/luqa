@@ -3,6 +3,9 @@
 import { CalendarCheck, ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
+import { AppPage, AppPageHeader } from "@/components/ui/app-page";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useHabitDay, useHabits, useHabitStats } from "@/lib/client/use-habits";
 import { useSettings } from "@/lib/client/use-settings";
 import { startOfWeek } from "@/lib/client/use-week";
@@ -68,11 +71,11 @@ export function HabitsView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-5 md:px-8 md:py-7">
-      {/* header */}
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Habits</h1>
-        <div className="flex items-center gap-2">
+    <AppPage>
+      <AppPageHeader
+        title="Habits"
+        actions={
+          <div className="flex items-center gap-2">
           <div className="inline-flex rounded-full border border-border bg-surface p-0.5 text-xs font-medium">
             {(["day", "insights"] as const).map((t) => (
               <button
@@ -88,16 +91,16 @@ export function HabitsView() {
               </button>
             ))}
           </div>
-          <button
-            type="button"
+          <Button
+            size="icon-sm"
             onClick={openCreate}
             aria-label="New habit"
-            className="grid h-9 w-9 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
           >
             <Plus className="h-4.5 w-4.5" />
-          </button>
-        </div>
-      </div>
+          </Button>
+          </div>
+        }
+      />
 
       {/* week strip */}
       <div className="mt-4 flex items-center gap-1">
@@ -175,7 +178,18 @@ export function HabitsView() {
             ))}
           </div>
         ) : allHabits.length === 0 ? (
-          <EmptyState onCreate={openCreate} />
+          <EmptyState
+            icon={<Sparkles className="h-6 w-6" />}
+            title="No habits yet"
+            description="Build a routine — tasks, counts, or timed goals."
+            actionLabel={
+              <>
+                <Plus className="h-4 w-4" />
+                New habit
+              </>
+            }
+            onAction={openCreate}
+          />
         ) : dayHabits.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border py-12 text-center">
             <CalendarCheck className="h-6 w-6 text-faint" />
@@ -190,36 +204,15 @@ export function HabitsView() {
         )}
       </div>
 
-      <HabitForm
-        open={formOpen}
-        habit={editing}
-        defaultDate={selectedKey}
-        onClose={() => setFormOpen(false)}
-      />
-    </div>
-  );
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-14 text-center">
-      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary">
-        <Sparkles className="h-6 w-6" />
-      </span>
-      <div>
-        <p className="text-sm font-medium">No habits yet</p>
-        <p className="mt-0.5 text-xs text-faint">
-          Build a routine — tasks, counts, or timed goals.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
-      >
-        <Plus className="h-4 w-4" />
-        New habit
-      </button>
-    </div>
+      {formOpen && (
+        <HabitForm
+          key={editing?.id ?? "new"}
+          open
+          habit={editing}
+          defaultDate={selectedKey}
+          onClose={() => setFormOpen(false)}
+        />
+      )}
+    </AppPage>
   );
 }

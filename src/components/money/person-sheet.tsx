@@ -54,13 +54,6 @@ export function PersonSheet({
   const { ledger, isLoading } = usePersonLedger(personId);
   const [mode, setMode] = useState<Mode>("ledger");
 
-  // Every fresh person opens on their history.
-  const [lastId, setLastId] = useState(personId);
-  if (personId !== lastId) {
-    setLastId(personId);
-    setMode("ledger");
-  }
-
   const person = ledger?.person ?? null;
   const balance = ledger?.balanceCents ?? 0;
 

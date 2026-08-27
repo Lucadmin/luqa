@@ -65,14 +65,6 @@ export function SleepEditor({
   const [endValue, setEndValue] = useState(entry ? toLocalInputValue(entry.endTime) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadedId, setLoadedId] = useState(entry?.id ?? null);
-
-  if (entry && entry.id !== loadedId) {
-    setLoadedId(entry.id);
-    setStartValue(toLocalInputValue(entry.startTime));
-    setEndValue(toLocalInputValue(entry.endTime));
-    setError(null);
-  }
 
   if (!entry) {
     return null;

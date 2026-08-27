@@ -1,7 +1,8 @@
 "use client";
 
 import useSWR, { mutate as globalMutate } from "swr";
-import useSWRInfinite from "swr/infinite";
+import useSWRInfinite, { unstable_serialize } from "swr/infinite";
+import { useCallback, useMemo } from "react";
 import { apiSend, fetcher } from "@/lib/client/fetcher";
 import type {
   ExpenseDTO,
@@ -17,10 +18,37 @@ import type {
  * Any write can move a balance, so the whole money namespace is refreshed
  * together rather than each screen guessing what else it touched.
  */
-function revalidateMoney() {
-  return globalMutate(
-    (key) => typeof key === "string" && key.startsWith("/api/money"),
-  );
+const EXPENSE_PAGE_SIZE = 20;
+
+function expensePageKey(_pageIndex: number, previousPage: ExpensePageDTO | null) {
+  if (previousPage && previousPage.nextCursor === null) return null;
+
+  const params = new URLSearchParams({ limit: String(EXPENSE_PAGE_SIZE) });
+  if (previousPage?.nextCursor) params.set("cursor", previousPage.nextCursor);
+  return `/api/money/expenses?${params.toString()}`;
+}
+
+const EXPENSE_LIST_KEY = unstable_serialize(expensePageKey);
+
+async function revalidateMoney() {
+  await Promise.all([
+    globalMutate(
+      (key) =>
+        typeof key === "string" &&
+        key.startsWith("/api/money") &&
+        !key.startsWith("/api/money/expenses?"),
+    ),
+    // Filter mutations intentionally skip SWR's `$inf$` metadata entries.
+    // Revalidate the paginated expense list through its serialized key too.
+    globalMutate(EXPENSE_LIST_KEY),
+  ]);
+}
+
+function revalidateMoneyInBackground() {
+  void revalidateMoney().catch(() => {
+    // The write already succeeded. SWR will surface refresh failures on the
+    // affected view and retry on focus/reconnect.
+  });
 }
 
 export function useMoneyOverview() {
@@ -32,38 +60,30 @@ export function useMoneyOverview() {
   return { overview: data?.overview ?? null, isLoading, error, mutate };
 }
 
-const EXPENSE_PAGE_SIZE = 20;
-
 export function useExpenses() {
   const { data, error, isLoading, isValidating, size, setSize, mutate } =
     useSWRInfinite<ExpensePageDTO>(
-      (_pageIndex, previousPage) => {
-        if (previousPage && previousPage.nextCursor === null) return null;
-
-        const params = new URLSearchParams({
-          limit: String(EXPENSE_PAGE_SIZE),
-        });
-        if (previousPage?.nextCursor) {
-          params.set("cursor", previousPage.nextCursor);
-        }
-        return `/api/money/expenses?${params.toString()}`;
-      },
+      expensePageKey,
       fetcher,
     );
 
-  const seen = new Set<string>();
-  const expenses =
-    data?.flatMap((page) =>
-      page.expenses.filter((expense) => {
-        if (seen.has(expense.id)) return false;
-        seen.add(expense.id);
-        return true;
-      }),
-    ) ?? [];
+  const expenses = useMemo(() => {
+    const seen = new Set<string>();
+    return (
+      data?.flatMap((page) =>
+        page.expenses.filter((expense) => {
+          if (seen.has(expense.id)) return false;
+          seen.add(expense.id);
+          return true;
+        }),
+      ) ?? []
+    );
+  }, [data]);
   const hasMore = Boolean(data?.at(-1)?.nextCursor);
   const isLoadingMore =
     isLoading ||
     (size > 0 && data !== undefined && typeof data[size - 1] === "undefined");
+  const loadMore = useCallback(() => setSize((current) => current + 1), [setSize]);
 
   return {
     expenses,
@@ -72,7 +92,7 @@ export function useExpenses() {
     isLoadingMore,
     isValidating,
     hasMore,
-    loadMore: () => setSize(size + 1),
+    loadMore,
     mutate,
   };
 }
@@ -186,7 +206,7 @@ export async function createExpense(input: ExpenseInput) {
     "POST",
     input,
   );
-  await revalidateMoney();
+  revalidateMoneyInBackground();
   return expense;
 }
 
@@ -196,13 +216,13 @@ export async function updateExpense(id: string, patch: Partial<ExpenseInput>) {
     "PATCH",
     patch,
   );
-  await revalidateMoney();
+  revalidateMoneyInBackground();
   return expense;
 }
 
 export async function deleteExpense(id: string) {
   await apiSend(`/api/money/expenses/${id}`, "DELETE");
-  await revalidateMoney();
+  revalidateMoneyInBackground();
 }
 
 // --- settlements ------------------------------------------------------------

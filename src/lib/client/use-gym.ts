@@ -1,7 +1,8 @@
 "use client";
 
 import useSWR, { mutate as globalMutate } from "swr";
-import useSWRInfinite from "swr/infinite";
+import useSWRInfinite, { unstable_serialize } from "swr/infinite";
+import { useCallback, useMemo } from "react";
 import { apiSend, fetcher } from "@/lib/client/fetcher";
 import type {
   ExerciseDTO,
@@ -18,10 +19,37 @@ const SESSIONS_PAGE_SIZE = 20;
  * usage counts, the exercise vocabulary, every open history graph — so the
  * whole gym namespace refreshes together.
  */
-function revalidateGym() {
-  return globalMutate(
-    (key) => typeof key === "string" && key.startsWith("/api/gym"),
-  );
+interface SessionsPage {
+  sessions: GymSessionDTO[];
+  nextCursor: string | null;
+}
+
+function sessionPageKey(_pageIndex: number, previousPage: SessionsPage | null) {
+  if (previousPage && previousPage.nextCursor === null) return null;
+
+  const params = new URLSearchParams({ limit: String(SESSIONS_PAGE_SIZE) });
+  if (previousPage?.nextCursor) params.set("cursor", previousPage.nextCursor);
+  return `/api/gym/sessions?${params.toString()}`;
+}
+
+const SESSION_LIST_KEY = unstable_serialize(sessionPageKey);
+
+async function revalidateGym() {
+  await Promise.all([
+    globalMutate(
+      (key) =>
+        typeof key === "string" &&
+        key.startsWith("/api/gym") &&
+        !key.startsWith("/api/gym/sessions?"),
+    ),
+    globalMutate(SESSION_LIST_KEY),
+  ]);
+}
+
+function revalidateGymInBackground() {
+  void revalidateGym().catch(() => {
+    // The write already succeeded; let SWR retry the refresh later.
+  });
 }
 
 export function useGymOverview() {
@@ -33,11 +61,6 @@ export function useGymOverview() {
   return { overview: data?.overview ?? null, isLoading, error, mutate };
 }
 
-interface SessionsPage {
-  sessions: GymSessionDTO[];
-  nextCursor: string | null;
-}
-
 /**
  * Sessions, newest first, loaded a page at a time. `loadMore` is meant to be
  * called from an IntersectionObserver at the bottom of the list — the point is
@@ -47,29 +70,27 @@ interface SessionsPage {
 export function useGymSessions() {
   const { data, error, isLoading, size, setSize, mutate } =
     useSWRInfinite<SessionsPage>(
-      (_pageIndex, previousPage: SessionsPage | null) => {
-        if (previousPage && previousPage.nextCursor === null) return null;
-
-        const params = new URLSearchParams({ limit: String(SESSIONS_PAGE_SIZE) });
-        if (previousPage?.nextCursor) params.set("cursor", previousPage.nextCursor);
-        return `/api/gym/sessions?${params.toString()}`;
-      },
+      sessionPageKey,
       fetcher,
     );
 
-  const seen = new Set<string>();
-  const sessions =
-    data?.flatMap((page) =>
-      page.sessions.filter((session) => {
-        if (seen.has(session.id)) return false;
-        seen.add(session.id);
-        return true;
-      }),
-    ) ?? [];
+  const sessions = useMemo(() => {
+    const seen = new Set<string>();
+    return (
+      data?.flatMap((page) =>
+        page.sessions.filter((session) => {
+          if (seen.has(session.id)) return false;
+          seen.add(session.id);
+          return true;
+        }),
+      ) ?? []
+    );
+  }, [data]);
   const hasMore = Boolean(data?.at(-1)?.nextCursor);
   const isLoadingMore =
     isLoading ||
     (size > 0 && data !== undefined && typeof data[size - 1] === "undefined");
+  const loadMore = useCallback(() => setSize((current) => current + 1), [setSize]);
 
   return {
     sessions,
@@ -77,7 +98,7 @@ export function useGymSessions() {
     isLoading,
     isLoadingMore,
     hasMore,
-    loadMore: () => setSize(size + 1),
+    loadMore,
     mutate,
   };
 }
@@ -132,7 +153,7 @@ export async function createSession(input: SessionInput) {
     "POST",
     input,
   );
-  await revalidateGym();
+  revalidateGymInBackground();
   return session;
 }
 
@@ -142,7 +163,7 @@ export async function updateSession(id: string, patch: SessionInput) {
     "PATCH",
     patch,
   );
-  await revalidateGym();
+  revalidateGymInBackground();
   return session;
 }
 
@@ -164,7 +185,7 @@ export async function patchSessionSilently(id: string, patch: SessionInput) {
 
 export async function deleteSession(id: string) {
   await apiSend(`/api/gym/sessions/${id}`, "DELETE");
-  await revalidateGym();
+  revalidateGymInBackground();
 }
 
 // --- gyms --------------------------------------------------------------------

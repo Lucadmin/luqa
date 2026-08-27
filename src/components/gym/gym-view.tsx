@@ -2,12 +2,16 @@
 
 import { Dumbbell, MapPin, Plus, Search } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { AppPage, AppPageHeader } from "@/components/ui/app-page";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { InfiniteListFooter } from "@/components/ui/infinite-list-footer";
 import { Input } from "@/components/ui/input";
 import { useGymOverview, useGymSessions } from "@/lib/client/use-gym";
 import { cn } from "@/lib/cn";
 import { formatDayLabel } from "@/lib/time";
-import type { ExerciseDTO, GymSessionDTO } from "@/lib/types";
+import type { ExerciseDTO, GymLocationDTO, GymSessionDTO } from "@/lib/types";
 
 // Modals only matter once opened — load them on demand instead of paying
 // for their JS on every visit to the gym tab.
@@ -22,6 +26,9 @@ const SessionSheet = dynamic(() =>
 );
 
 type Tab = "sessions" | "exercises";
+
+const EMPTY_LOCATIONS: GymLocationDTO[] = [];
+const EMPTY_EXERCISES: ExerciseDTO[] = [];
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -44,101 +51,69 @@ export function GymView() {
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
-  const locations = overview?.locations ?? [];
-  const exercises = overview?.exercises ?? [];
-  const locationById = new Map(locations.map((l) => [l.id, l]));
+  const locations = overview?.locations ?? EMPTY_LOCATIONS;
+  const exercises = overview?.exercises ?? EMPTY_EXERCISES;
+  const locationById = useMemo(
+    () => new Map(locations.map((location) => [location.id, location])),
+    [locations],
+  );
 
   // Sessions load newest first, so if today's exists it's always the first
   // page's first row — no need to wait for the rest of the history.
   const todaySession = sessions.find((s) => s.date === todayKey()) ?? null;
 
-  // Land on /gym mid-workout and it picks up right where it was left — once
-  // per fresh app open, not on every tab switch back to Gym. `autoOpenedId`
-  // just makes sure this runs at most once per distinct session, the same
-  // render-phase-reset idiom the sheets below use for their own props.
-  const [autoOpenedId, setAutoOpenedId] = useState<string | null>(null);
-  if (todaySession && todaySession.id !== autoOpenedId) {
-    setAutoOpenedId(todaySession.id);
-    const flagKey = `gym-auto-opened-${todaySession.id}`;
-    if (!sessionStorage.getItem(flagKey)) {
-      sessionStorage.setItem(flagKey, "1");
-      setEditing(todaySession);
-      setSessionOpen(true);
-    }
-  }
-
   function newSession() {
     // Tapping "+" continues today's session if one's already going, rather
     // than starting a second one for the same day.
-    if (todaySession) sessionStorage.setItem(`gym-auto-opened-${todaySession.id}`, "1");
     setEditing(todaySession);
     setSessionOpen(true);
   }
 
   function editSession(session: GymSessionDTO) {
-    if (session.date === todayKey()) {
-      sessionStorage.setItem(`gym-auto-opened-${session.id}`, "1");
-    }
     setEditing(session);
     setSessionOpen(true);
   }
 
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const target = loadMoreRef.current;
-    if (!target || !hasMore || isLoadingMore) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting) return;
-        observer.disconnect();
-        void loadMore();
-      },
-      { rootMargin: "300px 0px" },
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [hasMore, isLoadingMore, loadMore]);
-
-  const q = query.trim().toLowerCase();
-  const shownExercises = exercises
-    .filter((e) => !e.archived)
-    .filter((e) => !q || e.name.toLowerCase().includes(q))
-    .sort((a, b) => {
-      if (a.lastPerformed !== b.lastPerformed) {
-        return (b.lastPerformed ?? "").localeCompare(a.lastPerformed ?? "");
-      }
-      return b.sessionCount - a.sessionCount;
-    });
+  const deferredQuery = useDeferredValue(query);
+  const q = deferredQuery.trim().toLowerCase();
+  const shownExercises = useMemo(
+    () =>
+      exercises
+        .filter((exercise) => !exercise.archived)
+        .filter((exercise) => !q || exercise.name.toLowerCase().includes(q))
+        .sort((a, b) => {
+          if (a.lastPerformed !== b.lastPerformed) {
+            return (b.lastPerformed ?? "").localeCompare(a.lastPerformed ?? "");
+          }
+          return b.sessionCount - a.sessionCount;
+        }),
+    [exercises, q],
+  );
 
   const historyExercise = historyId
     ? exercises.find((e) => e.id === historyId)
     : null;
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-5 md:px-8 md:py-7">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Gym</h1>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setLocationsOpen(true)}
-            aria-label="Gyms"
-            className="grid h-9 w-9 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-foreground"
-          >
-            <MapPin className="h-4.5 w-4.5" />
-          </button>
-          <button
-            type="button"
-            onClick={newSession}
-            aria-label="New session"
-            className="grid h-9 w-9 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
-          >
-            <Plus className="h-4.5 w-4.5" />
-          </button>
-        </div>
-      </div>
+    <AppPage>
+      <AppPageHeader
+        title="Gym"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setLocationsOpen(true)}
+              aria-label="Gyms"
+            >
+              <MapPin className="h-4.5 w-4.5" />
+            </Button>
+            <Button size="icon-sm" onClick={newSession} aria-label="New session">
+              <Plus className="h-4.5 w-4.5" />
+            </Button>
+          </div>
+        }
+      />
 
       {/* headline: how much has actually happened */}
       {(overview?.totalSessions ?? 0) > 0 && (
@@ -167,7 +142,18 @@ export function GymView() {
               ))}
             </div>
           ) : sessions.length === 0 ? (
-            <EmptyState onCreate={newSession} />
+            <EmptyState
+              icon={<Dumbbell className="h-6 w-6" />}
+              title="No sessions yet"
+              description="Log today’s and the history builds itself from there."
+              actionLabel={
+                <>
+                  <Plus className="h-4 w-4" />
+                  Log a session
+                </>
+              }
+              onAction={newSession}
+            />
           ) : (
             <>
               <ul className="flex flex-col gap-1.5">
@@ -184,18 +170,12 @@ export function GymView() {
                 ))}
               </ul>
 
-              {hasMore && (
-                <div ref={loadMoreRef} className="flex justify-center py-3">
-                  <button
-                    type="button"
-                    onClick={() => void loadMore()}
-                    disabled={isLoadingMore}
-                    className="rounded-full px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-foreground disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {isLoadingMore ? "Loading…" : "Load more sessions"}
-                  </button>
-                </div>
-              )}
+              <InfiniteListFooter
+                hasMore={hasMore}
+                isLoading={isLoadingMore}
+                onLoadMore={loadMore}
+                label="Load more sessions"
+              />
             </>
           )}
         </div>
@@ -232,29 +212,36 @@ export function GymView() {
         </div>
       )}
 
-      <SessionSheet
-        open={sessionOpen}
-        onClose={() => setSessionOpen(false)}
-        session={editing}
-        locations={locations}
-        exercises={exercises}
-        sessions={sessions}
-        onManageLocations={() => setLocationsOpen(true)}
-      />
+      {sessionOpen && (
+        <SessionSheet
+          key={editing?.id ?? "new"}
+          open
+          onClose={() => setSessionOpen(false)}
+          session={editing}
+          locations={locations}
+          exercises={exercises}
+          sessions={sessions}
+          onManageLocations={() => setLocationsOpen(true)}
+        />
+      )}
 
-      <LocationsSheet
-        open={locationsOpen}
-        onClose={() => setLocationsOpen(false)}
-        locations={locations}
-      />
+      {locationsOpen && (
+        <LocationsSheet
+          open
+          onClose={() => setLocationsOpen(false)}
+          locations={locations}
+        />
+      )}
 
-      <ExerciseHistorySheet
-        exerciseId={historyId}
-        name={historyExercise?.name ?? ""}
-        locations={locations}
-        onClose={() => setHistoryId(null)}
-      />
-    </div>
+      {historyId && (
+        <ExerciseHistorySheet
+          exerciseId={historyId}
+          name={historyExercise?.name ?? ""}
+          locations={locations}
+          onClose={() => setHistoryId(null)}
+        />
+      )}
+    </AppPage>
   );
 }
 
@@ -356,29 +343,5 @@ function ExerciseRow({
         {exercise.lastPerformed ? formatDayLabel(exercise.lastPerformed) : ""}
       </span>
     </button>
-  );
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-14 text-center">
-      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary">
-        <Dumbbell className="h-6 w-6" />
-      </span>
-      <div>
-        <p className="text-sm font-medium">No sessions yet</p>
-        <p className="mt-0.5 text-xs text-faint">
-          Log today&apos;s and the history builds itself from there.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
-      >
-        <Plus className="h-4 w-4" />
-        Log a session
-      </button>
-    </div>
   );
 }

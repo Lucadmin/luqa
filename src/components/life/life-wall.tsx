@@ -43,7 +43,14 @@ function useElementSize<T extends HTMLElement>() {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const update = () => setSize({ width: el.clientWidth, height: el.clientHeight });
+    const update = () =>
+      setSize((current) => {
+        const width = el.clientWidth;
+        const height = el.clientHeight;
+        return current.width === width && current.height === height
+          ? current
+          : { width, height };
+      });
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -94,11 +101,11 @@ export const LifeWall = forwardRef<LifeWallHandle, LifeWallProps>(function LifeW
   { totalWeeks, currentWeek, cellPeriods, noteWeeks, milestoneWeeks, onFocusWeek, labelFor },
   ref,
 ) {
-  const [wrapRef, size] = useElementSize<HTMLDivElement>();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const geoRef = useRef<Geometry>({ cell: 0, gap: 0, rowCell: 0, rowGap: 0, rows: 0 });
-  const [magnifier, setMagnifier] = useState<{ x: number; y: number; text: string } | null>(null);
-  const [flash, setFlash] = useState<{ top: number; height: number; id: number } | null>(null);
+    const [wrapRef, size] = useElementSize<HTMLDivElement>();
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const magnifierRef = useRef<HTMLDivElement>(null);
+    const geoRef = useRef<Geometry>({ cell: 0, gap: 0, rowCell: 0, rowGap: 0, rows: 0 });
+    const [flash, setFlash] = useState<{ top: number; height: number; id: number } | null>(null);
 
   const rows = Math.ceil(totalWeeks / WEEKS_PER_YEAR);
 
@@ -235,18 +242,19 @@ export const LifeWall = forwardRef<LifeWallHandle, LifeWallProps>(function LifeW
     const hit = hitTest(e.clientX, e.clientY);
     if (!hit) return;
     const wrapRect = wrapRef.current?.getBoundingClientRect();
-    setMagnifier({
-      x: e.clientX - (wrapRect?.left ?? 0),
-      y: e.clientY - (wrapRect?.top ?? 0),
-      text: labelFor(hit.index),
-    });
+    const magnifier = magnifierRef.current;
+    if (!magnifier) return;
+    magnifier.hidden = false;
+    magnifier.textContent = labelFor(hit.index);
+    magnifier.style.left = `${e.clientX - (wrapRect?.left ?? 0)}px`;
+    magnifier.style.top = `${e.clientY - (wrapRect?.top ?? 0)}px`;
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     const hit = hitTest(e.clientX, e.clientY);
-    setMagnifier(null);
+    if (magnifierRef.current) magnifierRef.current.hidden = true;
     if (hit) onFocusWeek(hit.index);
   }
 
@@ -268,18 +276,15 @@ export const LifeWall = forwardRef<LifeWallHandle, LifeWallProps>(function LifeW
         onPointerUp={onPointerUp}
         onPointerCancel={() => {
           draggingRef.current = false;
-          setMagnifier(null);
+          if (magnifierRef.current) magnifierRef.current.hidden = true;
         }}
       />
-      {magnifier && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute z-10 -translate-x-1/2 translate-y-[-135%] whitespace-nowrap rounded-lg bg-foreground px-2.5 py-1.5 text-xs font-semibold text-background shadow-lg"
-          style={{ left: magnifier.x, top: magnifier.y }}
-        >
-          {magnifier.text}
-        </div>
-      )}
+      <div
+        ref={magnifierRef}
+        hidden
+        aria-hidden
+        className="pointer-events-none absolute z-10 -translate-x-1/2 translate-y-[-135%] whitespace-nowrap rounded-lg bg-foreground px-2.5 py-1.5 text-xs font-semibold text-background shadow-lg"
+      />
       {flash && (
         <FlashOverlay
           key={flash.id}

@@ -43,18 +43,6 @@ export function LocationsSheet({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [wasOpen, setWasOpen] = useState(false);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) {
-      setCode("");
-      setName("");
-      setColor(SWATCHES[0]);
-      setEditingId(null);
-      setError(null);
-    }
-  }
-
   async function submit() {
     const trimmedCode = code.trim();
     if (!trimmedCode) return;

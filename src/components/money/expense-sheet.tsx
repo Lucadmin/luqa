@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Gift, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Avatar } from "@/components/money/avatar";
 import {
   previewSplit,
@@ -25,6 +25,36 @@ import type { ExpenseDTO, PersonDTO, PersonGroupDTO } from "@/lib/types";
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function defaultsFor(
+  peopleById: Map<string, PersonDTO>,
+  ids: string[],
+  keepGifts: SplitRow[] = [],
+): SplitState {
+  const gifted = new Set(
+    keepGifts.filter((row) => row.gifted).map((row) => row.personId),
+  );
+  const selected = ids
+    .map((id) => peopleById.get(id))
+    .filter((person): person is PersonDTO => Boolean(person));
+  const defaults = defaultSplitFor(
+    selected.map((person) => ({
+      id: person.id,
+      defaultPercent: person.defaultPercent,
+    })),
+  );
+
+  return {
+    mode: defaults.mode,
+    includeMe: defaults.includeMe,
+    rows: defaults.participants.map((participant) => ({
+      personId: participant.personId,
+      percentBp: participant.percentBp ?? null,
+      amountCents: null,
+      gifted: gifted.has(participant.personId),
+    })),
+  };
 }
 
 /**
@@ -51,86 +81,42 @@ export function ExpenseSheet({
   presetPersonIds?: string[];
   presetGroupId?: string | null;
 }) {
-  const peopleById = new Map(people.map((p) => [p.id, p]));
+  const peopleById = useMemo(
+    () => new Map(people.map((person) => [person.id, person])),
+    [people],
+  );
 
-  const [amountText, setAmountText] = useState("");
-  const [description, setDescription] = useState("");
-  const [dateKey, setDateKey] = useState(todayKey());
-  const [paidBy, setPaidBy] = useState<string | null>(null);
-  const [groupId, setGroupId] = useState<string | null>(null);
-  const [split, setSplit] = useState<SplitState>({
-    mode: "EQUAL",
-    includeMe: true,
-    rows: [],
-  });
-  const [customized, setCustomized] = useState(false);
-  const [showSplit, setShowSplit] = useState(false);
+  const [amountText, setAmountText] = useState(() =>
+    expense ? (expense.amountCents / 100).toFixed(2) : "",
+  );
+  const [description, setDescription] = useState(expense?.description ?? "");
+  const [dateKey, setDateKey] = useState(expense?.date ?? todayKey());
+  const [paidBy, setPaidBy] = useState<string | null>(
+    expense?.paidByPersonId ?? null,
+  );
+  const [groupId, setGroupId] = useState<string | null>(
+    expense?.groupId ?? presetGroupId,
+  );
+  const [split, setSplit] = useState<SplitState>(() =>
+    expense
+      ? {
+          mode: expense.splitMode,
+          includeMe: expense.myShareCents > 0,
+          rows: expense.shares.map((share) => ({
+            personId: share.personId,
+            percentBp: share.percentBp,
+            amountCents: share.amountCents,
+            gifted: share.gifted,
+          })),
+        }
+      : defaultsFor(peopleById, presetPersonIds),
+  );
+  const [customized, setCustomized] = useState(Boolean(expense));
+  const [showSplit, setShowSplit] = useState(Boolean(expense));
   const [newName, setNewName] = useState("");
   const [addingPerson, setAddingPerson] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  // Re-arm the form each time the sheet opens, from either the expense being
-  // edited or whatever the user tapped to get here.
-  const [wasOpen, setWasOpen] = useState(false);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) {
-      setError(null);
-      setAddingPerson(false);
-      setNewName("");
-      if (expense) {
-        setAmountText((expense.amountCents / 100).toFixed(2));
-        setDescription(expense.description);
-        setDateKey(expense.date);
-        setPaidBy(expense.paidByPersonId);
-        setGroupId(expense.groupId);
-        setSplit({
-          mode: expense.splitMode,
-          includeMe: expense.myShareCents > 0,
-          rows: expense.shares.map((s) => ({
-            personId: s.personId,
-            percentBp: s.percentBp,
-            amountCents: s.amountCents,
-            gifted: s.gifted,
-          })),
-        });
-        setCustomized(true);
-        setShowSplit(true);
-      } else {
-        setAmountText("");
-        setDescription("");
-        setDateKey(todayKey());
-        setPaidBy(null);
-        setGroupId(presetGroupId);
-        setCustomized(false);
-        setShowSplit(false);
-        setSplit(defaultsFor(presetPersonIds));
-      }
-    }
-  }
-
-  function defaultsFor(ids: string[], keepGifts: SplitRow[] = []): SplitState {
-    const gifted = new Set(keepGifts.filter((r) => r.gifted).map((r) => r.personId));
-    const selected = ids
-      .map((id) => peopleById.get(id))
-      .filter((p): p is PersonDTO => Boolean(p));
-
-    const d = defaultSplitFor(
-      selected.map((p) => ({ id: p.id, defaultPercent: p.defaultPercent })),
-    );
-
-    return {
-      mode: d.mode,
-      includeMe: d.includeMe,
-      rows: d.participants.map((p) => ({
-        personId: p.personId,
-        percentBp: p.percentBp ?? null,
-        amountCents: null,
-        gifted: gifted.has(p.personId),
-      })),
-    };
-  }
 
   const selectedIds = split.rows.map((r) => r.personId);
   const amountCents = Math.max(0, parseAmountToCents(amountText) ?? 0);
@@ -164,7 +150,7 @@ export function ExpenseSheet({
         ),
       });
     } else {
-      setSplit(defaultsFor(ids, split.rows));
+      setSplit(defaultsFor(peopleById, ids, split.rows));
     }
   }
 
@@ -202,7 +188,24 @@ export function ExpenseSheet({
       const person = await createPerson({ name });
       setAddingPerson(false);
       setNewName("");
-      setSelection([...selectedIds, person.id]);
+      const nextIds = [...selectedIds, person.id];
+      if (customized) {
+        setSplit((current) => ({
+          ...current,
+          rows: [
+            ...current.rows,
+            {
+              personId: person.id,
+              percentBp: 0,
+              amountCents: 0,
+              gifted: false,
+            },
+          ],
+        }));
+      } else {
+        const withPerson = new Map(peopleById).set(person.id, person);
+        setSplit(defaultsFor(withPerson, nextIds, split.rows));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add that person");
     } finally {

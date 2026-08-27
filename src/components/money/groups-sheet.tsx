@@ -26,19 +26,11 @@ export function GroupsSheet({
   const [editing, setEditing] = useState<PersonGroupDTO | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const [lastOpen, setLastOpen] = useState(open);
-  if (open !== lastOpen) {
-    setLastOpen(open);
-    if (open) {
-      setEditing(null);
-      setCreating(false);
-    }
-  }
-
   return (
     <Sheet open={open} onClose={onClose} title="Groups">
       {editing || creating ? (
         <GroupForm
+          key={editing?.id ?? "new"}
           group={editing}
           people={people}
           onDone={() => {

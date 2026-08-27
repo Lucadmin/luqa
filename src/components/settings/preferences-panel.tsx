@@ -40,23 +40,33 @@ function Card({ children }: { children: React.ReactNode }) {
 
 export function ProfilePanel() {
   const { settings, updateSettings } = useSettings();
-  const [name, setName] = useState(settings.name ?? "");
+  return (
+    <ProfileForm
+      key={`${settings.name ?? ""}:${settings.email}`}
+      nameValue={settings.name}
+      email={settings.email}
+      onSave={(name) => updateSettings({ name })}
+    />
+  );
+}
+
+function ProfileForm({
+  nameValue,
+  email,
+  onSave,
+}: {
+  nameValue: string | null;
+  email: string;
+  onSave: (name: string | null) => Promise<void>;
+}) {
+  const [name, setName] = useState(nameValue ?? "");
   const [saving, setSaving] = useState(false);
-
-  // Adopt the loaded/saved name when it changes upstream (e.g. once the
-  // settings request resolves) — the render-time sync pattern, no effect.
-  const [lastLoaded, setLastLoaded] = useState(settings.name);
-  if (settings.name !== lastLoaded) {
-    setLastLoaded(settings.name);
-    setName(settings.name ?? "");
-  }
-
-  const dirty = name.trim() !== (settings.name ?? "");
+  const dirty = name.trim() !== (nameValue ?? "");
 
   async function save() {
     setSaving(true);
     try {
-      await updateSettings({ name: name.trim() || null });
+      await onSave(name.trim() || null);
     } finally {
       setSaving(false);
     }
@@ -78,7 +88,7 @@ export function ProfilePanel() {
         </div>
       </Row>
       <Row label="Email">
-        <span className="text-sm text-muted">{settings.email}</span>
+        <span className="text-sm text-muted">{email}</span>
       </Row>
     </Card>
   );

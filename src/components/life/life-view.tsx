@@ -337,24 +337,29 @@ export function LifeView() {
         maxYear={maxYear}
       />
 
-      <WeekReviewPanel
-        weekIndex={openWeek}
-        note={selectedNote}
-        headline={selectedHeadline}
-        dateRange={selectedRange}
-        periodNames={selectedPeriodNames}
-        onClose={() => setOpenWeek(null)}
-        onSave={saveNote}
-      />
+      {openWeek !== null && (
+        <WeekReviewPanel
+          key={openWeek}
+          weekIndex={openWeek}
+          note={selectedNote}
+          headline={selectedHeadline}
+          dateRange={selectedRange}
+          periodNames={selectedPeriodNames}
+          onClose={() => setOpenWeek(null)}
+          onSave={saveNote}
+        />
+      )}
 
-      <PeriodsSheet
-        open={periodsOpen}
-        onClose={() => setPeriodsOpen(false)}
-        periods={life.periods}
-        onCreate={createPeriod}
-        onUpdate={updatePeriod}
-        onDelete={deletePeriod}
-      />
+      {periodsOpen && (
+        <PeriodsSheet
+          open
+          onClose={() => setPeriodsOpen(false)}
+          periods={life.periods}
+          onCreate={createPeriod}
+          onUpdate={updatePeriod}
+          onDelete={deletePeriod}
+        />
+      )}
     </div>
   );
 }

@@ -5,17 +5,21 @@ import type { Cache } from "swr";
 const STORAGE_KEY = "luqa:swr-cache:v1";
 const SAVE_INTERVAL_MS = 30_000;
 
-function readPersisted(): Map<string, unknown> {
+type CacheValue = ReturnType<Cache["get"]>;
+
+function readPersisted(): Map<string, CacheValue> {
   if (typeof window === "undefined") return new Map();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? new Map(JSON.parse(raw)) : new Map();
+    return raw
+      ? new Map<string, CacheValue>(JSON.parse(raw) as [string, CacheValue][])
+      : new Map();
   } catch {
     return new Map();
   }
 }
 
-function writePersisted(map: Map<string, unknown>) {
+function writePersisted(map: Map<string, CacheValue>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(map.entries())));
   } catch {
@@ -37,10 +41,40 @@ function writePersisted(map: Map<string, unknown>) {
  */
 export function localStorageCacheProvider(): Cache {
   const map = readPersisted();
+  let dirty = false;
+
+  const cache: Cache = {
+    get: (key) => map.get(key),
+    set: (key, value) => {
+      dirty = true;
+      map.set(key, value);
+    },
+    delete: (key) => {
+      dirty = true;
+      map.delete(key);
+    },
+    keys: () => map.keys(),
+  };
 
   if (typeof window !== "undefined") {
-    const save = () => writePersisted(map);
-    setInterval(save, SAVE_INTERVAL_MS);
+    const save = () => {
+      if (!dirty) return;
+      writePersisted(map);
+      dirty = false;
+    };
+    const saveWhenIdle = () => {
+      if (!dirty) return;
+      const idleWindow = window as Window & {
+        requestIdleCallback?: Window["requestIdleCallback"];
+      };
+      if (typeof idleWindow.requestIdleCallback === "function") {
+        idleWindow.requestIdleCallback(save, { timeout: 2_000 });
+      } else {
+        setTimeout(save, 0);
+      }
+    };
+
+    setInterval(saveWhenIdle, SAVE_INTERVAL_MS);
     window.addEventListener("pagehide", save);
     window.addEventListener("beforeunload", save);
     document.addEventListener("visibilitychange", () => {
@@ -48,7 +82,7 @@ export function localStorageCacheProvider(): Cache {
     });
   }
 
-  return map as unknown as Cache;
+  return cache;
 }
 
 /**

@@ -9,7 +9,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExerciseHistory } from "@/components/gym/exercise-history";
 import { ExercisePicker } from "@/components/gym/exercise-picker";
 import { SetInputList } from "@/components/gym/set-input";
@@ -62,6 +62,21 @@ function newRow(init: Partial<Row> & { name: string }): Row {
   };
 }
 
+function rowsFromSession(session: GymSessionDTO | null): Row[] {
+  if (!session) return [];
+  return session.exercises.map((exercise) => {
+    const leftover =
+      !exercise.notes && exercise.raw ? parseSetLine(exercise.raw).leftover : "";
+    return newRow({
+      exerciseId: exercise.exerciseId,
+      name: exercise.name,
+      sets: exercise.sets,
+      notes: exercise.notes || leftover,
+      showNotes: Boolean(exercise.notes || leftover),
+    });
+  });
+}
+
 /**
  * Log a session — designed to just be left open on a phone at the gym.
  *
@@ -91,13 +106,15 @@ export function SessionSheet({
   presetLocationId?: string | null;
   onManageLocations: () => void;
 }) {
-  const [dateKey, setDateKey] = useState(todayKey());
-  const [locationId, setLocationId] = useState<string | null>(null);
-  const [notes, setNotes] = useState("");
-  const [rows, setRows] = useState<Row[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [dateKey, setDateKey] = useState(session?.date ?? todayKey());
+  const [locationId, setLocationId] = useState<string | null>(
+    session?.locationId ?? presetLocationId,
+  );
+  const [notes, setNotes] = useState(session?.notes ?? "");
+  const [rows, setRows] = useState<Row[]>(() => rowsFromSession(session));
+  const [sessionId, setSessionId] = useState<string | null>(session?.id ?? null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [showNotesField, setShowNotesField] = useState(false);
+  const [showNotesField, setShowNotesField] = useState(Boolean(session?.notes));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveState, setSaveState] = useState<"saving" | "saved">("saved");
@@ -112,50 +129,7 @@ export function SessionSheet({
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirty = useRef(false);
 
-  // Re-arm the form each time it opens, from the session being edited or from
-  // whatever was tapped to get here.
-  const [wasOpen, setWasOpen] = useState(false);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) {
-      setError(null);
-      setPickerOpen(false);
-      if (session) {
-        setSessionId(session.id);
-        setDateKey(session.date);
-        setLocationId(session.locationId);
-        setNotes(session.notes);
-        setShowNotesField(Boolean(session.notes));
-        setRows(
-          session.exercises.map((e) => {
-            // Older entries can carry a remark the notation didn't capture
-            // ("Nicht machen -> Knie broken"). Surface it as a note rather
-            // than dropping it once editing moves it out of the raw line.
-            const leftover =
-              !e.notes && e.raw ? parseSetLine(e.raw).leftover : "";
-            return newRow({
-              exerciseId: e.exerciseId,
-              name: e.name,
-              sets: e.sets,
-              notes: e.notes || leftover,
-              showNotes: Boolean(e.notes || leftover),
-            });
-          }),
-        );
-      } else {
-        setSessionId(null);
-        setDateKey(todayKey());
-        setLocationId(presetLocationId);
-        setNotes("");
-        setShowNotesField(false);
-        setRows([]);
-      }
-    }
-  }
-
-  // The autosave bookkeeping (refs) resets alongside the form state above.
-  // Refs can only be touched from an effect, not during render, so this runs
-  // as a companion effect keyed to the same `open` transition.
+  // Reset autosave bookkeeping for this mounted editor instance.
   useEffect(() => {
     if (!open) return;
     hydrating.current = true;
@@ -174,7 +148,10 @@ export function SessionSheet({
     let cancelled = false;
     createSession({ date: dateKey, locationId, notes: "" })
       .then((created) => {
-        if (cancelled) return;
+        if (cancelled) {
+          void deleteSession(created.id).catch(() => {});
+          return;
+        }
         eagerlyCreated.current = true;
         setSessionId(created.id);
       })
@@ -261,26 +238,36 @@ export function SessionSheet({
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [open]);
 
-  const exerciseById = new Map(exercises.map((e) => [e.id, e]));
-  const activeLocations = locations.filter((l) => !l.archived || l.id === locationId);
-
-  // The last session at the gym currently selected — the basis for "repeat".
-  const lastHere = sessions.find(
-    (s) =>
-      s.id !== sessionId &&
-      s.exercises.length > 0 &&
-      (locationId ? s.locationId === locationId : true),
+  const exerciseById = useMemo(
+    () => new Map(exercises.map((exercise) => [exercise.id, exercise])),
+    [exercises],
+  );
+  const activeLocations = useMemo(
+    () => locations.filter((location) => !location.archived || location.id === locationId),
+    [locationId, locations],
   );
 
-  function patchRow(key: string, patch: Partial<Row>) {
+  // The last session at the gym currently selected — the basis for "repeat".
+  const lastHere = useMemo(
+    () =>
+      sessions.find(
+        (candidate) =>
+          candidate.id !== sessionId &&
+          candidate.exercises.length > 0 &&
+          (locationId ? candidate.locationId === locationId : true),
+      ),
+    [locationId, sessionId, sessions],
+  );
+
+  const patchRow = useCallback((key: string, patch: Partial<Row>) => {
     setRows((current) =>
       current.map((r) => (r.key === key ? { ...r, ...patch } : r)),
     );
-  }
+  }, []);
 
-  function removeRow(key: string) {
+  const removeRow = useCallback((key: string) => {
     setRows((current) => current.filter((r) => r.key !== key));
-  }
+  }, []);
 
   function repeatLast() {
     if (!lastHere) return;
@@ -411,8 +398,8 @@ export function SessionSheet({
                 exercise={row.exerciseId ? exerciseById.get(row.exerciseId) : undefined}
                 locations={locations}
                 locationId={locationId}
-                onPatch={(patch) => patchRow(row.key, patch)}
-                onRemove={() => removeRow(row.key)}
+                onPatch={patchRow}
+                onRemove={removeRow}
               />
             ))}
 
@@ -462,23 +449,25 @@ export function SessionSheet({
         </div>
       </Sheet>
 
-      <ExercisePicker
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        exercises={exercises}
-        preferredIds={lastHere?.exercises.map((e) => e.exerciseId) ?? []}
-        onPick={(choice) =>
-          setRows((current) => [
-            ...current,
-            newRow({ exerciseId: choice.exerciseId, name: choice.name }),
-          ])
-        }
-      />
+      {pickerOpen && (
+        <ExercisePicker
+          open
+          onClose={() => setPickerOpen(false)}
+          exercises={exercises}
+          preferredIds={lastHere?.exercises.map((e) => e.exerciseId) ?? []}
+          onPick={(choice) =>
+            setRows((current) => [
+              ...current,
+              newRow({ exerciseId: choice.exerciseId, name: choice.name }),
+            ])
+          }
+        />
+      )}
     </>
   );
 }
 
-function ExerciseRow({
+const ExerciseRow = memo(function ExerciseRow({
   row,
   exercise,
   locations,
@@ -490,8 +479,8 @@ function ExerciseRow({
   exercise?: ExerciseDTO;
   locations: GymLocationDTO[];
   locationId: string | null;
-  onPatch: (patch: Partial<Row>) => void;
-  onRemove: () => void;
+  onPatch: (key: string, patch: Partial<Row>) => void;
+  onRemove: (key: string) => void;
 }) {
   const summary = summarizeSets(row.sets);
 
@@ -506,7 +495,7 @@ function ExerciseRow({
 
         <button
           type="button"
-          onClick={() => onPatch({ showNotes: !row.showNotes })}
+          onClick={() => onPatch(row.key, { showNotes: !row.showNotes })}
           aria-label="Note"
           className={cn(
             "grid h-7 w-7 place-items-center rounded-lg transition-colors hover:bg-surface-2",
@@ -519,7 +508,7 @@ function ExerciseRow({
         {exercise && (
           <button
             type="button"
-            onClick={() => onPatch({ showHistory: !row.showHistory })}
+            onClick={() => onPatch(row.key, { showHistory: !row.showHistory })}
             aria-label="History"
             aria-expanded={row.showHistory}
             className={cn(
@@ -537,7 +526,7 @@ function ExerciseRow({
 
         <button
           type="button"
-          onClick={onRemove}
+          onClick={() => onRemove(row.key)}
           aria-label={`Remove ${row.name}`}
           className="grid h-7 w-7 place-items-center rounded-lg text-faint transition-colors hover:bg-surface-2 hover:text-red-500"
         >
@@ -546,7 +535,10 @@ function ExerciseRow({
       </div>
 
       <div className="mt-1.5">
-        <SetInputList sets={row.sets} onChange={(sets) => onPatch({ sets })} />
+        <SetInputList
+          sets={row.sets}
+          onChange={(sets) => onPatch(row.key, { sets })}
+        />
       </div>
 
       {/* what's logged so far — never a blocker, just a read-out */}
@@ -557,7 +549,7 @@ function ExerciseRow({
         <button
           type="button"
           onClick={() =>
-            onPatch({ sets: parseSetLine(exercise.lastRaw ?? "").sets })
+            onPatch(row.key, { sets: parseSetLine(exercise.lastRaw ?? "").sets })
           }
           className="mt-1.5 flex w-full items-baseline gap-1.5 text-left text-[11px] text-faint transition-colors hover:text-foreground"
         >
@@ -575,7 +567,7 @@ function ExerciseRow({
       {row.showNotes && (
         <input
           value={row.notes}
-          onChange={(e) => onPatch({ notes: e.target.value })}
+          onChange={(e) => onPatch(row.key, { notes: e.target.value })}
           placeholder="Note for this exercise"
           className="mt-1.5 w-full rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs placeholder:text-faint focus:outline-none"
         />
@@ -593,4 +585,4 @@ function ExerciseRow({
       )}
     </div>
   );
-}
+});

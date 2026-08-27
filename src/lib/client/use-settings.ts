@@ -41,11 +41,11 @@ export function useSettings() {
     );
     // Day grouping for reports/week is recomputed from settings — revalidate
     // anything that buckets by the logical day so it reflects the new cutoff.
-    await globalMutate(
+    void globalMutate(
       (key) =>
         typeof key === "string" &&
         (key.startsWith("/api/reports") || key.startsWith("/api/week")),
-    );
+    ).catch(() => {});
   }
 
   return { settings, isLoading, error, mutate, updateSettings };

@@ -2,9 +2,13 @@
 
 import { Gift, Plus, Users, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Avatar } from "@/components/money/avatar";
 import { balanceLabel } from "@/components/money/person-sheet";
+import { AppPage, AppPageHeader } from "@/components/ui/app-page";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { InfiniteListFooter } from "@/components/ui/infinite-list-footer";
 import { useExpenses, useMoneyOverview } from "@/lib/client/use-money";
 import { cn } from "@/lib/cn";
 import { formatMoney } from "@/lib/money";
@@ -23,6 +27,19 @@ const PersonSheet = dynamic(() =>
   import("@/components/money/person-sheet").then((m) => m.PersonSheet),
 );
 
+type MoneyOverlay =
+  | {
+      type: "expense";
+      expense: ExpenseDTO | null;
+      personIds: string[];
+      groupId: string | null;
+    }
+  | { type: "person"; personId: string }
+  | { type: "groups" }
+  | null;
+
+const EMPTY_PEOPLE: PersonBalanceDTO[] = [];
+
 export function MoneyView() {
   const { overview, isLoading } = useMoneyOverview();
   const {
@@ -34,77 +51,49 @@ export function MoneyView() {
     loadMore,
     mutate: reloadExpenses,
   } = useExpenses();
-  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const [overlay, setOverlay] = useState<MoneyOverlay>(null);
 
-  const [expenseOpen, setExpenseOpen] = useState(false);
-  const [editing, setEditing] = useState<ExpenseDTO | null>(null);
-  const [presetPeople, setPresetPeople] = useState<string[]>([]);
-  const [presetGroup, setPresetGroup] = useState<string | null>(null);
-  const [openPersonId, setOpenPersonId] = useState<string | null>(null);
-  const [groupsOpen, setGroupsOpen] = useState(false);
-
-  const people = overview?.people ?? [];
+  const people = overview?.people ?? EMPTY_PEOPLE;
   const groups = overview?.groups ?? [];
   const currency = overview?.currency ?? "EUR";
-  const byId = new Map(people.map((p) => [p.id, p]));
+  const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
 
   // Archived people stay in `people` so their names still resolve on old
   // expenses, but they only appear in the list while something is outstanding.
   const listed = people.filter((p) => !p.archived || p.balanceCents !== 0);
 
   function newExpense(personIds: string[] = [], groupId: string | null = null) {
-    setEditing(null);
-    setPresetPeople(personIds);
-    setPresetGroup(groupId);
-    setExpenseOpen(true);
+    setOverlay({ type: "expense", expense: null, personIds, groupId });
   }
 
   function editExpense(expense: ExpenseDTO) {
-    setEditing(expense);
-    setPresetPeople([]);
-    setPresetGroup(null);
-    setExpenseOpen(true);
+    setOverlay({ type: "expense", expense, personIds: [], groupId: null });
   }
 
-  useEffect(() => {
-    const target = loadMoreRef.current;
-    if (!target || !hasMore || isLoadingMore) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting) return;
-        observer.disconnect();
-        void loadMore();
-      },
-      { rootMargin: "300px 0px" },
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [hasMore, isLoadingMore, loadMore]);
-
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-5 md:px-8 md:py-7">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Money</h1>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setGroupsOpen(true)}
-            aria-label="Groups"
-            className="grid h-9 w-9 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-foreground"
-          >
-            <Users className="h-4.5 w-4.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => newExpense()}
-            aria-label="New expense"
-            className="grid h-9 w-9 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
-          >
-            <Plus className="h-4.5 w-4.5" />
-          </button>
-        </div>
-      </div>
+    <AppPage>
+      <AppPageHeader
+        title="Money"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setOverlay({ type: "groups" })}
+              aria-label="Groups"
+            >
+              <Users className="h-4.5 w-4.5" />
+            </Button>
+            <Button
+              size="icon-sm"
+              onClick={() => newExpense()}
+              aria-label="New expense"
+            >
+              <Plus className="h-4.5 w-4.5" />
+            </Button>
+          </div>
+        }
+      />
 
       {/* the headline: what is out there */}
       <div className="mt-4 rounded-2xl border border-border bg-surface">
@@ -187,7 +176,18 @@ export function MoneyView() {
             ))}
           </div>
         ) : listed.length === 0 ? (
-          <EmptyState onCreate={() => newExpense()} />
+          <EmptyState
+            icon={<Wallet className="h-6 w-6" />}
+            title="Nothing owed yet"
+            description="Log the next bill you pick up — people get added as you go."
+            actionLabel={
+              <>
+                <Plus className="h-4 w-4" />
+                Add expense
+              </>
+            }
+            onAction={() => newExpense()}
+          />
         ) : (
           <ul className="flex flex-col gap-1.5">
             {listed.map((person) => (
@@ -195,7 +195,7 @@ export function MoneyView() {
                 <PersonRow
                   person={person}
                   currency={currency}
-                  onOpen={() => setOpenPersonId(person.id)}
+                  onOpen={() => setOverlay({ type: "person", personId: person.id })}
                 />
               </li>
             ))}
@@ -240,18 +240,12 @@ export function MoneyView() {
                   </li>
                 ))}
               </ul>
-              {hasMore && (
-                <div ref={loadMoreRef} className="flex justify-center py-3">
-                  <button
-                    type="button"
-                    onClick={() => void loadMore()}
-                    disabled={isLoadingMore}
-                    className="rounded-full px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-foreground disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {isLoadingMore ? "Loading…" : "Load more expenses"}
-                  </button>
-                </div>
-              )}
+              <InfiniteListFooter
+                hasMore={hasMore}
+                isLoading={isLoadingMore}
+                onLoadMore={loadMore}
+                label="Load more expenses"
+              />
               {expensesError && expenses.length > 0 && (
                 <div className="py-3 text-center">
                   <p className="text-xs text-muted">More expenses couldn&rsquo;t load.</p>
@@ -269,38 +263,39 @@ export function MoneyView() {
         </div>
       )}
 
-      <ExpenseSheet
-        open={expenseOpen}
-        onClose={() => setExpenseOpen(false)}
-        people={people}
-        groups={groups}
-        currency={currency}
-        expense={editing}
-        presetPersonIds={presetPeople}
-        presetGroupId={presetGroup}
-      />
+      {overlay?.type === "expense" && (
+        <ExpenseSheet
+          open
+          onClose={() => setOverlay(null)}
+          people={people}
+          groups={groups}
+          currency={currency}
+          expense={overlay.expense}
+          presetPersonIds={overlay.personIds}
+          presetGroupId={overlay.groupId}
+        />
+      )}
 
-      <PersonSheet
-        personId={openPersonId}
-        onClose={() => setOpenPersonId(null)}
-        currency={currency}
-        onAddExpense={(id) => {
-          setOpenPersonId(null);
-          newExpense([id]);
-        }}
-        onEditExpense={(expense) => {
-          setOpenPersonId(null);
-          editExpense(expense);
-        }}
-      />
+      {overlay?.type === "person" && (
+        <PersonSheet
+          key={overlay.personId}
+          personId={overlay.personId}
+          onClose={() => setOverlay(null)}
+          currency={currency}
+          onAddExpense={(id) => newExpense([id])}
+          onEditExpense={editExpense}
+        />
+      )}
 
-      <GroupsSheet
-        open={groupsOpen}
-        onClose={() => setGroupsOpen(false)}
-        groups={groups}
-        people={people}
-      />
-    </div>
+      {overlay?.type === "groups" && (
+        <GroupsSheet
+          open
+          onClose={() => setOverlay(null)}
+          groups={groups}
+          people={people}
+        />
+      )}
+    </AppPage>
   );
 }
 
@@ -411,29 +406,5 @@ function ExpenseRow({
           : formatMoney(delta, currency, { signed: true, compact: true })}
       </span>
     </button>
-  );
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-14 text-center">
-      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary">
-        <Wallet className="h-6 w-6" />
-      </span>
-      <div>
-        <p className="text-sm font-medium">Nothing owed yet</p>
-        <p className="mt-0.5 text-xs text-faint">
-          Log the next bill you pick up — people get added as you go.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
-      >
-        <Plus className="h-4 w-4" />
-        Add expense
-      </button>
-    </div>
   );
 }

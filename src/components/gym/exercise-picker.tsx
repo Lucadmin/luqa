@@ -32,12 +32,6 @@ export function ExercisePicker({
 }) {
   const [query, setQuery] = useState("");
 
-  const [wasOpen, setWasOpen] = useState(false);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setQuery("");
-  }
-
   const q = query.trim().toLowerCase();
   const preferred = new Set(preferredIds);
 

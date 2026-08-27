@@ -436,15 +436,18 @@ export function DayView() {
         />
       )}
 
-      <SleepEditor
-        entry={selectedSleep}
-        onClose={() => setSelectedSleep(null)}
-        onSave={async (id, patch) => {
-          const updated = await updateSleepEntry(id, patch);
-          setSelectedSleep(updated);
-          return updated;
-        }}
-      />
+      {selectedSleep && (
+        <SleepEditor
+          key={selectedSleep.id}
+          entry={selectedSleep}
+          onClose={() => setSelectedSleep(null)}
+          onSave={async (id, patch) => {
+            const updated = await updateSleepEntry(id, patch);
+            setSelectedSleep(updated);
+            return updated;
+          }}
+        />
+      )}
     </div>
   );
 }

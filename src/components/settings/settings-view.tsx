@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { mutate as globalMutate } from "swr";
 import { CategoriesPanel } from "@/components/settings/categories-panel";
 import { PreferencesPanel, ProfilePanel } from "@/components/settings/preferences-panel";
+import { AppPage, AppPageHeader } from "@/components/ui/app-page";
 import { Button } from "@/components/ui/button";
 import { apiSend } from "@/lib/client/fetcher";
 import { useGoogleHealthStatus } from "@/lib/client/use-google-health-status";
@@ -325,8 +326,8 @@ function Section({
 
 export function SettingsView() {
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-6 md:px-8 md:py-8">
-      <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
+    <AppPage className="py-6 md:py-8">
+      <AppPageHeader title="Settings" />
 
       <div className="mt-6 flex flex-col gap-8">
         <Section title="Profile">
@@ -350,6 +351,6 @@ export function SettingsView() {
           </Suspense>
         </Section>
       </div>
-    </div>
+    </AppPage>
   );
 }

@@ -87,6 +87,20 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled):active {
+    transform: translateY(1px);
+  }
+}
+
 /* For scrollers whose position is meaningless — the infinite timeline, the
    habit strip — a scrollbar is just noise. */
 @utility scrollbar-none {

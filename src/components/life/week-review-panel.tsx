@@ -32,21 +32,11 @@ export function WeekReviewPanel({
   onClose,
   onSave,
 }: WeekReviewPanelProps) {
-  const [highlights, setHighlights] = useState("");
-  const [lessons, setLessons] = useState("");
-  const [rating, setRating] = useState<number | null>(null);
-  const [milestone, setMilestone] = useState("");
+  const [highlights, setHighlights] = useState(note?.highlights ?? "");
+  const [lessons, setLessons] = useState(note?.lessons ?? "");
+  const [rating, setRating] = useState<number | null>(note?.rating ?? null);
+  const [milestone, setMilestone] = useState(note?.milestone ?? "");
   const [saving, setSaving] = useState(false);
-
-  // Re-seed the form whenever a different week is opened (render-time sync).
-  const [seed, setSeed] = useState<number | null>(null);
-  if (weekIndex !== seed) {
-    setSeed(weekIndex);
-    setHighlights(note?.highlights ?? "");
-    setLessons(note?.lessons ?? "");
-    setRating(note?.rating ?? null);
-    setMilestone(note?.milestone ?? "");
-  }
 
   useEffect(() => {
     if (weekIndex === null) return;

@@ -94,14 +94,6 @@ export function HabitForm({
   const [draft, setDraft] = useState<Draft>(() => draftFrom(habit, defaultDate));
   const [saving, setSaving] = useState(false);
 
-  // Reset the draft whenever the sheet opens for a different habit.
-  const syncKey = `${open}:${habit?.id ?? "new"}`;
-  const [lastKey, setLastKey] = useState(syncKey);
-  if (syncKey !== lastKey) {
-    setLastKey(syncKey);
-    setDraft(draftFrom(habit, defaultDate));
-  }
-
   function patch(p: Partial<Draft>) {
     setDraft((d) => ({ ...d, ...p }));
   }
