@@ -1,9 +1,13 @@
 import NextAuth from "next-auth";
-import { NextResponse, type NextRequest } from "next/server";
+import {
+  NextResponse,
+  type NextFetchEvent,
+  type NextRequest,
+} from "next/server";
 import { authConfig } from "@/auth.config";
 
 // Next.js 16 proxy (formerly middleware). Edge-only, JWT check — no DB/bcrypt.
-const { auth: withAuth } = NextAuth(authConfig);
+const { auth } = NextAuth(authConfig);
 
 const MAX_API_BODY_BYTES = 5 * 1024 * 1024;
 const RATE_LIMITS = {
@@ -141,7 +145,14 @@ function securityResponse(request: NextRequest): NextResponse | null {
   return null;
 }
 
-export default withAuth((req) => securityResponse(req));
+const browserProxy = auth((request) => securityResponse(request));
+
+export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (request.nextUrl.pathname.startsWith("/api/v1/")) {
+    return securityResponse(request) ?? NextResponse.next();
+  }
+  return browserProxy(request, event);
+}
 
 export const config = {
   matcher: [
