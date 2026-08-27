@@ -30,7 +30,10 @@ class TodayTimeline extends StatelessWidget {
     final latest = entries.isEmpty
         ? 14
         : entries
-              .map((entry) => entry.end.hour + (entry.end.minute > 0 ? 1 : 0))
+              .map((entry) {
+                final end = entry.endOrNow();
+                return end.hour + (end.minute > 0 ? 1 : 0);
+              })
               .reduce(math.max);
     final startHour = math.min(8, earliest);
     final endHour = math.max(14, latest);
@@ -130,7 +133,8 @@ class _TimelineEntry extends StatelessWidget {
         button: true,
         label:
             '${category?.name ?? 'No category'}, ${entry.description}, '
-            '${clock(entry.start)} to ${clock(entry.end)}',
+            '${clock(entry.start)} to '
+            '${entry.end == null ? 'now' : clock(entry.end!)}',
         child: Material(
           color: background,
           shape: RoundedRectangleBorder(
@@ -173,7 +177,8 @@ class _TimelineEntry extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${clock(entry.start)} – ${clock(entry.end)}',
+                        '${clock(entry.start)} – '
+                        '${entry.end == null ? 'Now' : clock(entry.end!)}',
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.w500,

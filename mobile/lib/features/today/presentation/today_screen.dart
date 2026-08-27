@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
+import 'package:luqa/features/auth/application/auth_controller.dart';
 import 'package:luqa/features/today/application/today_controller.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa/features/today/presentation/log_time_sheet.dart';
@@ -33,59 +34,64 @@ class TodayScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(todayControllerProvider);
+    final user = ref.watch(authControllerProvider).value?.user;
     final theme = Theme.of(context);
 
     return SafeArea(
       bottom: false,
-      child: CustomScrollView(
-        key: const PageStorageKey('today-scroll'),
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-            sliver: SliverToBoxAdapter(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _TodayHeader(day: state.day),
-                      const SizedBox(height: LuqaSpacing.xl),
-                      _CaptureActions(
-                        onLogTime: () => _openLogTime(context),
-                        onStartTimer: () => _showTimerPreview(context),
-                      ),
-                      const SizedBox(height: LuqaSpacing.lg),
-                      _SleepRow(sleep: state.sleep),
-                      const Divider(),
-                      _HabitStrip(habits: state.habits),
-                      const Divider(),
-                      const SizedBox(height: LuqaSpacing.lg),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Timeline', style: theme.textTheme.titleLarge),
-                          Text(
-                            '${compactDuration(_tracked(state.entries))} tracked',
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: LuqaSpacing.md),
-                      TodayTimeline(
-                        entries: state.entries,
-                        categories: state.categories,
-                      ),
-                      const SizedBox(height: LuqaSpacing.xxl),
-                    ],
+      child: RefreshIndicator.adaptive(
+        onRefresh: () => ref.read(todayControllerProvider.notifier).retry(),
+        child: CustomScrollView(
+          key: const PageStorageKey('today-scroll'),
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              sliver: SliverToBoxAdapter(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _TodayHeader(day: state.day, initial: user?.initial),
+                        _SyncStatus(state: state),
+                        const SizedBox(height: LuqaSpacing.xl),
+                        _CaptureActions(
+                          enabled: !state.isLoading,
+                          onLogTime: () => _openLogTime(context),
+                          onStartTimer: () => _showTimerPreview(context),
+                        ),
+                        const SizedBox(height: LuqaSpacing.lg),
+                        _SleepRow(sleep: state.sleep),
+                        const Divider(),
+                        _HabitStrip(habits: state.habits),
+                        const Divider(),
+                        const SizedBox(height: LuqaSpacing.lg),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Timeline', style: theme.textTheme.titleLarge),
+                            if (!state.isLoading)
+                              Text(
+                                '${compactDuration(_tracked(state.entries))} tracked',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: LuqaSpacing.md),
+                        _TimelineBody(state: state),
+                        const SizedBox(height: LuqaSpacing.xxl),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -95,9 +101,10 @@ class TodayScreen extends ConsumerWidget {
 }
 
 class _TodayHeader extends StatelessWidget {
-  const _TodayHeader({required this.day});
+  const _TodayHeader({required this.day, required this.initial});
 
   final DateTime day;
+  final String? initial;
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +148,7 @@ class _TodayHeader extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    'L',
+                    initial ?? 'L',
                     style: theme.textTheme.titleLarge?.copyWith(fontSize: 18),
                   ),
                 ),
@@ -155,8 +162,13 @@ class _TodayHeader extends StatelessWidget {
 }
 
 class _CaptureActions extends StatelessWidget {
-  const _CaptureActions({required this.onLogTime, required this.onStartTimer});
+  const _CaptureActions({
+    required this.enabled,
+    required this.onLogTime,
+    required this.onStartTimer,
+  });
 
+  final bool enabled;
   final VoidCallback onLogTime;
   final VoidCallback onStartTimer;
 
@@ -167,7 +179,7 @@ class _CaptureActions extends StatelessWidget {
         Expanded(
           child: FilledButton.icon(
             key: const ValueKey('log-time-button'),
-            onPressed: onLogTime,
+            onPressed: enabled ? onLogTime : null,
             icon: const Icon(Icons.add_rounded),
             label: const Text('Log time'),
           ),
@@ -175,7 +187,7 @@ class _CaptureActions extends StatelessWidget {
         const SizedBox(width: LuqaSpacing.sm),
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: onStartTimer,
+            onPressed: enabled ? onStartTimer : null,
             icon: const Icon(Icons.play_arrow_rounded),
             label: const Text('Start timer'),
           ),
@@ -188,14 +200,16 @@ class _CaptureActions extends StatelessWidget {
 class _SleepRow extends StatelessWidget {
   const _SleepRow({required this.sleep});
 
-  final Duration sleep;
+  final Duration? sleep;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Semantics(
       button: true,
-      label: '${compactDuration(sleep)} sleep',
+      label: sleep == null
+          ? 'Sleep data not connected'
+          : '${compactDuration(sleep!)} sleep',
       child: InkWell(
         onTap: () => ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -224,7 +238,9 @@ class _SleepRow extends StatelessWidget {
               const SizedBox(width: LuqaSpacing.md),
               Expanded(
                 child: Text(
-                  '${compactDuration(sleep)} sleep',
+                  sleep == null
+                      ? 'Sleep data not connected'
+                      : '${compactDuration(sleep!)} sleep',
                   style: theme.textTheme.bodyLarge,
                 ),
               ),
@@ -250,6 +266,9 @@ class _HabitStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (habits.isEmpty) {
+      return const _EmptyHabitRow();
+    }
     return Semantics(
       button: true,
       label: 'Today habits. Open habit management.',
@@ -275,6 +294,198 @@ class _HabitStrip extends StatelessWidget {
               const Icon(Icons.chevron_right_rounded),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyHabitRow extends StatelessWidget {
+  const _EmptyHabitRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 58,
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_circle_outline_rounded,
+            size: 20,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: LuqaSpacing.md),
+          Expanded(
+            child: Text(
+              'Habits are not connected yet',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SyncStatus extends StatelessWidget {
+  const _SyncStatus({required this.state});
+
+  final TodayState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final message = state.isOffline
+        ? 'Offline · showing saved data'
+        : state.isRefreshing
+        ? 'Updating…'
+        : null;
+    return AnimatedSwitcher(
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : LuqaMotion.state,
+      child: message == null
+          ? const SizedBox.shrink(key: ValueKey('today-synced'))
+          : Padding(
+              key: ValueKey(message),
+              padding: const EdgeInsets.only(top: LuqaSpacing.sm),
+              child: Row(
+                children: [
+                  Icon(
+                    state.isOffline
+                        ? Icons.cloud_off_outlined
+                        : Icons.sync_rounded,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: LuqaSpacing.sm),
+                  Text(
+                    message,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+class _TimelineBody extends ConsumerWidget {
+  const _TimelineBody({required this.state});
+
+  final TodayState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (state.isLoading && state.entries.isEmpty) {
+      return const _TimelineSkeleton();
+    }
+    if (state.error != null && state.entries.isEmpty) {
+      return _TimelineLoadError(
+        message: state.error!,
+        onRetry: () => ref.read(todayControllerProvider.notifier).retry(),
+      );
+    }
+    if (state.entries.isEmpty) {
+      return const _EmptyTimeline();
+    }
+    return TodayTimeline(entries: state.entries, categories: state.categories);
+  }
+}
+
+class _TimelineSkeleton extends StatelessWidget {
+  const _TimelineSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final raised = LuqaPalette.of(context).raised;
+    return ExcludeSemantics(
+      child: Column(
+        children: [
+          for (final width in [0.72, 0.92, 0.58]) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: FractionallySizedBox(
+                widthFactor: width,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: raised,
+                    borderRadius: BorderRadius.circular(LuqaRadii.control),
+                  ),
+                  child: const SizedBox(height: 72),
+                ),
+              ),
+            ),
+            const SizedBox(height: LuqaSpacing.md),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelineLoadError extends StatelessWidget {
+  const _TimelineLoadError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: LuqaPalette.of(context).border),
+        borderRadius: BorderRadius.circular(LuqaRadii.surface),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(LuqaSpacing.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.cloud_off_outlined),
+            const SizedBox(height: LuqaSpacing.md),
+            Text(message, style: theme.textTheme.bodyLarge),
+            const SizedBox(height: LuqaSpacing.lg),
+            OutlinedButton(onPressed: onRetry, child: const Text('Try again')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyTimeline extends StatelessWidget {
+  const _EmptyTimeline();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: LuqaSpacing.section),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              Icons.calendar_today_outlined,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: LuqaSpacing.md),
+            Text('Nothing logged yet', style: theme.textTheme.titleMedium),
+            const SizedBox(height: LuqaSpacing.xs),
+            Text(
+              'Add the first part of your day when you are ready.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
       ),
     );

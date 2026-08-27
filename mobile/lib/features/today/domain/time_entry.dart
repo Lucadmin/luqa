@@ -12,10 +12,14 @@ class TimeEntry {
   final String description;
   final String? categoryId;
   final DateTime start;
-  final DateTime end;
+  final DateTime? end;
   final bool pendingSync;
 
-  Duration get duration => end.difference(start);
+  bool get isRunning => end == null;
+
+  DateTime endOrNow([DateTime? now]) => end ?? now ?? DateTime.now();
+
+  Duration get duration => endOrNow().difference(start);
 }
 
 class NewTimeEntry {

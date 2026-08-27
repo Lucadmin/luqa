@@ -390,6 +390,7 @@ export type UpdateExerciseInput = z.infer<typeof updateExerciseSchema>;
 
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type ImportSleepInput = z.infer<typeof importSleepSchema>;
 export type UpdateSleepInput = z.infer<typeof updateSleepSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

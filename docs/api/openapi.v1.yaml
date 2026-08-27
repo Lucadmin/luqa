@@ -1,0 +1,384 @@
+openapi: 3.1.0
+info:
+  title: Luqa Mobile API
+  version: 1.0.0
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+  description: >-
+    Stable native-client contract for Luqa. Authentication uses revocable
+    opaque bearer tokens; the browser companion retains its Auth.js session.
+servers:
+  - url: /api/v1
+tags:
+  - name: Authentication
+    description: Native device-session creation, rotation, and revocation.
+  - name: Categories
+    description: User-owned activity categories and identity colors.
+  - name: Time entries
+    description: Retrospective blocks and running activity timers.
+paths:
+  /auth/session:
+    post:
+      operationId: createMobileSession
+      tags: [Authentication]
+      summary: Exchange owner credentials for a device session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "201":
+          description: Device session created or replaced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionCredentials"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    delete:
+      operationId: revokeMobileSession
+      tags: [Authentication]
+      summary: Revoke the current device session
+      responses:
+        "204":
+          description: Session revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/refresh:
+    post:
+      operationId: refreshMobileSession
+      tags: [Authentication]
+      summary: Rotate a refresh token and issue a new credential pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshSessionRequest"
+      responses:
+        "200":
+          description: Session rotated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionCredentials"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [Categories]
+      summary: List the current user's categories
+      responses:
+        "200":
+          description: Category collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createCategory
+      tags: [Categories]
+      summary: Create or resolve a category by name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryRequest"
+      responses:
+        "200":
+          description: An existing case-insensitive name match
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /time-entries:
+    get:
+      operationId: listTimeEntries
+      tags: [Time entries]
+      summary: List entries overlapping a half-open UTC window
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Time-entry collection ordered by start time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntryListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createTimeEntry
+      tags: [Time entries]
+      summary: Create a completed block or running timer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTimeEntryRequest"
+      responses:
+        "201":
+          description: Time entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntryResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    mobileBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Short-lived Luqa mobile access token.
+  responses:
+    InvalidInput:
+      description: Malformed JSON, input, or query parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Invalid, expired, revoked, or missing device credential
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Too many credential attempts
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    CreateSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, deviceId]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+        deviceId:
+          type: string
+          minLength: 8
+          maxLength: 128
+        deviceName:
+          type: string
+          minLength: 1
+          maxLength: 120
+    RefreshSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          minLength: 32
+          maxLength: 256
+    MobileUser:
+      type: object
+      additionalProperties: false
+      required: [id, email, name]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: [string, "null"]
+    SessionCredentials:
+      type: object
+      additionalProperties: false
+      required:
+        - user
+        - accessToken
+        - accessExpiresAt
+        - refreshToken
+        - refreshExpiresAt
+      properties:
+        user:
+          $ref: "#/components/schemas/MobileUser"
+        accessToken:
+          type: string
+        accessExpiresAt:
+          type: string
+          format: date-time
+        refreshToken:
+          type: string
+        refreshExpiresAt:
+          type: string
+          format: date-time
+    Category:
+      type: object
+      additionalProperties: false
+      required: [id, name, color, archived]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        archived:
+          type: boolean
+    CreateCategoryRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+    CategoryResponse:
+      type: object
+      additionalProperties: false
+      required: [category]
+      properties:
+        category:
+          $ref: "#/components/schemas/Category"
+    CategoryListResponse:
+      type: object
+      additionalProperties: false
+      required: [categories]
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+    EntrySource:
+      type: string
+      enum: [APP, GOOGLE]
+    TimeEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - description
+        - categoryId
+        - startTime
+        - endTime
+        - source
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        categoryId:
+          type: [string, "null"]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: [string, "null"]
+          format: date-time
+        source:
+          $ref: "#/components/schemas/EntrySource"
+    CreateTimeEntryRequest:
+      type: object
+      additionalProperties: false
+      required: [startTime]
+      properties:
+        description:
+          type: string
+          maxLength: 500
+          default: ""
+        categoryId:
+          type: [string, "null"]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: [string, "null"]
+          format: date-time
+    TimeEntryResponse:
+      type: object
+      additionalProperties: false
+      required: [entry]
+      properties:
+        entry:
+          $ref: "#/components/schemas/TimeEntry"
+    TimeEntryListResponse:
+      type: object
+      additionalProperties: false
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeEntry"
+    ErrorDetail:
+      type: object
+      additionalProperties: true
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        issues: {}
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorDetail"
+security:
+  - mobileBearer: []

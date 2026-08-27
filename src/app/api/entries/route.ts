@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
-import { db } from "@/lib/db";
-import { pushEntryCreate } from "@/lib/google/push-sync";
-import { toEntryDTO } from "@/lib/serializers";
+import {
+  InvalidCategoryError,
+  createTimeEntry,
+  listTimeEntries,
+  parseEntryWindow,
+} from "@/lib/server/today";
 import { createEntrySchema } from "@/lib/validations";
 
 // GET /api/entries?from=ISO&to=ISO
@@ -11,31 +14,11 @@ export async function GET(request: Request) {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(request.url);
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
-  if (!from || !to) {
-    return NextResponse.json({ error: "from and to are required" }, { status: 400 });
+  const window = parseEntryWindow(new URL(request.url).searchParams);
+  if (!window.ok) {
+    return NextResponse.json({ error: window.message }, { status: 400 });
   }
-
-  const fromDate = new Date(from);
-  const toDate = new Date(to);
-  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
-    return NextResponse.json({ error: "Invalid from/to" }, { status: 400 });
-  }
-
-  const entries = await db.timeEntry.findMany({
-    where: {
-      userId,
-      deletedAt: null,
-      startTime: { lt: toDate },
-      // overlaps the window: still running, or ended after `from`
-      OR: [{ endTime: null }, { endTime: { gt: fromDate } }],
-    },
-    orderBy: { startTime: "asc" },
-  });
-
-  return NextResponse.json({ entries: entries.map(toEntryDTO) });
+  return NextResponse.json({ entries: await listTimeEntries(userId, window) });
 }
 
 // POST /api/entries — create an entry (past block or a running timer).
@@ -57,54 +40,13 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { description, categoryId, startTime, endTime } = parsed.data;
-
-  // Guard: the category must belong to this user.
-  if (categoryId) {
-    const owns = await db.category.findFirst({
-      where: { id: categoryId, userId },
-      select: { id: true },
-    });
-    if (!owns) {
+  try {
+    const entry = await createTimeEntry(userId, parsed.data);
+    return NextResponse.json({ entry }, { status: 201 });
+  } catch (error) {
+    if (error instanceof InvalidCategoryError) {
       return NextResponse.json({ error: "Unknown category" }, { status: 400 });
     }
+    throw error;
   }
-
-  const start = new Date(startTime);
-
-  const entry = await db.$transaction(async (tx) => {
-    // Starting a live timer (no end) stops any other running entry, Toggl-style.
-    if (!endTime) {
-      await tx.timeEntry.updateMany({
-        where: { userId, endTime: null, deletedAt: null },
-        data: { endTime: start },
-      });
-    }
-    return tx.timeEntry.create({
-      data: {
-        userId,
-        description: description ?? "",
-        categoryId: categoryId ?? null,
-        startTime: start,
-        endTime: endTime ? new Date(endTime) : null,
-        source: "APP",
-      },
-    });
-  });
-
-  const dto = toEntryDTO(entry);
-
-  // Push to Google Calendar (only if entry is complete; swallows its own errors).
-  if (entry.endTime) {
-    await pushEntryCreate(
-      userId,
-      entry.id,
-      entry.description,
-      entry.categoryId,
-      entry.startTime.toISOString(),
-      entry.endTime.toISOString(),
-    );
-  }
-
-  return NextResponse.json({ entry: dto }, { status: 201 });
 }

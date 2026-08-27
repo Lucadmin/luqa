@@ -1,0 +1,9 @@
+pubName: luqa_api
+pubVersion: 1.0.0
+pubDescription: Generated Luqa Mobile API client.
+pubHomepage: https://github.com/Lucadmin/luqa
+pubRepository: https://github.com/Lucadmin/luqa
+pubPublishTo: none
+useFinalProperties: true
+useOptional: true
+enumUnknownDefaultCase: true

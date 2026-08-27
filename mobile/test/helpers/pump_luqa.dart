@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:luqa/app/luqa_app.dart';
 import 'package:luqa/app/router.dart';
 import 'package:luqa/app/theme_mode_controller.dart';
+import 'package:luqa/features/auth/application/auth_controller.dart';
+import 'package:luqa/features/auth/domain/auth_user.dart';
 import 'package:luqa/features/today/application/today_controller.dart';
 import 'package:luqa/features/today/data/fake_today_repository.dart';
 
@@ -16,6 +18,13 @@ class FixedThemeModeController extends ThemeModeController {
 
   @override
   ThemeMode build() => mode;
+}
+
+class FixedAuthController extends AuthController {
+  @override
+  Future<AuthState> build() async => const AuthState.signedIn(
+    AuthUser(id: 'luca', email: 'luca@example.com', name: 'Luca'),
+  );
 }
 
 Future<void> pumpLuqa(
@@ -34,6 +43,7 @@ Future<void> pumpLuqa(
       overrides: [
         currentTimeProvider.overrideWithValue(fixedNow),
         todayRepositoryProvider.overrideWithValue(FakeTodayRepository()),
+        authControllerProvider.overrideWith(FixedAuthController.new),
         themeModeProvider.overrideWith(
           () => FixedThemeModeController(themeMode),
         ),

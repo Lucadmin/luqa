@@ -13,11 +13,14 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
+    "api:lint": "npx --yes @redocly/cli lint docs/api/openapi.v1.yaml",
+    "api:generate": "DART_POST_PROCESS_FILE='dart format' npx --yes @openapitools/openapi-generator-cli generate -i docs/api/openapi.v1.yaml -g dart -o mobile/packages/luqa_api -c docs/api/openapi-generator-dart.yaml --global-property apiTests=false,modelTests=false --enable-post-process-file && node scripts/redact-generated-mobile-client.mjs",
     "mobile:pub": "cd mobile && flutter pub get",
     "mobile:analyze": "cd mobile && flutter analyze",
     "mobile:test": "cd mobile && flutter test",
     "mobile:goldens": "cd mobile && flutter test --update-goldens test/goldens/today_screen_golden_test.dart",
-    "mobile:build:android": "cd mobile && flutter build apk --debug"
+    "mobile:build:android": "cd mobile && flutter build apk --debug",
+    "test:server": "node --test tests/server/*.test.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",

@@ -11,17 +11,24 @@ future versioned API host.
 - Compact `NavigationBar` and expanded `NavigationRail` with five persistent
   go_router branches: Today, Gym, Money, People, and Insights.
 - Separate Settings, Profile, and component-gallery routes.
-- Riverpod repository/controller boundary with a replaceable fake repository.
+- Native device sign-in with short-lived access tokens, rotating refresh tokens,
+  and Android Keystore / iOS Keychain storage.
+- Generated, versioned Dart client for the OpenAPI contract in
+  `../docs/api/openapi.v1.yaml`.
+- Riverpod repository/controller boundary backed by the real `/api/v1` routes
+  and an app-private, user-scoped local Today read cache with no credentials.
 - Today screen with retrospective capture hierarchy, sleep, compact habits, and
   a category-aware timeline.
 - Log time bottom sheet with inferred times, recent activities, category
-  search/creation, validation, saving feedback, and local timeline insertion.
+  search/creation, validation, saving feedback, and server persistence.
+- Explicit loading, empty, cached-offline, refresh, expired-session, and error
+  states instead of demo data in production.
 - Compact/expanded navigation tests, interaction tests, contrast tests, and
   deterministic light/dark golden tests.
 
 Gym, Money, People, and Insights are routed placeholders rather than fake
-feature implementations. The next vertical slice replaces the Today fake
-repository with the generated `/api/v1` client and local cache.
+feature implementations. Habits and sleep remain honest placeholders until
+their mobile contracts are connected.
 
 ## Toolchain
 
@@ -52,6 +59,10 @@ Run on an Android device or emulator:
 flutter run
 ```
 
+The app opens the native sign-in screen and uses the same owner credentials as
+the web companion. No Neon connection string or server secret is shipped in the
+APK.
+
 For a physical phone running Android 11 or newer, enable Developer options and
 Wireless debugging, then choose **Pair device with pairing code**. On this Mac:
 
@@ -75,8 +86,8 @@ flutter test --update-goldens test/goldens/today_screen_golden_test.dart
 
 ## Build-time configuration
 
-No Neon credential or privileged server secret belongs in the app. Future API
-code reads public environment values through `lib/app/app_config.dart`:
+No Neon credential or privileged server secret belongs in the app. The public
+API origin is injected at build time through `lib/app/app_config.dart`:
 
 ```bash
 flutter run \
@@ -85,7 +96,26 @@ flutter run \
 ```
 
 `10.0.2.2` reaches the host machine from Android Emulator. A physical device
-needs a reachable HTTPS development endpoint or LAN address.
+can use the Mac's reachable LAN address while developing. Production builds
+refuse a non-HTTPS API origin:
+
+```bash
+flutter build apk --release \
+  --dart-define=LUQA_ENV=production \
+  --dart-define=LUQA_API_BASE_URL=https://your-luqa-domain.example
+```
+
+The backend and legacy browser UI continue to deploy together on Vercel. The
+mobile client talks only to `/api/v1`; browser Auth.js cookies and native bearer
+tokens are deliberately separate.
+
+Regenerate the Dart package after changing the contract:
+
+```bash
+cd ..
+npm run api:lint
+npm run api:generate
+```
 
 ## Architecture
 
@@ -96,19 +126,21 @@ lib/
   features/
     today/
       application/      Riverpod controller and providers
-      data/             repository contract and current fake
+      data/             remote repository, read cache, test fake
       domain/           immutable entry/category models
       presentation/     Today, Log time, picker, timeline
+    auth/                native session state, secure credentials, sign-in UI
+  core/network/          generated-client adapter and token rotation
+packages/luqa_api/       generated OpenAPI Dart client
 ```
 
 Views depend on controller state, controllers depend on the abstract repository,
 and tests override providers with deterministic values. Network and local-cache
 implementations can therefore replace the fake without rewriting widgets.
 
-## Next implementation slice
+## Next implementation slices
 
-1. Add mobile device-session endpoints under `/api/v1/auth`.
-2. Publish the first OpenAPI contract for categories and time entries.
-3. Generate the Dart client and implement the remote Today repository.
-4. Add a local read cache, mutation ids, and explicit pending-sync state.
-5. Replace demo entries only after the signed-in API path passes end to end.
+1. Complete timer, edit, and delete actions for time entries.
+2. Add mutation idempotency plus a deliberate offline write queue.
+3. Connect habits and sleep through versioned mobile endpoints.
+4. Replace the Gym placeholder with the next complete vertical slice.

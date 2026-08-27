@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
+import 'package:luqa/features/auth/application/auth_controller.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final authentication = ref.watch(authControllerProvider);
+    final user = authentication.value?.user;
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: SafeArea(
@@ -24,16 +28,38 @@ class ProfileScreen extends StatelessWidget {
                     radius: 34,
                     backgroundColor: theme.colorScheme.primary,
                     foregroundColor: theme.colorScheme.onPrimary,
-                    child: Text('L', style: theme.textTheme.headlineLarge),
+                    child: Text(
+                      user?.initial ?? 'L',
+                      style: theme.textTheme.headlineLarge,
+                    ),
                   ),
                   const SizedBox(height: LuqaSpacing.lg),
-                  Text('Luca', style: theme.textTheme.headlineLarge),
+                  Text(
+                    user?.displayName ?? 'Luqa',
+                    style: theme.textTheme.headlineLarge,
+                  ),
                   const SizedBox(height: LuqaSpacing.sm),
                   Text(
-                    'Account identity, device sessions, and security controls '
-                    'will connect here when the mobile authentication contract ships.',
+                    user?.email ?? '',
                     style: theme.textTheme.bodyLarge?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: LuqaSpacing.section),
+                  const Divider(),
+                  const SizedBox(height: LuqaSpacing.lg),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: authentication.isLoading
+                          ? null
+                          : () => ref
+                                .read(authControllerProvider.notifier)
+                                .signOut(),
+                      icon: const Icon(Icons.logout_rounded),
+                      label: Text(
+                        authentication.isLoading ? 'Signing out…' : 'Sign out',
+                      ),
                     ),
                   ),
                 ],

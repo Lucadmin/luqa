@@ -8,6 +8,7 @@ const { auth: withAuth } = NextAuth(authConfig);
 const MAX_API_BODY_BYTES = 5 * 1024 * 1024;
 const RATE_LIMITS = {
   login: { limit: 10, windowMs: 10 * 60 * 1000 },
+  mobileLogin: { limit: 10, windowMs: 10 * 60 * 1000 },
   signup: { limit: 5, windowMs: 60 * 60 * 1000 },
 };
 
@@ -69,13 +70,26 @@ function isSameOrigin(request: NextRequest): boolean {
 
 function securityResponse(request: NextRequest): NextResponse | null {
   const { pathname } = request.nextUrl;
+  const isMobileApi = pathname.startsWith("/api/v1/");
 
   if (pathname.startsWith("/api/")) {
     const contentLength = Number(request.headers.get("content-length") ?? 0);
     if (contentLength > MAX_API_BODY_BYTES) {
       return NextResponse.json(
-        { error: "Request body too large" },
-        { status: 413 },
+        isMobileApi
+          ? {
+              error: {
+                code: "payload_too_large",
+                message: "Request body too large",
+              },
+            }
+          : { error: "Request body too large" },
+        {
+          status: 413,
+          headers: isMobileApi
+            ? { "Cache-Control": "private, no-store, max-age=0" }
+            : undefined,
+        },
       );
     }
 
@@ -92,6 +106,8 @@ function securityResponse(request: NextRequest): NextResponse | null {
   const rateLimitName =
     request.method === "POST" && pathname === "/api/signup"
       ? "signup"
+      : request.method === "POST" && pathname === "/api/v1/auth/session"
+        ? "mobileLogin"
       : request.method === "POST" &&
           pathname === "/api/auth/callback/credentials"
         ? "login"
@@ -101,10 +117,22 @@ function securityResponse(request: NextRequest): NextResponse | null {
     const result = rateLimit(rateLimitName, request);
     if (result.limited) {
       return NextResponse.json(
-        { error: "Too many requests" },
+        rateLimitName === "mobileLogin"
+          ? {
+              error: {
+                code: "rate_limited",
+                message: "Too many requests",
+              },
+            }
+          : { error: "Too many requests" },
         {
           status: 429,
-          headers: { "Retry-After": String(result.retryAfter) },
+          headers: {
+            "Retry-After": String(result.retryAfter),
+            ...(rateLimitName === "mobileLogin"
+              ? { "Cache-Control": "private, no-store, max-age=0" }
+              : {}),
+          },
         },
       );
     }

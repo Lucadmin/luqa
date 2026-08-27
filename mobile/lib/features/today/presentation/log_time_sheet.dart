@@ -69,7 +69,8 @@ class _LogTimeSheetState extends ConsumerState<LogTimeSheet> {
   ) {
     final end = DateTime(day.year, day.month, day.day, now.hour, now.minute);
     final snappedEnd = _snap(end);
-    final completed = [...entries]..sort((a, b) => a.end.compareTo(b.end));
+    final completed = entries.where((entry) => entry.end != null).toList()
+      ..sort((a, b) => a.end!.compareTo(b.end!));
     final latestEnd = completed.isEmpty ? null : completed.last.end;
     final gap = latestEnd == null ? null : snappedEnd.difference(latestEnd);
     final plausibleGap =

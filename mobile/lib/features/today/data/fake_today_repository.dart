@@ -47,8 +47,7 @@ class FakeTodayRepository implements TodayRepository {
     ]);
   }
 
-  @override
-  TodaySnapshot load(DateTime day) {
+  TodaySnapshot _snapshot(DateTime day) {
     _seed(day);
     return TodaySnapshot(
       day: DateTime(day.year, day.month, day.day),
@@ -85,6 +84,12 @@ class FakeTodayRepository implements TodayRepository {
       sleep: const Duration(hours: 7, minutes: 17),
     );
   }
+
+  @override
+  Future<TodaySnapshot?> loadCached(DateTime day) async => _snapshot(day);
+
+  @override
+  Future<TodaySnapshot> refresh(DateTime day) async => _snapshot(day);
 
   @override
   Future<TimeEntry> addEntry(NewTimeEntry draft) async {

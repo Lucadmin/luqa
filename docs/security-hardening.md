@@ -27,6 +27,8 @@ against internet bot traffic. Recommended production rules:
   then switch obvious abuse to `deny`.
 - Rate limit `POST /api/auth/callback/credentials`: 10 requests per 10 minutes per
   IP, action `challenge` or `deny`.
+- Rate limit `POST /api/v1/auth/session`: 10 requests per 10 minutes per IP,
+  action `deny`. This is the native credentials exchange.
 - Rate limit `POST /api/signup`: 5 requests per hour per IP, action `deny`.
 - Deny common scanner paths: `/wp-admin`, `/wp-login.php`, `/.env`,
   `/xmlrpc.php`, `/phpmyadmin`, `/admin`, `/cgi-bin`.

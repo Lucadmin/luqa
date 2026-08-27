@@ -16,11 +16,13 @@ class TodaySnapshot {
   final List<Category> categories;
   final List<RecentActivity> recentActivities;
   final List<HabitSnapshot> habits;
-  final Duration sleep;
+  final Duration? sleep;
 }
 
 abstract interface class TodayRepository {
-  TodaySnapshot load(DateTime day);
+  Future<TodaySnapshot?> loadCached(DateTime day);
+
+  Future<TodaySnapshot> refresh(DateTime day);
 
   Future<TimeEntry> addEntry(NewTimeEntry draft);
 

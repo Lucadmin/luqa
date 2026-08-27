@@ -46,8 +46,34 @@ model User {
   gymLocations           GymLocation[]
   exercises              Exercise[]
   gymSessions            GymSession[]
+  mobileSessions         MobileSession[]
 
   @@map("users")
+}
+
+// Revocable native-app session. Tokens are random opaque credentials; only
+// their SHA-256 hashes are persisted. One installation owns one active session
+// per user, and refresh rotates both credentials.
+model MobileSession {
+  id               String    @id @default(cuid())
+  userId           String
+  deviceId         String
+  deviceName       String?
+  accessTokenHash  String    @unique
+  accessExpiresAt  DateTime
+  refreshTokenHash String    @unique
+  refreshExpiresAt DateTime
+  lastUsedAt       DateTime  @default(now())
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+  @@index([refreshExpiresAt])
+  @@map("mobile_sessions")
 }
 
 // A category / "project" in Toggl terms. The list grows as the user works.

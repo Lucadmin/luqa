@@ -22,6 +22,8 @@ export const authConfig = {
         nextUrl.pathname.startsWith("/signup");
       const isPublicApi =
         nextUrl.pathname.startsWith("/api/auth") ||
+        // Native API routes enforce their own opaque bearer-token sessions.
+        nextUrl.pathname.startsWith("/api/v1/") ||
         nextUrl.pathname === "/api/signup" ||
         nextUrl.pathname === "/api/google/callback" ||
         nextUrl.pathname === "/api/google/webhook" ||
