@@ -100,6 +100,15 @@ class MemoryTodayCache implements TodayCache {
 }
 
 class FakeLuqaApi implements LuqaApi {
+  // Health sync is exercised in test/features/health; this fake only needs to
+  // satisfy the interface for the Today repository.
+  @override
+  Future<api.HealthSyncResponse> pushHealthSync(api.HealthSyncRequest request) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<api.HealthSyncState>> healthSyncStates() async => const [];
+
   @override
   Future<List<api.Category>> listCategories() async => [
     api.Category(

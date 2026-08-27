@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:luqa/app/theme_mode_controller.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
+import 'package:luqa/features/health/presentation/health_connect_tile.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -55,13 +56,17 @@ class SettingsScreen extends ConsumerWidget {
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => context.push('/gallery'),
             ),
-            const Divider(),
+            const SizedBox(height: LuqaSpacing.section),
+            Text('Integrations', style: theme.textTheme.titleLarge),
+            const SizedBox(height: LuqaSpacing.sm),
+            const HealthConnectTile(),
+            const Divider(height: LuqaSpacing.section),
             const ListTile(
               contentPadding: EdgeInsets.zero,
               minTileHeight: 56,
-              leading: Icon(Icons.sync_outlined),
-              title: Text('Integrations'),
-              subtitle: Text('API, Calendar, and Health connections follow'),
+              leading: Icon(Icons.event_outlined),
+              title: Text('Calendar'),
+              subtitle: Text('Google Calendar sync follows'),
             ),
           ],
         ),

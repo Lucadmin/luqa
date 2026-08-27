@@ -1,9 +1,16 @@
-import type { SleepSource } from "@/generated/prisma/client";
+import type { HealthSource } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { googleHealthClientForUser, googleHealthFetch } from "@/lib/google-health/oauth";
 import { importSleepEntries, markMissingSleepEntriesDeleted } from "@/lib/sleep";
 import type { ImportSleepInput } from "@/lib/validations";
 
+/**
+ * @deprecated Superseded by on-device Health Connect sync
+ * (`POST /api/v1/health/sync`). Nothing calls `syncGoogleHealthSleep` any more —
+ * it is kept, with existing connections and tokens, so a previously imported
+ * history stays explicable and the path can be revived if Health Connect proves
+ * insufficient. See docs/sleep-integration.md.
+ */
 interface GoogleHealthIdentity {
   healthUserId?: string;
   legacyUserId?: string;
@@ -266,7 +273,7 @@ export async function syncGoogleHealthSleep(
   });
   const deleted = await markMissingSleepEntriesDeleted({
     userId,
-    source: "GOOGLE_HEALTH" as SleepSource,
+    source: "GOOGLE_HEALTH" as HealthSource,
     from,
     to,
     externalIds: entries.map((entry) => entry.externalId).filter(Boolean) as string[],

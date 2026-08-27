@@ -1,50 +1,30 @@
-import type { Prisma, SleepEntry, SleepSource } from "@/generated/prisma/client";
+import type { HealthSource, Prisma, SleepEntry } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import type { ImportSleepInput } from "@/lib/validations";
 import type { SleepDayStatsDTO, SleepReportDTO, SleepStageDTO } from "@/lib/types";
 import { isoDateKey } from "@/lib/time";
-
-const AWAKE_STAGES = new Set(["AWAKE", "AWAKE_IN_BED", "OUT_OF_BED", "RESTLESS"]);
-const LIGHT_STAGES = new Set(["LIGHT"]);
-const DEEP_STAGES = new Set(["DEEP"]);
-const REM_STAGES = new Set(["REM"]);
-const ASLEEP_STAGES = new Set(["ASLEEP", "SLEEPING", "LIGHT", "DEEP", "REM"]);
-
-function minutesBetween(start: Date | string, end: Date | string): number {
-  const startMs = typeof start === "string" ? Date.parse(start) : start.getTime();
-  const endMs = typeof end === "string" ? Date.parse(end) : end.getTime();
-  return Math.max(0, Math.round((endMs - startMs) / 60000));
-}
+import {
+  AWAKE_IN_BED_STAGES,
+  AWAKE_STAGES,
+  DEEP_STAGES,
+  LIGHT_STAGES,
+  OUT_OF_BED_STAGES,
+  REM_STAGES,
+  UNKNOWN_STAGES,
+  deriveSleepMetrics,
+  efficiencyPercent,
+  inferSleepMinutes,
+  minutesBetween,
+  normalizeStageName,
+  stageMinutes,
+} from "@/lib/health/sleep-metrics";
 
 function jsonValue(value: unknown): Prisma.InputJsonValue | undefined {
   if (value === undefined) return undefined;
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
-function normalizeStageName(stage: string): string {
-  return stage.trim().toUpperCase().replace(/\s+/g, "_");
-}
-
-function stageMinutes(stages: SleepStageDTO[], names: Set<string>): number {
-  return stages.reduce((total, stage) => {
-    const name = normalizeStageName(stage.stage);
-    if (!names.has(name)) return total;
-    return total + minutesBetween(stage.startTime, stage.endTime);
-  }, 0);
-}
-
-function inferSleepMinutes(
-  durationMinutes: number,
-  awakeMinutes: number | null,
-  stages: SleepStageDTO[],
-): number | null {
-  const stagedAsleep = stageMinutes(stages, ASLEEP_STAGES);
-  if (stagedAsleep > 0) return stagedAsleep;
-  if (awakeMinutes !== null) return Math.max(0, durationMinutes - awakeMinutes);
-  return null;
-}
-
-function generatedExternalId(source: SleepSource, startTime: string, endTime: string): string {
+function generatedExternalId(source: HealthSource, startTime: string, endTime: string): string {
   return `${source.toLowerCase()}:${startTime}:${endTime}`;
 }
 
@@ -52,7 +32,7 @@ export async function importSleepEntries(
   userId: string,
   input: ImportSleepInput,
 ): Promise<{ upserted: number; deleted: number }> {
-  const source = input.source as SleepSource;
+  const source = input.source as HealthSource;
   const now = new Date();
   let upserted = 0;
   let deleted = 0;
@@ -64,15 +44,48 @@ export async function importSleepEntries(
       endTime: new Date(stage.endTime).toISOString(),
     }));
     const duration = minutesBetween(entry.startTime, entry.endTime);
-    const inferredAwake = stageMinutes(stages, AWAKE_STAGES);
-    const inferredLight = stageMinutes(stages, LIGHT_STAGES);
-    const inferredDeep = stageMinutes(stages, DEEP_STAGES);
-    const inferredRem = stageMinutes(stages, REM_STAGES);
-    const awakeMinutes = entry.awakeMinutes ?? (inferredAwake > 0 ? inferredAwake : null);
-    const lightMinutes = entry.lightMinutes ?? (inferredLight > 0 ? inferredLight : null);
-    const deepMinutes = entry.deepMinutes ?? (inferredDeep > 0 ? inferredDeep : null);
-    const remMinutes = entry.remMinutes ?? (inferredRem > 0 ? inferredRem : null);
+    const staged = (names: Set<string>, reported?: number | null) => {
+      if (reported !== undefined && reported !== null) return reported;
+      const minutes = stageMinutes(stages, names);
+      return minutes > 0 ? minutes : null;
+    };
+    const awakeMinutes = staged(AWAKE_STAGES, entry.awakeMinutes);
+    const awakeInBedMinutes = staged(AWAKE_IN_BED_STAGES, entry.awakeInBedMinutes);
+    const outOfBedMinutes = staged(OUT_OF_BED_STAGES, entry.outOfBedMinutes);
+    const lightMinutes = staged(LIGHT_STAGES, entry.lightMinutes);
+    const deepMinutes = staged(DEEP_STAGES, entry.deepMinutes);
+    const remMinutes = staged(REM_STAGES, entry.remMinutes);
+    const unknownMinutes = staged(UNKNOWN_STAGES, entry.unknownMinutes);
     const sleepMinutes = entry.sleepMinutes ?? inferSleepMinutes(duration, awakeMinutes, stages);
+    const derived = deriveSleepMetrics(new Date(entry.startTime), stages);
+    const sleepFields = {
+      title: entry.title ?? null,
+      notes: entry.notes ?? null,
+      sourceApp: entry.sourceApp ?? null,
+      startTime: new Date(entry.startTime),
+      endTime: new Date(entry.endTime),
+      startZoneOffset: entry.startZoneOffset ?? null,
+      endZoneOffset: entry.endZoneOffset ?? null,
+      sleepMinutes,
+      awakeMinutes,
+      awakeInBedMinutes,
+      outOfBedMinutes,
+      lightMinutes,
+      deepMinutes,
+      remMinutes,
+      unknownMinutes,
+      inBedMinutes: duration,
+      efficiencyPercent: efficiencyPercent(sleepMinutes, duration),
+      latencyMinutes: derived.latencyMinutes,
+      wasoMinutes: derived.wasoMinutes,
+      awakeningCount: derived.awakeningCount,
+      midpoint: derived.midpoint,
+      isNap: entry.isNap ?? false,
+      recordingMethod: entry.recordingMethod ?? null,
+      deviceModel: entry.deviceModel ?? null,
+      stages: jsonValue(stages),
+      raw: jsonValue(entry.raw),
+    };
     const externalId =
       entry.externalId ?? generatedExternalId(source, entry.startTime, entry.endTime);
     const existing = await db.sleepEntry.findUnique({
@@ -108,19 +121,7 @@ export async function importSleepEntries(
         },
       },
       update: {
-        title: entry.title ?? null,
-        sourceApp: entry.sourceApp ?? null,
-        startTime: new Date(entry.startTime),
-        endTime: new Date(entry.endTime),
-        startZoneOffset: entry.startZoneOffset ?? null,
-        endZoneOffset: entry.endZoneOffset ?? null,
-        sleepMinutes,
-        awakeMinutes,
-        lightMinutes,
-        deepMinutes,
-        remMinutes,
-        stages: jsonValue(stages),
-        raw: jsonValue(entry.raw),
+        ...sleepFields,
         lastSyncedAt: now,
         deletedAt: null,
         manualOverrideAt: null,
@@ -129,19 +130,7 @@ export async function importSleepEntries(
         userId,
         source,
         externalId,
-        title: entry.title ?? null,
-        sourceApp: entry.sourceApp ?? null,
-        startTime: new Date(entry.startTime),
-        endTime: new Date(entry.endTime),
-        startZoneOffset: entry.startZoneOffset ?? null,
-        endZoneOffset: entry.endZoneOffset ?? null,
-        sleepMinutes,
-        awakeMinutes,
-        lightMinutes,
-        deepMinutes,
-        remMinutes,
-        stages: jsonValue(stages),
-        raw: jsonValue(entry.raw),
+        ...sleepFields,
         lastSyncedAt: now,
         manualOverrideAt: null,
       },
@@ -174,7 +163,7 @@ export async function markMissingSleepEntriesDeleted({
   externalIds,
 }: {
   userId: string;
-  source: SleepSource;
+  source: HealthSource;
   from: Date;
   to: Date;
   externalIds: string[];

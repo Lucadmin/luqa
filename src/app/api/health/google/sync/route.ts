@@ -1,28 +1,20 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
-import { syncGoogleHealthSleep } from "@/lib/google-health/sync";
 
-export async function POST(request: Request) {
+// Deprecated. Sleep now arrives from Android Health Connect via the mobile app
+// (`POST /api/v1/health/sync`). The route stays so an old client gets a clear
+// answer instead of a 404, and so the deprecation is visible in the route tree.
+export async function POST() {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(request.url);
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
-  const fromDate = from ? new Date(from) : undefined;
-  const toDate = to ? new Date(to) : undefined;
-
-  if (
-    (fromDate && Number.isNaN(fromDate.getTime())) ||
-    (toDate && Number.isNaN(toDate.getTime()))
-  ) {
-    return NextResponse.json({ error: "Invalid from/to" }, { status: 400 });
-  }
-
-  const result = await syncGoogleHealthSleep(userId, {
-    from: fromDate,
-    to: toDate,
-  });
-
-  return NextResponse.json(result);
+  return NextResponse.json(
+    {
+      error: "Google Health sync is retired",
+      detail:
+        "Sleep is imported from Android Health Connect by the Luqa mobile app. " +
+        "Existing Google Health entries are kept and still readable.",
+    },
+    { status: 410 },
+  );
 }

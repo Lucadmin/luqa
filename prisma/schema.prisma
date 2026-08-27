@@ -34,6 +34,8 @@ model User {
   categories             Category[]
   timeEntries            TimeEntry[]
   sleepEntries           SleepEntry[]
+  healthSamples          HealthSample[]
+  healthSyncStates       HealthSyncState[]
   googleConnection       GoogleConnection?
   googleHealthConnection GoogleHealthConnection?
   habits                 Habit[]
@@ -102,11 +104,35 @@ enum EntrySource {
   GOOGLE // created from a Google Calendar event
 }
 
-// Where a sleep session came from.
-enum SleepSource {
+// Where a health record came from. Shared by every health domain — sleep today,
+// samples (steps, heart rate, body metrics) as they are switched on — so adding a
+// metric never means adding another source enum.
+enum HealthSource {
   HEALTH_CONNECT // Android Health Connect, including Samsung Health data shared there
-  GOOGLE_HEALTH // Google Health API
+  APPLE_HEALTH // iOS HealthKit, for when the iOS client lands
+  GOOGLE_HEALTH // Google Health API. Deprecated: superseded by on-device Health Connect.
   MANUAL // created or imported without a device provider
+}
+
+// A scalar or interval measurement from a health provider. Sleep keeps its own
+// table because a session carries stage structure; everything else is one row per
+// sample, so enabling a new metric is an enum value plus a client descriptor.
+enum HealthMetricType {
+  SLEEP // sync bookkeeping only; sessions live in sleep_entries, never health_samples
+  STEPS // count over the interval
+  DISTANCE_METERS
+  ACTIVE_ENERGY_KCAL
+  TOTAL_ENERGY_KCAL
+  EXERCISE_MINUTES
+  HEART_RATE_BPM
+  RESTING_HEART_RATE_BPM
+  HEART_RATE_VARIABILITY_MS
+  RESPIRATORY_RATE_BPM
+  BLOOD_OXYGEN_PERCENT
+  BODY_TEMPERATURE_C
+  WEIGHT_KG
+  BODY_FAT_PERCENT
+  VO2_MAX
 }
 
 // One tracked block of time. endTime is null while a timer is running.
@@ -139,12 +165,13 @@ model TimeEntry {
 // A sleep session imported from a health provider. It is intentionally separate
 // from TimeEntry so work/activity reports do not count sleep as tracked time.
 model SleepEntry {
-  id         String      @id @default(cuid())
+  id         String       @id @default(cuid())
   userId     String
-  source     SleepSource
+  source     HealthSource
   externalId String
 
   title     String?
+  notes     String?
   sourceApp String?
   startTime DateTime
   endTime   DateTime
@@ -153,12 +180,30 @@ model SleepEntry {
   startZoneOffset String?
   endZoneOffset   String?
 
-  // Normalized totals in minutes. Null means the provider did not report it.
-  sleepMinutes Int?
-  awakeMinutes Int?
-  lightMinutes Int?
-  deepMinutes  Int?
-  remMinutes   Int?
+  // Stage totals in minutes. Null means the provider did not report the stage at
+  // all, which is different from reporting zero. Health Connect distinguishes
+  // awake-in-bed from out-of-bed; both used to collapse into awakeMinutes.
+  sleepMinutes      Int? // total asleep: light + deep + rem + unspecified asleep
+  awakeMinutes      Int? // awake inside the session
+  awakeInBedMinutes Int?
+  outOfBedMinutes   Int?
+  lightMinutes      Int?
+  deepMinutes       Int?
+  remMinutes        Int?
+  unknownMinutes    Int? // staged time the provider could not classify
+
+  // Quality metrics derived from the stage timeline on import, so reports and
+  // both clients read the same numbers instead of each recomputing them.
+  inBedMinutes      Int? // wall-clock session length
+  efficiencyPercent Float? // asleep / in-bed, 0–100
+  latencyMinutes    Int? // session start until the first asleep stage
+  wasoMinutes       Int? // wake after sleep onset, before the final wake
+  awakeningCount    Int? // distinct awake blocks after sleep onset
+  midpoint          DateTime? // midpoint of the asleep span, for chronotype drift
+
+  isNap           Boolean @default(false)
+  recordingMethod String? // AUTOMATICALLY_RECORDED | ACTIVELY_RECORDED | MANUAL_ENTRY | UNKNOWN
+  deviceModel     String?
 
   stages Json?
   raw    Json?
@@ -175,6 +220,63 @@ model SleepEntry {
   @@index([userId, endTime])
   @@index([userId, startTime])
   @@map("sleep_entries")
+}
+
+// One measurement from a health provider. Deliberately shaped like SleepEntry —
+// same identity, soft-delete, and manual-override rules — so the ingest pipeline
+// treats sleep sessions and samples the same way.
+model HealthSample {
+  id         String           @id @default(cuid())
+  userId     String
+  source     HealthSource
+  metric     HealthMetricType
+  externalId String
+
+  // Instant measurements set both to the same time; interval metrics (steps,
+  // energy) span the bucket the provider aggregated over.
+  startTime DateTime
+  endTime   DateTime
+
+  value      Float
+  sourceApp  String?
+  zoneOffset String?
+  raw        Json?
+
+  lastSyncedAt     DateTime?
+  manualOverrideAt DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, source, metric, externalId])
+  @@index([userId, metric, startTime])
+  @@index([userId, metric, endTime])
+  @@map("health_samples")
+}
+
+// Per-user, per-source, per-metric sync bookkeeping. The Health Connect changes
+// token itself is device-local, so this records what the server last accepted —
+// enough to show "last synced" and to decide when a full backfill is due.
+model HealthSyncState {
+  id     String           @id @default(cuid())
+  userId String
+  source HealthSource
+  metric HealthMetricType // SLEEP tracks the sleep_entries domain
+
+  lastSyncedAt   DateTime?
+  lastEntryAt    DateTime? // newest record timestamp accepted so far
+  lastDeviceId   String? // which device last pushed, for multi-device debugging
+  backfilledFrom DateTime? // oldest point a full read has covered
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, source, metric])
+  @@map("health_sync_states")
 }
 
 // A user's connection to Google Calendar (separate OAuth from login).

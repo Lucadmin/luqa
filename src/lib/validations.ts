@@ -15,7 +15,7 @@ export type CredentialsInput = z.infer<typeof credentialsSchema>;
 
 // --- Time entries & categories ---
 
-const isoString = z
+export const isoString = z
   .string()
   .refine((s) => !Number.isNaN(Date.parse(s)), "Invalid datetime");
 
@@ -63,8 +63,19 @@ export const updateCategorySchema = z.object({
 
 // --- Sleep imports ---
 
-const sleepSource = z.enum(["HEALTH_CONNECT", "GOOGLE_HEALTH", "MANUAL"]);
+const healthSource = z.enum([
+  "HEALTH_CONNECT",
+  "APPLE_HEALTH",
+  "GOOGLE_HEALTH",
+  "MANUAL",
+]);
 const sleepMinutes = z.number().int().min(0).max(48 * 60);
+const recordingMethod = z.enum([
+  "AUTOMATICALLY_RECORDED",
+  "ACTIVELY_RECORDED",
+  "MANUAL_ENTRY",
+  "UNKNOWN",
+]);
 
 const sleepStageSchema = z
   .object({
@@ -77,10 +88,14 @@ const sleepStageSchema = z
     path: ["endTime"],
   });
 
-const sleepEntryImportSchema = z
+// Stage totals and quality metrics are optional: a provider that reports only
+// summary numbers still imports, and anything derivable from `stages` is
+// recomputed server-side rather than trusted from the client.
+export const sleepEntryImportSchema = z
   .object({
     externalId: z.string().trim().min(1).max(300).optional(),
     title: z.string().trim().max(120).nullish(),
+    notes: z.string().trim().max(2000).nullish(),
     sourceApp: z.string().trim().max(120).nullish(),
     startTime: isoString,
     endTime: isoString,
@@ -88,9 +103,15 @@ const sleepEntryImportSchema = z
     endZoneOffset: z.string().trim().max(40).nullish(),
     sleepMinutes: sleepMinutes.nullish(),
     awakeMinutes: sleepMinutes.nullish(),
+    awakeInBedMinutes: sleepMinutes.nullish(),
+    outOfBedMinutes: sleepMinutes.nullish(),
     lightMinutes: sleepMinutes.nullish(),
     deepMinutes: sleepMinutes.nullish(),
     remMinutes: sleepMinutes.nullish(),
+    unknownMinutes: sleepMinutes.nullish(),
+    isNap: z.boolean().optional(),
+    recordingMethod: recordingMethod.nullish(),
+    deviceModel: z.string().trim().max(120).nullish(),
     stages: z.array(sleepStageSchema).max(300).optional(),
     raw: z.unknown().optional(),
   })
@@ -100,9 +121,58 @@ const sleepEntryImportSchema = z
   });
 
 export const importSleepSchema = z.object({
-  source: sleepSource.default("HEALTH_CONNECT"),
+  source: healthSource.default("HEALTH_CONNECT"),
   entries: z.array(sleepEntryImportSchema).max(1000).default([]),
   deletedExternalIds: z.array(z.string().trim().min(1).max(300)).max(1000).optional(),
+});
+
+// --- Health samples (steps, heart rate, body metrics) ---
+
+export const healthMetricType = z.enum([
+  "STEPS",
+  "DISTANCE_METERS",
+  "ACTIVE_ENERGY_KCAL",
+  "TOTAL_ENERGY_KCAL",
+  "EXERCISE_MINUTES",
+  "HEART_RATE_BPM",
+  "RESTING_HEART_RATE_BPM",
+  "HEART_RATE_VARIABILITY_MS",
+  "RESPIRATORY_RATE_BPM",
+  "BLOOD_OXYGEN_PERCENT",
+  "BODY_TEMPERATURE_C",
+  "WEIGHT_KG",
+  "BODY_FAT_PERCENT",
+  "VO2_MAX",
+]);
+
+export const healthSampleImportSchema = z
+  .object({
+    externalId: z.string().trim().min(1).max(300),
+    metric: healthMetricType,
+    startTime: isoString,
+    endTime: isoString,
+    value: z.number().finite(),
+    sourceApp: z.string().trim().max(120).nullish(),
+    zoneOffset: z.string().trim().max(40).nullish(),
+    raw: z.unknown().optional(),
+  })
+  .refine((v) => Date.parse(v.endTime) >= Date.parse(v.startTime), {
+    message: "End must not be before start",
+    path: ["endTime"],
+  });
+
+export const importHealthSamplesSchema = z.object({
+  source: healthSource.default("HEALTH_CONNECT"),
+  samples: z.array(healthSampleImportSchema).max(5000).default([]),
+  deleted: z
+    .array(
+      z.object({
+        metric: healthMetricType,
+        externalId: z.string().trim().min(1).max(300),
+      }),
+    )
+    .max(5000)
+    .optional(),
 });
 
 export const updateSleepSchema = z
@@ -392,6 +462,8 @@ export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type ImportSleepInput = z.infer<typeof importSleepSchema>;
+export type ImportHealthSamplesInput = z.infer<typeof importHealthSamplesSchema>;
+export type HealthMetricTypeInput = z.infer<typeof healthMetricType>;
 export type UpdateSleepInput = z.infer<typeof updateSleepSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 export type CreateLifePeriodInput = z.infer<typeof createLifePeriodSchema>;

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { syncGoogleHealthSleep } from "@/lib/google-health/sync";
 import {
   bearerToken,
   verifyOptionalWebhookToken,
@@ -17,29 +16,6 @@ interface GoogleHealthWebhookBody {
         endTime?: string;
       };
     }>;
-  };
-}
-
-function notificationRange(body: GoogleHealthWebhookBody): { from: Date; to: Date } {
-  const times = (body.data?.intervals ?? [])
-    .flatMap((interval) => [
-      interval.physicalTimeInterval?.startTime,
-      interval.physicalTimeInterval?.endTime,
-    ])
-    .filter((time): time is string => Boolean(time))
-    .map((time) => Date.parse(time))
-    .filter((time) => Number.isFinite(time));
-
-  if (times.length === 0) {
-    return {
-      from: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-      to: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    };
-  }
-
-  return {
-    from: new Date(Math.min(...times) - 48 * 60 * 60 * 1000),
-    to: new Date(Math.max(...times) + 24 * 60 * 60 * 1000),
   };
 }
 
@@ -69,15 +45,17 @@ export async function POST(request: Request) {
     return new NextResponse(null, { status: 204 });
   }
 
+  // Deprecated: acknowledged but no longer acted on. Sleep is imported from
+  // Health Connect on the phone, so a Google-side change notification has
+  // nothing to trigger. Google keeps retrying anything that is not a 2xx, hence
+  // the 204 rather than a 410.
   const conn = await db.googleHealthConnection.findFirst({
     where: { healthUserId: body.data.healthUserId },
     select: { userId: true },
   });
-
   if (conn) {
-    const range = notificationRange(body);
-    await syncGoogleHealthSleep(conn.userId, range).catch((e) =>
-      console.error("[google-health-webhook] sleep sync failed", e),
+    console.info(
+      "[google-health-webhook] ignoring notification; Health Connect is the sleep source now",
     );
   }
 

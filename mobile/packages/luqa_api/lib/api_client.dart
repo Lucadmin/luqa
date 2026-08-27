@@ -216,18 +216,44 @@ class ApiClient {
           return CreateSessionRequest.fromJson(value);
         case 'CreateTimeEntryRequest':
           return CreateTimeEntryRequest.fromJson(value);
+        case 'DeviceHealthSource':
+          return DeviceHealthSourceTypeTransformer().decode(value);
         case 'EntrySource':
           return EntrySourceTypeTransformer().decode(value);
         case 'ErrorDetail':
           return ErrorDetail.fromJson(value);
         case 'ErrorResponse':
           return ErrorResponse.fromJson(value);
+        case 'HealthMetricType':
+          return HealthMetricTypeTypeTransformer().decode(value);
+        case 'HealthSampleImport':
+          return HealthSampleImport.fromJson(value);
+        case 'HealthSampleRef':
+          return HealthSampleRef.fromJson(value);
+        case 'HealthSyncCounts':
+          return HealthSyncCounts.fromJson(value);
+        case 'HealthSyncRequest':
+          return HealthSyncRequest.fromJson(value);
+        case 'HealthSyncResponse':
+          return HealthSyncResponse.fromJson(value);
+        case 'HealthSyncState':
+          return HealthSyncState.fromJson(value);
+        case 'HealthSyncStateListResponse':
+          return HealthSyncStateListResponse.fromJson(value);
         case 'MobileUser':
           return MobileUser.fromJson(value);
         case 'RefreshSessionRequest':
           return RefreshSessionRequest.fromJson(value);
         case 'SessionCredentials':
           return SessionCredentials.fromJson(value);
+        case 'SleepSessionImport':
+          return SleepSessionImport.fromJson(value);
+        case 'SleepStage':
+          return SleepStage.fromJson(value);
+        case 'SleepSyncPayload':
+          return SleepSyncPayload.fromJson(value);
+        case 'SleepSyncWindow':
+          return SleepSyncWindow.fromJson(value);
         case 'TimeEntry':
           return TimeEntry.fromJson(value);
         case 'TimeEntryListResponse':

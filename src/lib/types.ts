@@ -1,7 +1,11 @@
 // Wire types shared between the API routes and the client.
 
 export type EntrySource = "APP" | "GOOGLE";
-export type SleepSource = "HEALTH_CONNECT" | "GOOGLE_HEALTH" | "MANUAL";
+export type HealthSource =
+  | "HEALTH_CONNECT"
+  | "APPLE_HEALTH"
+  | "GOOGLE_HEALTH"
+  | "MANUAL";
 
 export interface CategoryDTO {
   id: string;
@@ -31,9 +35,10 @@ export interface SleepStageDTO {
 
 export interface SleepEntryDTO {
   id: string;
-  source: SleepSource;
+  source: HealthSource;
   externalId: string;
   title: string | null;
+  notes: string | null;
   sourceApp: string | null;
   /** ISO UTC. */
   startTime: string;
@@ -41,9 +46,26 @@ export interface SleepEntryDTO {
   endTime: string;
   sleepMinutes: number | null;
   awakeMinutes: number | null;
+  awakeInBedMinutes: number | null;
+  outOfBedMinutes: number | null;
   lightMinutes: number | null;
   deepMinutes: number | null;
   remMinutes: number | null;
+  unknownMinutes: number | null;
+  /** Wall-clock session length. */
+  inBedMinutes: number | null;
+  /** Asleep as a share of time in bed, 0–100. */
+  efficiencyPercent: number | null;
+  /** Session start until the first asleep stage. */
+  latencyMinutes: number | null;
+  /** Wake after sleep onset, before the final wake. */
+  wasoMinutes: number | null;
+  awakeningCount: number | null;
+  /** ISO UTC midpoint of the asleep span. */
+  midpoint: string | null;
+  isNap: boolean;
+  recordingMethod: string | null;
+  deviceModel: string | null;
   stages: SleepStageDTO[];
   manualOverrideAt: string | null;
 }

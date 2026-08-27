@@ -49,6 +49,7 @@ function sourceLabel(entry: SleepEntryDTO): string {
   if (entry.sourceApp) return entry.sourceApp;
   if (entry.source === "GOOGLE_HEALTH") return "Google Health";
   if (entry.source === "HEALTH_CONNECT") return "Health Connect";
+  if (entry.source === "APPLE_HEALTH") return "Apple Health";
   return "Manual";
 }
 

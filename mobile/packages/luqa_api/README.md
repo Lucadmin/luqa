@@ -64,6 +64,8 @@ Class | Method | HTTP request | Description
 *AuthenticationApi* | [**revokeMobileSession**](doc//AuthenticationApi.md#revokemobilesession) | **DELETE** /auth/session | Revoke the current device session
 *CategoriesApi* | [**createCategory**](doc//CategoriesApi.md#createcategory) | **POST** /categories | Create or resolve a category by name
 *CategoriesApi* | [**listCategories**](doc//CategoriesApi.md#listcategories) | **GET** /categories | List the current user's categories
+*HealthApi* | [**getHealthSyncState**](doc//HealthApi.md#gethealthsyncstate) | **GET** /health/sync | Read what the server last accepted, per source and metric
+*HealthApi* | [**pushHealthSync**](doc//HealthApi.md#pushhealthsync) | **POST** /health/sync | Push sleep sessions and samples read from the device
 *TimeEntriesApi* | [**createTimeEntry**](doc//TimeEntriesApi.md#createtimeentry) | **POST** /time-entries | Create a completed block or running timer
 *TimeEntriesApi* | [**listTimeEntries**](doc//TimeEntriesApi.md#listtimeentries) | **GET** /time-entries | List entries overlapping a half-open UTC window
 
@@ -76,12 +78,25 @@ Class | Method | HTTP request | Description
  - [CreateCategoryRequest](doc//CreateCategoryRequest.md)
  - [CreateSessionRequest](doc//CreateSessionRequest.md)
  - [CreateTimeEntryRequest](doc//CreateTimeEntryRequest.md)
+ - [DeviceHealthSource](doc//DeviceHealthSource.md)
  - [EntrySource](doc//EntrySource.md)
  - [ErrorDetail](doc//ErrorDetail.md)
  - [ErrorResponse](doc//ErrorResponse.md)
+ - [HealthMetricType](doc//HealthMetricType.md)
+ - [HealthSampleImport](doc//HealthSampleImport.md)
+ - [HealthSampleRef](doc//HealthSampleRef.md)
+ - [HealthSyncCounts](doc//HealthSyncCounts.md)
+ - [HealthSyncRequest](doc//HealthSyncRequest.md)
+ - [HealthSyncResponse](doc//HealthSyncResponse.md)
+ - [HealthSyncState](doc//HealthSyncState.md)
+ - [HealthSyncStateListResponse](doc//HealthSyncStateListResponse.md)
  - [MobileUser](doc//MobileUser.md)
  - [RefreshSessionRequest](doc//RefreshSessionRequest.md)
  - [SessionCredentials](doc//SessionCredentials.md)
+ - [SleepSessionImport](doc//SleepSessionImport.md)
+ - [SleepStage](doc//SleepStage.md)
+ - [SleepSyncPayload](doc//SleepSyncPayload.md)
+ - [SleepSyncWindow](doc//SleepSyncWindow.md)
  - [TimeEntry](doc//TimeEntry.md)
  - [TimeEntryListResponse](doc//TimeEntryListResponse.md)
  - [TimeEntryResponse](doc//TimeEntryResponse.md)

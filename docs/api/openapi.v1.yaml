@@ -17,6 +17,11 @@ tags:
     description: User-owned activity categories and identity colors.
   - name: Time entries
     description: Retrospective blocks and running activity timers.
+  - name: Health
+    description: >-
+      On-device health ingestion. The client reads the platform store (Android
+      Health Connect, iOS HealthKit later) and pushes normalized records; the
+      server never pulls from a provider.
 paths:
   /auth/session:
     post:
@@ -162,6 +167,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TimeEntryResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /health/sync:
+    get:
+      operationId: getHealthSyncState
+      tags: [Health]
+      summary: Read what the server last accepted, per source and metric
+      responses:
+        "200":
+          description: Sync watermarks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthSyncStateListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: pushHealthSync
+      tags: [Health]
+      summary: Push sleep sessions and samples read from the device
+      description: >-
+        Idempotent by provider record id. Supply `sleep.window` only when the
+        device re-read a full range: it authorizes the server to soft-delete
+        sessions inside that range it no longer sees.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HealthSyncRequest"
+      responses:
+        "200":
+          description: Counts applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthSyncResponse"
         "400":
           $ref: "#/components/responses/InvalidInput"
         "401":
@@ -363,6 +407,256 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TimeEntry"
+    DeviceHealthSource:
+      type: string
+      description: Platform store the device read. Server-pull sources are not accepted here.
+      enum: [HEALTH_CONNECT, APPLE_HEALTH]
+    HealthMetricType:
+      type: string
+      enum:
+        - STEPS
+        - DISTANCE_METERS
+        - ACTIVE_ENERGY_KCAL
+        - TOTAL_ENERGY_KCAL
+        - EXERCISE_MINUTES
+        - HEART_RATE_BPM
+        - RESTING_HEART_RATE_BPM
+        - HEART_RATE_VARIABILITY_MS
+        - RESPIRATORY_RATE_BPM
+        - BLOOD_OXYGEN_PERCENT
+        - BODY_TEMPERATURE_C
+        - WEIGHT_KG
+        - BODY_FAT_PERCENT
+        - VO2_MAX
+    SleepStage:
+      type: object
+      additionalProperties: false
+      required: [stage, startTime, endTime]
+      properties:
+        stage:
+          type: string
+          description: Provider stage name, normalized server-side (e.g. DEEP, REM, AWAKE_IN_BED).
+          maxLength: 40
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+    SleepSessionImport:
+      type: object
+      additionalProperties: false
+      required: [startTime, endTime]
+      description: >-
+        One provider sleep session. Stage totals and quality metrics are optional;
+        anything derivable from `stages` is recomputed server-side.
+      properties:
+        externalId:
+          type: string
+          description: Provider record id. Falls back to a start/end key when absent.
+          minLength: 1
+          maxLength: 300
+        title:
+          type: [string, "null"]
+          maxLength: 120
+        notes:
+          type: [string, "null"]
+          maxLength: 2000
+        sourceApp:
+          type: [string, "null"]
+          maxLength: 120
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        startZoneOffset:
+          type: [string, "null"]
+          maxLength: 40
+        endZoneOffset:
+          type: [string, "null"]
+          maxLength: 40
+        sleepMinutes:
+          type: [integer, "null"]
+        awakeMinutes:
+          type: [integer, "null"]
+        awakeInBedMinutes:
+          type: [integer, "null"]
+        outOfBedMinutes:
+          type: [integer, "null"]
+        lightMinutes:
+          type: [integer, "null"]
+        deepMinutes:
+          type: [integer, "null"]
+        remMinutes:
+          type: [integer, "null"]
+        unknownMinutes:
+          type: [integer, "null"]
+        isNap:
+          type: boolean
+        recordingMethod:
+          type: [string, "null"]
+          enum: [AUTOMATICALLY_RECORDED, ACTIVELY_RECORDED, MANUAL_ENTRY, UNKNOWN, null]
+        deviceModel:
+          type: [string, "null"]
+          maxLength: 120
+        stages:
+          type: array
+          maxItems: 300
+          items:
+            $ref: "#/components/schemas/SleepStage"
+    HealthSampleImport:
+      type: object
+      additionalProperties: false
+      required: [externalId, metric, startTime, endTime, value]
+      properties:
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 300
+        metric:
+          $ref: "#/components/schemas/HealthMetricType"
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+          description: Equal to startTime for instant measurements.
+        value:
+          type: number
+        sourceApp:
+          type: [string, "null"]
+          maxLength: 120
+        zoneOffset:
+          type: [string, "null"]
+          maxLength: 40
+    HealthSampleRef:
+      type: object
+      additionalProperties: false
+      required: [metric, externalId]
+      properties:
+        metric:
+          $ref: "#/components/schemas/HealthMetricType"
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 300
+    SleepSyncWindow:
+      type: object
+      additionalProperties: false
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+    SleepSyncPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        entries:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/SleepSessionImport"
+        deletedExternalIds:
+          type: array
+          maxItems: 1000
+          items:
+            type: string
+            minLength: 1
+            maxLength: 300
+        window:
+          $ref: "#/components/schemas/SleepSyncWindow"
+    HealthSyncRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        source:
+          $ref: "#/components/schemas/DeviceHealthSource"
+        deviceId:
+          type: string
+          minLength: 8
+          maxLength: 128
+        sleep:
+          $ref: "#/components/schemas/SleepSyncPayload"
+        samples:
+          type: array
+          maxItems: 5000
+          items:
+            $ref: "#/components/schemas/HealthSampleImport"
+        deletedSamples:
+          type: array
+          maxItems: 5000
+          items:
+            $ref: "#/components/schemas/HealthSampleRef"
+    HealthSyncCounts:
+      type: object
+      additionalProperties: false
+      required: [imported, deleted]
+      properties:
+        imported:
+          type: integer
+        deleted:
+          type: integer
+    HealthSyncResponse:
+      type: object
+      additionalProperties: false
+      required: [sleep, samples]
+      properties:
+        sleep:
+          $ref: "#/components/schemas/HealthSyncCounts"
+        samples:
+          $ref: "#/components/schemas/HealthSyncCounts"
+    HealthSyncState:
+      type: object
+      additionalProperties: false
+      required: [source, metric, lastSyncedAt, lastEntryAt, backfilledFrom]
+      properties:
+        source:
+          type: string
+          enum: [HEALTH_CONNECT, APPLE_HEALTH, GOOGLE_HEALTH, MANUAL]
+        metric:
+          type: string
+          description: SLEEP tracks the sleep-session domain.
+          enum:
+            - SLEEP
+            - STEPS
+            - DISTANCE_METERS
+            - ACTIVE_ENERGY_KCAL
+            - TOTAL_ENERGY_KCAL
+            - EXERCISE_MINUTES
+            - HEART_RATE_BPM
+            - RESTING_HEART_RATE_BPM
+            - HEART_RATE_VARIABILITY_MS
+            - RESPIRATORY_RATE_BPM
+            - BLOOD_OXYGEN_PERCENT
+            - BODY_TEMPERATURE_C
+            - WEIGHT_KG
+            - BODY_FAT_PERCENT
+            - VO2_MAX
+        lastSyncedAt:
+          type: [string, "null"]
+          format: date-time
+        lastEntryAt:
+          type: [string, "null"]
+          format: date-time
+        backfilledFrom:
+          type: [string, "null"]
+          format: date-time
+    HealthSyncStateListResponse:
+      type: object
+      additionalProperties: false
+      required: [states]
+      properties:
+        states:
+          type: array
+          items:
+            $ref: "#/components/schemas/HealthSyncState"
     ErrorDetail:
       type: object
       additionalProperties: true

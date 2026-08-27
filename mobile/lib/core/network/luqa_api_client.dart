@@ -31,6 +31,10 @@ abstract interface class LuqaApi {
     required DateTime start,
     required DateTime end,
   });
+
+  Future<api.HealthSyncResponse> pushHealthSync(api.HealthSyncRequest request);
+
+  Future<List<api.HealthSyncState>> healthSyncStates();
 }
 
 class LuqaApiClient implements LuqaApi {
@@ -49,6 +53,7 @@ class LuqaApiClient implements LuqaApi {
   }
 
   static const _requestTimeout = Duration(seconds: 15);
+  static const _syncTimeout = Duration(seconds: 60);
   static const _refreshLeeway = Duration(seconds: 30);
 
   final SecureCredentialStore credentialStore;
@@ -208,6 +213,27 @@ class LuqaApiClient implements LuqaApi {
     if (response == null) throw api.ApiException(500, 'Empty response');
     return response.entry;
   });
+
+  @override
+  Future<api.HealthSyncResponse> pushHealthSync(api.HealthSyncRequest request) =>
+      _authorized((client) async {
+        // A backfill carries a lot more than a routine push, so this gets a
+        // longer ceiling than the standard request timeout.
+        final response = await api.HealthApi(client)
+            .pushHealthSync(request)
+            .timeout(_syncTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response;
+      });
+
+  @override
+  Future<List<api.HealthSyncState>> healthSyncStates() =>
+      _authorized((client) async {
+        final response = await api.HealthApi(
+          client,
+        ).getHealthSyncState().timeout(_requestTimeout);
+        return response?.states ?? const [];
+      });
 
   Future<T> _authorized<T>(
     Future<T> Function(api.ApiClient client) request,

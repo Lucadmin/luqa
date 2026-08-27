@@ -24,6 +24,13 @@ const GUTTER = 52; // px for hour labels
 const DEFAULT_LEN = 30; // minutes — default size for a tap/click-created block
 const MIN_DRAG = 10; // minutes — shorter drags fall back to the default size
 
+const SOURCE_LABELS: Record<SleepEntryDTO["source"], string> = {
+  HEALTH_CONNECT: "Health Connect",
+  APPLE_HEALTH: "Apple Health",
+  GOOGLE_HEALTH: "Google Health",
+  MANUAL: "Manual",
+};
+
 function sleepMinutesFor(entry: SleepEntryDTO): number {
   if (entry.sleepMinutes !== null) return entry.sleepMinutes;
   const duration = (Date.parse(entry.endTime) - Date.parse(entry.startTime)) / 60000;
@@ -308,7 +315,7 @@ export function DayPane({
         const height = (endMin - startMin) * PX_PER_MINUTE;
         const compact = height < 38;
         const asleep = sleepMinutesFor(entry);
-        const source = entry.sourceApp ?? (entry.source === "GOOGLE_HEALTH" ? "Google Health" : "Health Connect");
+        const source = entry.sourceApp ?? SOURCE_LABELS[entry.source];
 
         return (
           <button

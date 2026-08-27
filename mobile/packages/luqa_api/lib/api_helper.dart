@@ -65,8 +65,14 @@ String parameterToString(dynamic value) {
   if (value is DateTime) {
     return value.toUtc().toIso8601String();
   }
+  if (value is DeviceHealthSource) {
+    return DeviceHealthSourceTypeTransformer().encode(value).toString();
+  }
   if (value is EntrySource) {
     return EntrySourceTypeTransformer().encode(value).toString();
+  }
+  if (value is HealthMetricType) {
+    return HealthMetricTypeTypeTransformer().encode(value).toString();
   }
   return value.toString();
 }

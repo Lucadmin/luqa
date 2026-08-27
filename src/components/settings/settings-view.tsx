@@ -3,7 +3,6 @@
 import { CalendarDays, Check, Moon, RefreshCw, Unlink, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { mutate as globalMutate } from "swr";
 import { CategoriesPanel } from "@/components/settings/categories-panel";
 import { PreferencesPanel, ProfilePanel } from "@/components/settings/preferences-panel";
 import { AppPage, AppPageHeader } from "@/components/ui/app-page";
@@ -156,51 +155,9 @@ function GoogleConnectionPanel() {
 function GoogleHealthPanel() {
   const { status, isLoading, mutate } = useGoogleHealthStatus();
   const searchParams = useSearchParams();
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
   const oauthResult = searchParams.get("health");
-
-  async function handleSync() {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const res = await apiSend<{
-        imported: number;
-        deleted: number;
-        raw?: number;
-        reconciled?: number;
-        latestEnd?: string | null;
-      }>(
-        "/api/health/google/sync",
-        "POST",
-      );
-      const latest = res.latestEnd
-        ? ` Latest: ${new Date(res.latestEnd).toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-          })}.`
-        : "";
-      const scanned =
-        res.raw !== undefined && res.reconciled !== undefined
-          ? ` Raw ${res.raw}, reconciled ${res.reconciled}.`
-          : "";
-      setSyncResult(
-        `Synced: ${res.imported} sleep sessions, ${res.deleted} removed.${scanned}${latest}`,
-      );
-      await mutate();
-      await globalMutate(
-        (key) =>
-          typeof key === "string" &&
-          (key.startsWith("/api/reports") || key.startsWith("/api/sleep")),
-      );
-    } catch {
-      setSyncResult("Sync failed. Check Google Health API access and try again.");
-    } finally {
-      setSyncing(false);
-    }
-  }
 
   async function handleDisconnect() {
     setDisconnecting(true);
@@ -240,7 +197,12 @@ function GoogleHealthPanel() {
               <Moon className="h-5 w-5 text-muted" />
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-semibold">Google Health</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold">Google Health</h3>
+                <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-faint">
+                  Retired
+                </span>
+              </div>
               {status.connected ? (
                 <div className="mt-0.5 flex flex-col gap-0.5">
                   <p className="truncate text-sm text-muted">
@@ -250,7 +212,8 @@ function GoogleHealthPanel() {
                     </span>
                   </p>
                   <p className="text-xs text-faint">
-                    Imports sleep sessions through the Google Health API.
+                    No longer syncing. Sleep now comes from Health Connect on your
+                    phone; sessions imported here previously are kept.
                   </p>
                   {status.lastSynced && (
                     <p className="text-xs text-faint">
@@ -268,40 +231,26 @@ function GoogleHealthPanel() {
                 </div>
               ) : (
                 <p className="mt-0.5 text-sm text-muted">
-                  Connect to import sleep from Google Health. Samsung Health can
-                  also feed Luqa through Health Connect once a mobile reader posts here.
+                  Retired. Sleep is imported by the Luqa mobile app from Android
+                  Health Connect, which also carries Samsung Health data.
                 </p>
               )}
             </div>
           </div>
 
-          {status.connected ? (
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm" onClick={handleSync} disabled={syncing}>
-                <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
-                {syncing ? "Syncing…" : "Sync sleep"}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleDisconnect}
-                disabled={disconnecting}
-                className="text-muted hover:text-red-500"
-              >
-                <Unlink className="h-3.5 w-3.5" />
-                Disconnect
-              </Button>
-            </div>
-          ) : (
-            <div>
-              <a href="/api/health/google/connect">
-                <Button size="sm">Connect</Button>
-              </a>
-            </div>
+          {status.connected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="self-start text-muted hover:text-red-500"
+            >
+              <Unlink className="h-3.5 w-3.5" />
+              Disconnect
+            </Button>
           )}
         </div>
-
-        {syncResult && <p className="mt-3 text-xs text-muted">{syncResult}</p>}
       </div>
     </div>
   );

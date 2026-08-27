@@ -2,7 +2,7 @@ import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { makeGoogleHealthOAuthClient } from "@/lib/google-health/oauth";
-import { fetchGoogleHealthIdentity, syncGoogleHealthSleep } from "@/lib/google-health/sync";
+import { fetchGoogleHealthIdentity } from "@/lib/google-health/sync";
 import {
   oauthStateCookieName,
   verifyOAuthState,
@@ -75,9 +75,8 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    await syncGoogleHealthSleep(userId).catch((e) =>
-      console.error("[google-health-callback] initial sleep sync failed", e),
-    );
+    // No initial sync: the Google Health pull is retired in favour of on-device
+    // Health Connect. Connecting now only records the account.
 
     return redirectWithClearedState(new URL("/settings?health=connected", origin));
   } catch (err) {
