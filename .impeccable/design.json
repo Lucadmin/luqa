@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-27T12:42:28Z",
+  "title": "Design System: Luqa",
+  "extensions": {
+    "colorMeta": {
+      "purple-light": {
+        "role": "primary",
+        "displayName": "Luqa Purple Light",
+        "canonical": "#6543E8",
+        "tonalRamp": ["#160B3D", "#281064", "#3B168C", "#5023B6", "#6543E8", "#8A72F1", "#B7A9F8", "#E5DFFF"]
+      },
+      "purple-dark": {
+        "role": "primary",
+        "displayName": "Luqa Purple Dark",
+        "canonical": "#A78BFA",
+        "tonalRamp": ["#1B123D", "#302160", "#4A347F", "#674C9E", "#8567C1", "#A78BFA", "#CBB9FD", "#EEE9FF"]
+      },
+      "light-ink": {
+        "role": "neutral",
+        "displayName": "Maximum Contrast Ink",
+        "canonical": "#1A1A1E",
+        "tonalRamp": ["#121214", "#2B2B30", "#46464C", "#626269", "#808087", "#A2A2A8", "#CACACE", "#F2F2F3"]
+      },
+      "dark-ink": {
+        "role": "neutral",
+        "displayName": "Maximum Contrast Light",
+        "canonical": "#F4F4F5",
+        "tonalRamp": ["#18181B", "#303034", "#4B4B50", "#68686E", "#88888E", "#AAAAAF", "#D0D0D3", "#F4F4F5"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Focal Display",
+        "purpose": "One dominant value or phrase on a top-level screen."
+      },
+      "numeric": {
+        "displayName": "Aligned Numeric",
+        "purpose": "Time, money, weights, counts, and reports with tabular figures."
+      }
+    },
+    "shadows": [
+      {
+        "name": "modal-lift",
+        "value": "0 8px 24px rgba(0,0,0,0.18)",
+        "purpose": "Dialogs and floating menus only."
+      },
+      {
+        "name": "drag-lift",
+        "value": "0 4px 8px rgba(0,0,0,0.16)",
+        "purpose": "Temporary feedback while an object is reordered."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press-fast",
+        "value": "120ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Press scale and immediate tactile feedback."
+      },
+      {
+        "name": "state-standard",
+        "value": "200ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Selection, completion, and content replacement."
+      },
+      {
+        "name": "emphasis-rare",
+        "value": "280ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Real completion, record, settlement, or milestone moments."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "0-599dp"
+      },
+      {
+        "name": "medium",
+        "value": "600-839dp"
+      },
+      {
+        "name": "expanded",
+        "value": "840dp+"
+      }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "northStar": "The Bold Personal Instrument",
+    "overview": "Luqa combines Trade Republic-like decisiveness with the intimacy of a private life record. Every screen has one unmistakable focal point, while supporting information becomes deliberately quieter. Scale, contrast, alignment, and open space create boldness; decoration does not.",
+    "keyCharacteristics": [
+      "One dominant idea per screen.",
+      "Stark neutral contrast with rare, meaningful purple.",
+      "Personal data color on an otherwise quiet shell.",
+      "Crisp corners and flat continuous working surfaces.",
+      "Responsive motion and haptics without page choreography."
+    ],
+    "rules": [
+      {
+        "name": "The One Focal Point Rule",
+        "body": "Every screen chooses a single dominant object. If three elements compete, none is bold.",
+        "section": "typography"
+      },
+      {
+        "name": "The Shell and Life Rule",
+        "body": "The shell belongs to Luqa; the colors belong to Luca's life.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat-at-Rest Rule",
+        "body": "If a surface is not modal, floating, or being dragged, it earns hierarchy through tone, border, space, or typography—not shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do give each screen one dominant focal object and make the remainder support it.",
+      "Do use black/white inversion for ordinary primary actions so purple stays distinctive.",
+      "Do use identity colors for the owner's data and always pair color with a label, icon, shape, or position.",
+      "Do design and golden-test dark and light themes independently."
+    ],
+    "donts": [
+      "Don't make Luqa resemble a corporate SaaS dashboard.",
+      "Don't use purple gradients, glowing borders, animated grids, or terminal typography as decoration.",
+      "Don't use constant confetti, mascot rewards, streak shame, or inflated celebration.",
+      "Don't build a collection of excessively rounded cards and pills.",
+      "Don't copy Trade Republic's financial metaphors or impersonal tone."
+    ]
+  }
+}
