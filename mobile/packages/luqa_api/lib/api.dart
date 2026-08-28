@@ -32,6 +32,7 @@ part 'optional.dart';
 part 'api/authentication_api.dart';
 part 'api/categories_api.dart';
 part 'api/health_api.dart';
+part 'api/sleep_api.dart';
 part 'api/time_entries_api.dart';
 
 part 'model/category.dart';
@@ -55,13 +56,17 @@ part 'model/health_sync_state_list_response.dart';
 part 'model/mobile_user.dart';
 part 'model/refresh_session_request.dart';
 part 'model/session_credentials.dart';
+part 'model/sleep_entry.dart';
+part 'model/sleep_entry_list_response.dart';
 part 'model/sleep_session_import.dart';
+part 'model/sleep_source.dart';
 part 'model/sleep_stage.dart';
 part 'model/sleep_sync_payload.dart';
 part 'model/sleep_sync_window.dart';
 part 'model/time_entry.dart';
 part 'model/time_entry_list_response.dart';
 part 'model/time_entry_response.dart';
+part 'model/update_time_entry_request.dart';
 
 /// An [ApiClient] instance that uses the default values obtained from
 /// the OpenAPI specification file.

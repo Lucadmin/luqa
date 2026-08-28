@@ -29,8 +29,17 @@ abstract interface class LuqaApi {
     required String description,
     required String? categoryId,
     required DateTime start,
-    required DateTime end,
+    required DateTime? end,
   });
+
+  Future<api.TimeEntry> updateTimeEntry(
+    String id,
+    api.UpdateTimeEntryRequest patch,
+  );
+
+  Future<void> deleteTimeEntry(String id);
+
+  Future<List<api.SleepEntry>> listSleepEntries(DateTime from, DateTime to);
 
   Future<api.HealthSyncResponse> pushHealthSync(api.HealthSyncRequest request);
 
@@ -198,7 +207,7 @@ class LuqaApiClient implements LuqaApi {
     required String description,
     required String? categoryId,
     required DateTime start,
-    required DateTime end,
+    required DateTime? end,
   }) => _authorized((client) async {
     final response = await api.TimeEntriesApi(client)
         .createTimeEntry(
@@ -206,13 +215,40 @@ class LuqaApiClient implements LuqaApi {
             startTime: start.toUtc(),
             description: api.Optional.present(description),
             categoryId: api.Optional.present(categoryId),
-            endTime: api.Optional.present(end.toUtc()),
+            endTime: api.Optional.present(end?.toUtc()),
           ),
         )
         .timeout(_requestTimeout);
     if (response == null) throw api.ApiException(500, 'Empty response');
     return response.entry;
   });
+
+  @override
+  Future<api.TimeEntry> updateTimeEntry(
+    String id,
+    api.UpdateTimeEntryRequest patch,
+  ) => _authorized((client) async {
+    final response = await api.TimeEntriesApi(
+      client,
+    ).updateTimeEntry(id, patch).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.entry;
+  });
+
+  @override
+  Future<void> deleteTimeEntry(String id) => _authorized(
+    (client) =>
+        api.TimeEntriesApi(client).deleteTimeEntry(id).timeout(_requestTimeout),
+  );
+
+  @override
+  Future<List<api.SleepEntry>> listSleepEntries(DateTime from, DateTime to) =>
+      _authorized((client) async {
+        final response = await api.SleepApi(
+          client,
+        ).listSleepEntries(from.toUtc(), to.toUtc()).timeout(_requestTimeout);
+        return response?.entries ?? const [];
+      });
 
   @override
   Future<api.HealthSyncResponse> pushHealthSync(api.HealthSyncRequest request) =>

@@ -6,6 +6,7 @@ import 'package:luqa/design_system/luqa_theme.dart';
 import 'package:luqa/features/auth/application/auth_controller.dart';
 import 'package:luqa/features/auth/presentation/auth_bootstrap_screen.dart';
 import 'package:luqa/features/auth/presentation/sign_in_screen.dart';
+import 'package:luqa/features/health/presentation/health_auto_sync.dart';
 
 class LuqaApp extends ConsumerWidget {
   const LuqaApp({super.key});
@@ -17,13 +18,15 @@ class LuqaApp extends ConsumerWidget {
     final session = authentication.value;
 
     if (session?.isAuthenticated == true) {
-      return MaterialApp.router(
-        title: 'Luqa',
-        debugShowCheckedModeBanner: false,
-        theme: LuqaTheme.light,
-        darkTheme: LuqaTheme.dark,
-        themeMode: themeMode,
-        routerConfig: luqaRouter,
+      return HealthAutoSync(
+        child: MaterialApp.router(
+          title: 'Luqa',
+          debugShowCheckedModeBanner: false,
+          theme: LuqaTheme.light,
+          darkTheme: LuqaTheme.dark,
+          themeMode: themeMode,
+          routerConfig: luqaRouter,
+        ),
       );
     }
 

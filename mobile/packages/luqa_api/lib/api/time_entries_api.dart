@@ -80,6 +80,59 @@ class TimeEntriesApi {
     return null;
   }
 
+  /// Soft-delete an entry
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  Future<Response> deleteTimeEntryWithHttpInfo(
+    String id, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/time-entries/{id}'.replaceAll('{id}', id);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Soft-delete an entry
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  Future<void> deleteTimeEntry(
+    String id, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await deleteTimeEntryWithHttpInfo(
+      id,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// List entries overlapping a half-open UTC window
   ///
   /// Note: This method returns the HTTP [Response].
@@ -150,6 +203,81 @@ class TimeEntriesApi {
         await _decodeBodyBytes(response),
         'TimeEntryListResponse',
       ) as TimeEntryListResponse;
+    }
+    return null;
+  }
+
+  /// Edit an entry, or stop a running timer by giving it an end
+  ///
+  /// Every field is optional; omitted fields are left untouched. Sending `endTime: null` reopens the entry as a running timer.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  ///
+  /// * [UpdateTimeEntryRequest] updateTimeEntryRequest (required):
+  Future<Response> updateTimeEntryWithHttpInfo(
+    String id,
+    UpdateTimeEntryRequest updateTimeEntryRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/time-entries/{id}'.replaceAll('{id}', id);
+
+    // ignore: prefer_final_locals
+    Object? postBody = updateTimeEntryRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PATCH',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Edit an entry, or stop a running timer by giving it an end
+  ///
+  /// Every field is optional; omitted fields are left untouched. Sending `endTime: null` reopens the entry as a running timer.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  ///
+  /// * [UpdateTimeEntryRequest] updateTimeEntryRequest (required):
+  Future<TimeEntryResponse?> updateTimeEntry(
+    String id,
+    UpdateTimeEntryRequest updateTimeEntryRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await updateTimeEntryWithHttpInfo(
+      id,
+      updateTimeEntryRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'TimeEntryResponse',
+      ) as TimeEntryResponse;
     }
     return null;
   }

@@ -14,21 +14,47 @@ future versioned API host.
 - Native device sign-in with short-lived access tokens, rotating refresh tokens,
   and Android Keystore / iOS Keychain storage.
 - Generated, versioned Dart client for the OpenAPI contract in
-  `../docs/api/openapi.v1.yaml`.
+  `../docs/api/openapi.v1.yaml`, including entry edit/delete and sleep reads.
 - Riverpod repository/controller boundary backed by the real `/api/v1` routes
-  and an app-private, user-scoped local Today read cache with no credentials.
-- Today screen with retrospective capture hierarchy, sleep, compact habits, and
-  a category-aware timeline.
-- Log time bottom sheet with inferred times, recent activities, category
-  search/creation, validation, saving feedback, and server persistence.
+  and an app-private, user-scoped local read cache with no credentials.
 - Explicit loading, empty, cached-offline, refresh, expired-session, and error
   states instead of demo data in production.
-- Compact/expanded navigation tests, interaction tests, contrast tests, and
+- Navigation tests, timeline interaction tests, contrast tests, and
   deterministic light/dark golden tests.
 
-Gym, Money, People, and Insights are routed placeholders rather than fake
-feature implementations. Habits and sleep remain honest placeholders until
-their mobile contracts are connected.
+### Time tracking
+
+The Today branch is a continuous timeline rather than a single day, matching
+the browser companion:
+
+- One pane per calendar day inside a single scroller spanning roughly ten years
+  back and a year ahead, with only the days on screen built. The header's date
+  label follows the scroll, and its chevrons, date picker, and "back to now"
+  control scroll it the other way.
+- Data is fetched in three-week windows quantised to whole weeks, so the window
+  key only changes every seventh day of scrolling and always keeps a week of
+  slack either side of the screen.
+- Entries lay out in side-by-side columns when they overlap, clip cleanly at
+  midnight so a block crossing it reads as one object, and show untracked
+  stretches as a "Fill 45m" pill.
+- **Tap any empty part of the grid** to drop a thirty-minute block. It floats
+  above the timeline with fingertip-sized handles on each edge; dragging
+  resizes in five-minute steps with a haptic tick per step, pulls the timeline
+  along near the viewport edges, and a second tap relocates the block rather
+  than discarding it. Committing happens in a composer docked under the grid,
+  so the block being edited stays visible.
+- **Long-press an entry** to lift it back into that same composer for reshaping;
+  **tap** it to open the full editor, with delete and an undo snackbar.
+- A running timer can be started and stopped from the bar above the grid, and
+  the now-line and the running block track the clock once a minute.
+- Sleep sessions read from `/api/v1/sleep-entries` sit behind the day as
+  measured context, with a read-only detail sheet. Corrections belong where the
+  data is recorded, so the app does not offer to edit them.
+
+The grid has fixed geometry, so block text is capped at 1.2x scaling and every
+block is drawn at least 26 dp high. The full text always reaches a screen
+reader through the block's semantics label, and the editor sheet scales without
+limit.
 
 ## Toolchain
 
@@ -81,7 +107,7 @@ Regenerate the design-system-critical goldens only after intentionally
 reviewing a visual change:
 
 ```bash
-flutter test --update-goldens test/goldens/today_screen_golden_test.dart
+flutter test --update-goldens test/goldens
 ```
 
 ## Build-time configuration
@@ -92,12 +118,29 @@ API origin is injected at build time through `lib/app/app_config.dart`:
 ```bash
 flutter run \
   --dart-define=LUQA_ENV=development \
-  --dart-define=LUQA_API_BASE_URL=http://10.0.2.2:3000
+  --dart-define=LUQA_API_BASE_URL=http://localhost:3000
 ```
 
-`10.0.2.2` reaches the host machine from Android Emulator. A physical device
-can use the Mac's reachable LAN address while developing. Production builds
-refuse a non-HTTPS API origin:
+That is also the default, so a plain `flutter run` works. It relies on ADB port
+forwarding, which has to be re-established after every reconnect or `adb
+kill-server`:
+
+```bash
+npm run dev            # in the repo root; Next listens on :3000
+adb reverse tcp:3000 tcp:3000
+```
+
+`adb reverse` points the device's own `localhost:3000` at the Mac, so the same
+origin works on the emulator and on a USB- or Wi-Fi-attached phone, and it
+survives changing Wi-Fi networks. Without it, sign-in fails with "The server
+took too long to respond" — the request is sent and nothing answers. The
+emulator-only `10.0.2.2` alias is silently dropped on a physical device, which
+produces the identical timeout.
+
+Cleartext HTTP to `localhost`, `127.0.0.1` and `10.0.2.2` is permitted only in
+the debug and profile variants, via
+`android/app/src/main/res/xml/network_security_config.xml`. Release builds keep
+Android's HTTPS-only default, and refuse a non-HTTPS API origin outright:
 
 ```bash
 flutter build apk --release \
@@ -125,10 +168,10 @@ lib/
   design_system/        themes, semantic tokens, component gallery
   features/
     today/
-      application/      Riverpod controller and providers
-      data/             remote repository, read cache, test fake
-      domain/           immutable entry/category models
-      presentation/     Today, Log time, picker, timeline
+      application/      Riverpod timeline controller and providers
+      data/             remote repository and app-private read cache
+      domain/           entry/sleep/category models, grid geometry and layout
+      presentation/     timeline screen, day panes, draft layer, editors
     auth/                native session state, secure credentials, sign-in UI
   core/network/          generated-client adapter and token rotation
 packages/luqa_api/       generated OpenAPI Dart client
@@ -140,7 +183,9 @@ implementations can therefore replace the fake without rewriting widgets.
 
 ## Next implementation slices
 
-1. Complete timer, edit, and delete actions for time entries.
-2. Add mutation idempotency plus a deliberate offline write queue.
-3. Connect habits and sleep through versioned mobile endpoints.
+1. Add mutation idempotency plus a deliberate offline write queue.
+2. Serve the day-start cutoff and other preferences from the settings endpoint
+   rather than the `dayStartHour` constant in `timeline_geometry.dart`.
+3. Connect habits through a versioned mobile endpoint and give them a home
+   outside the timeline chrome.
 4. Replace the Gym placeholder with the next complete vertical slice.

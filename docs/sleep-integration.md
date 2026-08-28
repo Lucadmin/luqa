@@ -116,9 +116,31 @@ rather than one per platform.
   watermarks. Lives on the phone because it describes what *this install* read;
   reinstalling correctly triggers a fresh backfill.
 
+- `mobile/lib/features/health/presentation/health_auto_sync.dart` — mounted in
+  the signed-in branch of the app, so it starts on sign-in and stops on sign-out.
+
 Sync windows: a first sync reaches back 30 days (Health Connect only guarantees
 30 days without the extra read-history permission). Later syncs re-read the last
 3 days, because trackers revise a night for a while after you wake up.
+
+### Automatic sync
+
+Sleep syncs on app launch and on every resume — no button press needed. The
+manual controls in Settings stay for forcing a pass or a full re-import.
+
+Automatic runs are throttled to one per 30 minutes, measured from the last
+*attempt* rather than the last success, so a failing sync backs off instead of
+retrying on every resume. They are silent: they never prompt for permission and
+never leave an error in Settings, because a single offline moment is not
+actionable. A persistently broken sync still shows up — the "last synced" label
+goes stale.
+
+This is **foreground-only**, on purpose. Reading Health Connect from a background
+worker needs `READ_HEALTH_DATA_IN_BACKGROUND`, which Play reviews as a separate
+health permission. For sleep it buys little: a night is written once, and syncing
+the moment the app opens puts the data there before it can be looked at. The
+trade-off is that the server only learns about last night once the phone app is
+opened — so the web dashboard lags until then.
 
 ### Android configuration
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Development only. Referenced by the debug and profile manifests, never by the
+  release manifest, so shipped builds keep Android's HTTPS-only default and the
+  client's own production HTTPS check in lib/core/network/luqa_api_client.dart.
+
+  Only loopback hosts are listed: `adb reverse tcp:3000 tcp:3000` forwards the
+  device's localhost to the dev machine's Next server, so no LAN address has to
+  be whitelisted here when the Wi-Fi network changes.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <!-- Android Emulator's alias for the host machine. -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

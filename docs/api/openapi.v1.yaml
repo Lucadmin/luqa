@@ -17,6 +17,8 @@ tags:
     description: User-owned activity categories and identity colors.
   - name: Time entries
     description: Retrospective blocks and running activity timers.
+  - name: Sleep
+    description: Read-only sleep sessions already ingested through health sync.
   - name: Health
     description: >-
       On-device health ingestion. The client reads the platform store (Android
@@ -171,6 +173,82 @@ paths:
           $ref: "#/components/responses/InvalidInput"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /time-entries/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updateTimeEntry
+      tags: [Time entries]
+      summary: Edit an entry, or stop a running timer by giving it an end
+      description: >-
+        Every field is optional; omitted fields are left untouched. Sending
+        `endTime: null` reopens the entry as a running timer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTimeEntryRequest"
+      responses:
+        "200":
+          description: Time entry updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntryResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteTimeEntry
+      tags: [Time entries]
+      summary: Soft-delete an entry
+      responses:
+        "204":
+          description: Time entry deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /sleep-entries:
+    get:
+      operationId: listSleepEntries
+      tags: [Sleep]
+      summary: List sleep sessions that ended inside a half-open UTC window
+      description: >-
+        Sessions are attributed to the day they woke up in, which is how the
+        timeline places them. Writes go through `/health/sync`.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Sleep-session collection ordered by wake time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SleepEntryListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /health/sync:
     get:
       operationId: getHealthSyncState
@@ -226,6 +304,12 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     Unauthorized:
       description: Invalid, expired, revoked, or missing device credential
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: The resource does not exist, or is not owned by this user
       content:
         application/json:
           schema:
@@ -407,6 +491,81 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TimeEntry"
+    UpdateTimeEntryRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        description:
+          type: string
+          maxLength: 500
+        categoryId:
+          type: [string, "null"]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: [string, "null"]
+          format: date-time
+    SleepSource:
+      type: string
+      enum: [HEALTH_CONNECT, APPLE_HEALTH, GOOGLE_HEALTH, MANUAL]
+    SleepEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - source
+        - title
+        - sourceApp
+        - startTime
+        - endTime
+        - sleepMinutes
+        - awakeMinutes
+        - lightMinutes
+        - deepMinutes
+        - remMinutes
+        - isNap
+      properties:
+        id:
+          type: string
+        source:
+          $ref: "#/components/schemas/SleepSource"
+        title:
+          type: [string, "null"]
+        sourceApp:
+          type: [string, "null"]
+          description: Provider application that recorded the session, when known.
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        sleepMinutes:
+          type: [integer, "null"]
+          description: Asleep minutes. Null when the provider only reported time in bed.
+        awakeMinutes:
+          type: [integer, "null"]
+        lightMinutes:
+          type: [integer, "null"]
+        deepMinutes:
+          type: [integer, "null"]
+        remMinutes:
+          type: [integer, "null"]
+        efficiencyPercent:
+          type: [number, "null"]
+        isNap:
+          type: boolean
+    SleepEntryListResponse:
+      type: object
+      additionalProperties: false
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/SleepEntry"
     DeviceHealthSource:
       type: string
       description: Platform store the device read. Server-pull sources are not accepted here.

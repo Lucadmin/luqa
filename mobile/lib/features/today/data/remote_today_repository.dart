@@ -3,64 +3,92 @@ import 'dart:convert';
 import 'package:luqa/core/network/luqa_api_client.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
 import 'package:luqa/features/today/domain/category.dart';
+import 'package:luqa/features/today/domain/sleep_entry.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa_api/api.dart' as api;
 import 'package:shared_preferences/shared_preferences.dart';
 
-abstract interface class TodayCache {
-  Future<TodaySnapshot?> read(DateTime day);
+abstract interface class TimelineCache {
+  Future<List<Category>?> readCategories();
 
-  Future<void> write(TodaySnapshot snapshot);
+  Future<void> writeCategories(List<Category> categories);
+
+  Future<TimelineWindow?> readWindow(DateTime from, DateTime to);
+
+  Future<void> writeWindow(TimelineWindow window);
 }
 
-class SharedPreferencesTodayCache implements TodayCache {
-  SharedPreferencesTodayCache({
+/// App-private, user-scoped read cache. It holds the most recent window only —
+/// enough to paint a cold start instantly, small enough that it never grows
+/// without bound. No credential ever reaches it.
+class SharedPreferencesTimelineCache implements TimelineCache {
+  SharedPreferencesTimelineCache({
     required String namespace,
     SharedPreferencesAsync? preferences,
   }) : _namespace = base64Url.encode(utf8.encode(namespace)),
        _preferences = preferences ?? SharedPreferencesAsync();
 
+  static const _version = 'v2';
+
   final String _namespace;
   final SharedPreferencesAsync _preferences;
 
-  String _key(DateTime day) =>
-      'luqa.today.v1.$_namespace.${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+  String get _categoriesKey => 'luqa.timeline.$_version.$_namespace.categories';
+  String get _windowKey => 'luqa.timeline.$_version.$_namespace.window';
 
   @override
-  Future<TodaySnapshot?> read(DateTime day) async {
-    final encoded = await _preferences.getString(_key(day));
+  Future<List<Category>?> readCategories() async {
+    final encoded = await _preferences.getString(_categoriesKey);
     if (encoded == null) return null;
     try {
-      final value = jsonDecode(encoded) as Map<String, Object?>;
-      final categories = (value['categories']! as List<Object?>)
-          .map((item) => item! as Map<String, Object?>)
-          .map(_categoryFromJson)
+      return (jsonDecode(encoded) as List<Object?>)
+          .map((item) => _categoryFromJson(item! as Map<String, Object?>))
           .toList(growable: false);
-      final entries = (value['entries']! as List<Object?>)
-          .map((item) => item! as Map<String, Object?>)
-          .map(_entryFromJson)
-          .toList(growable: false);
-      return TodaySnapshot(
-        day: DateTime(day.year, day.month, day.day),
-        entries: entries,
-        categories: categories,
-        recentActivities: _recentActivities(entries),
-        habits: const [],
-        sleep: null,
-      );
     } on Object {
-      await _preferences.remove(_key(day));
+      await _preferences.remove(_categoriesKey);
       return null;
     }
   }
 
   @override
-  Future<void> write(TodaySnapshot snapshot) => _preferences.setString(
-    _key(snapshot.day),
+  Future<void> writeCategories(List<Category> categories) => _preferences
+      .setString(_categoriesKey, jsonEncode(categories.map(_categoryToJson).toList()));
+
+  @override
+  Future<TimelineWindow?> readWindow(DateTime from, DateTime to) async {
+    final encoded = await _preferences.getString(_windowKey);
+    if (encoded == null) return null;
+    try {
+      final value = jsonDecode(encoded) as Map<String, Object?>;
+      // A cached window for a different range is useless; the caller is
+      // looking at other days.
+      if (value['from'] != _dayKey(from) || value['to'] != _dayKey(to)) {
+        return null;
+      }
+      return TimelineWindow(
+        from: from,
+        to: to,
+        entries: (value['entries']! as List<Object?>)
+            .map((item) => _entryFromJson(item! as Map<String, Object?>))
+            .toList(growable: false),
+        sleep: (value['sleep']! as List<Object?>)
+            .map((item) => _sleepFromJson(item! as Map<String, Object?>))
+            .toList(growable: false),
+      );
+    } on Object {
+      await _preferences.remove(_windowKey);
+      return null;
+    }
+  }
+
+  @override
+  Future<void> writeWindow(TimelineWindow window) => _preferences.setString(
+    _windowKey,
     jsonEncode({
-      'version': 1,
-      'categories': snapshot.categories.map(_categoryToJson).toList(),
-      'entries': snapshot.entries.map(_entryToJson).toList(),
+      'from': _dayKey(window.from),
+      'to': _dayKey(window.to),
+      'entries': window.entries.map(_entryToJson).toList(),
+      'sleep': window.sleep.map(_sleepToJson).toList(),
     }),
   );
 }
@@ -69,93 +97,96 @@ class RemoteTodayRepository implements TodayRepository {
   RemoteTodayRepository({required this.client, required this.cache});
 
   final LuqaApi client;
-  final TodayCache cache;
-  TodaySnapshot? _latest;
+  final TimelineCache cache;
 
   @override
-  Future<TodaySnapshot?> loadCached(DateTime day) async {
-    final cached = await cache.read(day);
-    _latest = cached;
-    return cached;
-  }
+  Future<List<Category>?> loadCachedCategories() => cache.readCategories();
 
   @override
-  Future<TodaySnapshot> refresh(DateTime day) async {
-    final start = DateTime(day.year, day.month, day.day);
-    final end = start.add(const Duration(days: 1));
-    final results = await Future.wait<Object>([
-      client.listCategories(),
-      client.listTimeEntries(start, end),
-    ]);
-    final categories = (results[0] as List<api.Category>)
+  Future<TimelineWindow?> loadCachedWindow(DateTime from, DateTime to) =>
+      cache.readWindow(from, to);
+
+  @override
+  Future<List<Category>> loadCategories() async {
+    final categories = (await client.listCategories())
         .where((category) => !category.archived)
         .map(_categoryFromApi)
         .toList(growable: false);
+    await cache.writeCategories(categories);
+    return categories;
+  }
+
+  @override
+  Future<TimelineWindow> loadWindow(DateTime from, DateTime to) async {
+    // Sleep is attributed to the day it wakes up in, so a session that began
+    // the evening before still belongs to this window. Reach a day further
+    // back for entries so a block crossing the boundary arrives whole.
+    final results = await Future.wait<Object>([
+      client.listTimeEntries(from.subtract(const Duration(days: 1)), to),
+      client.listSleepEntries(from, to),
+    ]);
     final entries =
-        (results[1] as List<api.TimeEntry>)
+        (results[0] as List<api.TimeEntry>)
             .map(_entryFromApi)
             .toList(growable: false)
           ..sort((left, right) => left.start.compareTo(right.start));
-    final snapshot = TodaySnapshot(
-      day: start,
+    final sleep =
+        (results[1] as List<api.SleepEntry>)
+            .map(_sleepFromApi)
+            .toList(growable: false)
+          ..sort((left, right) => left.start.compareTo(right.start));
+
+    final window = TimelineWindow(
+      from: from,
+      to: to,
       entries: entries,
-      categories: categories,
-      recentActivities: _recentActivities(entries),
-      habits: const [],
-      sleep: null,
+      sleep: sleep,
     );
-    _latest = snapshot;
-    await cache.write(snapshot);
-    return snapshot;
+    await cache.writeWindow(window);
+    return window;
   }
 
   @override
-  Future<TimeEntry> addEntry(NewTimeEntry draft) async {
-    final created = _entryFromApi(
-      await client.createTimeEntry(
-        description: draft.description,
-        categoryId: draft.categoryId,
-        start: draft.start,
-        end: draft.end,
+  Future<TimeEntry> addEntry(NewTimeEntry draft) async => _entryFromApi(
+    await client.createTimeEntry(
+      description: draft.description,
+      categoryId: draft.categoryId,
+      start: draft.start,
+      end: draft.end,
+    ),
+  );
+
+  @override
+  Future<TimeEntry> updateEntry(String id, EntryPatch patch) async {
+    return _entryFromApi(
+      await client.updateTimeEntry(
+        id,
+        api.UpdateTimeEntryRequest(
+          description: patch.description == null
+              ? const api.Optional.absent()
+              : api.Optional.present(patch.description),
+          categoryId: patch.clearCategory
+              ? const api.Optional.present(null)
+              : patch.categoryId == null
+              ? const api.Optional.absent()
+              : api.Optional.present(patch.categoryId),
+          startTime: patch.start == null
+              ? const api.Optional.absent()
+              : api.Optional.present(patch.start!.toUtc()),
+          endTime: patch.end == null
+              ? const api.Optional.absent()
+              : api.Optional.present(patch.end!.toUtc()),
+        ),
       ),
     );
-    final latest = _latest;
-    if (latest != null) {
-      final entries = [...latest.entries, created]
-        ..sort((left, right) => left.start.compareTo(right.start));
-      _latest = TodaySnapshot(
-        day: latest.day,
-        entries: entries,
-        categories: latest.categories,
-        recentActivities: _recentActivities(entries),
-        habits: latest.habits,
-        sleep: latest.sleep,
-      );
-      await cache.write(_latest!);
-    }
-    return created;
   }
 
   @override
-  Future<Category> addCategory(String name) async {
-    final created = _categoryFromApi(await client.createCategory(name));
-    final latest = _latest;
-    if (latest != null &&
-        !latest.categories.any((category) => category.id == created.id)) {
-      final categories = [...latest.categories, created]
-        ..sort((left, right) => left.name.compareTo(right.name));
-      _latest = TodaySnapshot(
-        day: latest.day,
-        entries: latest.entries,
-        categories: categories,
-        recentActivities: latest.recentActivities,
-        habits: latest.habits,
-        sleep: latest.sleep,
-      );
-      await cache.write(_latest!);
-    }
-    return created;
-  }
+  Future<void> deleteEntry(String id) => client.deleteTimeEntry(id);
+
+  @override
+  Future<Category> addCategory(String name) async =>
+      _categoryFromApi(await client.createCategory(name));
 }
 
 Category _categoryFromApi(api.Category value) => Category(
@@ -172,11 +203,30 @@ TimeEntry _entryFromApi(api.TimeEntry value) => TimeEntry(
   end: value.endTime?.toLocal(),
 );
 
+SleepEntry _sleepFromApi(api.SleepEntry value) => SleepEntry(
+  id: value.id,
+  source: value.source_.toString(),
+  sourceApp: value.sourceApp,
+  title: value.title,
+  start: value.startTime.toLocal(),
+  end: value.endTime.toLocal(),
+  sleepMinutes: value.sleepMinutes,
+  awakeMinutes: value.awakeMinutes,
+  lightMinutes: value.lightMinutes,
+  deepMinutes: value.deepMinutes,
+  remMinutes: value.remMinutes,
+  isNap: value.isNap,
+);
+
 int _colorValue(String value) {
   final hex = value.startsWith('#') ? value.substring(1) : value;
   final parsed = int.tryParse(hex, radix: 16);
   return parsed == null ? 0xFF6543E8 : 0xFF000000 | parsed;
 }
+
+String _dayKey(DateTime value) =>
+    '${value.year}-${value.month.toString().padLeft(2, '0')}-'
+    '${value.day.toString().padLeft(2, '0')}';
 
 Map<String, Object?> _categoryToJson(Category value) => {
   'id': value.id,
@@ -208,20 +258,32 @@ TimeEntry _entryFromJson(Map<String, Object?> value) => TimeEntry(
       : DateTime.parse(value['end']! as String).toLocal(),
 );
 
-List<RecentActivity> _recentActivities(List<TimeEntry> entries) {
-  final seen = <String>{};
-  final recent = <RecentActivity>[];
-  for (final entry in entries.reversed) {
-    if (entry.description.trim().isEmpty && entry.categoryId == null) continue;
-    final key = '${entry.description.trim()}\u0000${entry.categoryId ?? ''}';
-    if (!seen.add(key)) continue;
-    recent.add(
-      RecentActivity(
-        description: entry.description,
-        categoryId: entry.categoryId,
-      ),
-    );
-    if (recent.length == 5) break;
-  }
-  return recent;
-}
+Map<String, Object?> _sleepToJson(SleepEntry value) => {
+  'id': value.id,
+  'source': value.source,
+  'sourceApp': value.sourceApp,
+  'title': value.title,
+  'start': value.start.toUtc().toIso8601String(),
+  'end': value.end.toUtc().toIso8601String(),
+  'sleepMinutes': value.sleepMinutes,
+  'awakeMinutes': value.awakeMinutes,
+  'lightMinutes': value.lightMinutes,
+  'deepMinutes': value.deepMinutes,
+  'remMinutes': value.remMinutes,
+  'isNap': value.isNap,
+};
+
+SleepEntry _sleepFromJson(Map<String, Object?> value) => SleepEntry(
+  id: value['id']! as String,
+  source: value['source']! as String,
+  sourceApp: value['sourceApp'] as String?,
+  title: value['title'] as String?,
+  start: DateTime.parse(value['start']! as String).toLocal(),
+  end: DateTime.parse(value['end']! as String).toLocal(),
+  sleepMinutes: value['sleepMinutes'] as int?,
+  awakeMinutes: value['awakeMinutes'] as int?,
+  lightMinutes: value['lightMinutes'] as int?,
+  deepMinutes: value['deepMinutes'] as int?,
+  remMinutes: value['remMinutes'] as int?,
+  isNap: value['isNap']! as bool,
+);

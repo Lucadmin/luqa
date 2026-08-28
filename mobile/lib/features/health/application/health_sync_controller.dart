@@ -17,6 +17,11 @@ const kInitialBackfill = Duration(days: 30);
 /// trusted as final.
 const kResyncOverlap = Duration(days: 3);
 
+/// Minimum gap between automatic syncs. A night lands once a day, so anything
+/// tighter just spends battery re-reading sessions that have not changed. It is
+/// measured from the last *attempt*, so a failing sync backs off too.
+const kAutoSyncMinInterval = Duration(minutes: 30);
+
 enum HealthSyncStage { idle, checking, syncing }
 
 class HealthSyncState {
@@ -65,7 +70,7 @@ final healthReaderProvider = Provider<HealthReader>(
 );
 
 final healthSyncStoreProvider = Provider<HealthSyncStore>(
-  (ref) => HealthSyncStore(),
+  (ref) => SharedPreferencesHealthSyncStore(),
 );
 
 final healthSyncControllerProvider =
@@ -130,12 +135,43 @@ class HealthSyncController extends Notifier<HealthSyncState> {
     }
   }
 
+  /// Syncs without being asked, on launch and on every resume.
+  ///
+  /// Silent by design: it never prompts for permission, never shows a spinner
+  /// for the availability check, and swallows failures. A persistently broken
+  /// sync still surfaces — the tile's "last synced" label goes stale — but a
+  /// single offline moment must not leave a red error sitting in Settings.
+  Future<void> autoSync() async {
+    if (state.isBusy) return;
+
+    final attempted = await _store.lastAttemptedAt();
+    if (attempted != null &&
+        DateTime.now().difference(attempted) < kAutoSyncMinInterval) {
+      return;
+    }
+
+    try {
+      if (await _reader.availability() != HealthAvailability.available) return;
+      if (!await _reader.hasPermissions()) return;
+    } on Object {
+      return;
+    }
+
+    // Reflect what the quiet check just learned, so opening Settings after an
+    // automatic sync shows the real state rather than "Checking availability…".
+    state = state.copyWith(
+      availability: HealthAvailability.available,
+      permissionGranted: true,
+    );
+    await sync(auto: true);
+  }
+
   /// Reads the device and pushes to the server.
   ///
   /// The window always starts far enough back to re-read recently revised
   /// nights, and the push carries it so the server can reconcile deletions
   /// inside exactly the range that was re-read.
-  Future<void> sync({bool full = false}) async {
+  Future<void> sync({bool full = false, bool auto = false}) async {
     if (state.isBusy) return;
     state = state.copyWith(
       stage: HealthSyncStage.syncing,
@@ -145,6 +181,9 @@ class HealthSyncController extends Notifier<HealthSyncState> {
 
     try {
       final now = DateTime.now();
+      // Recorded before the work, not after: a sync that hangs or throws must
+      // still push the next automatic attempt out by the throttle interval.
+      await _store.setLastAttemptedAt(now);
       final backfilled = await _store.backfilledThrough();
       final from = full || backfilled == null
           ? now.subtract(kInitialBackfill)
@@ -183,7 +222,7 @@ class HealthSyncController extends Notifier<HealthSyncState> {
     } on Object catch (error) {
       state = state.copyWith(
         stage: HealthSyncStage.idle,
-        error: _message(error),
+        error: auto ? null : _message(error),
       );
     }
   }

@@ -17,6 +17,24 @@ class TimeEntry {
 
   bool get isRunning => end == null;
 
+  /// A null field leaves that value untouched; `clearCategory` is how the
+  /// category is removed, since null already means "unchanged".
+  TimeEntry copyWith({
+    String? description,
+    String? categoryId,
+    bool clearCategory = false,
+    DateTime? start,
+    DateTime? end,
+    bool? pendingSync,
+  }) => TimeEntry(
+    id: id,
+    description: description ?? this.description,
+    categoryId: clearCategory ? null : categoryId ?? this.categoryId,
+    start: start ?? this.start,
+    end: end ?? this.end,
+    pendingSync: pendingSync ?? this.pendingSync,
+  );
+
   DateTime endOrNow([DateTime? now]) => end ?? now ?? DateTime.now();
 
   Duration get duration => endOrNow().difference(start);
@@ -33,7 +51,9 @@ class NewTimeEntry {
   final String description;
   final String? categoryId;
   final DateTime start;
-  final DateTime end;
+
+  /// Null starts a running timer rather than a completed block.
+  final DateTime? end;
 }
 
 class RecentActivity {

@@ -5,7 +5,7 @@ import 'package:luqa/app/destination_placeholder.dart';
 import 'package:luqa/app/profile_screen.dart';
 import 'package:luqa/app/settings_screen.dart';
 import 'package:luqa/design_system/component_gallery_screen.dart';
-import 'package:luqa/features/today/presentation/today_screen.dart';
+import 'package:luqa/features/today/presentation/timeline_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
@@ -22,7 +22,7 @@ final luqaRouter = GoRouter(
             GoRoute(
               path: '/',
               pageBuilder: (context, state) =>
-                  const NoTransitionPage(child: TodayScreen()),
+                  const NoTransitionPage(child: TimelineScreen()),
             ),
           ],
         ),

@@ -1,6 +1,14 @@
 # Flutter Log time flow
 
-Status: interaction direction v1
+Status: superseded in part by the shipped timeline. The dedicated "Log time"
+bottom sheet described here was replaced by direct composition on the grid:
+tapping empty space drops a block, its edges are dragged to size it, and a
+composer docked under the timeline carries the title, category, and save. The
+full editor sheet below still exists — it is what opens when an entry is
+tapped, or when the composer's time row is opened for typed times. See
+`mobile/README.md` for the shipped interaction model.
+
+Original status: interaction direction v1
 Design system: [DESIGN.md](../DESIGN.md)
 Today context: [flutter-today-concept.md](flutter-today-concept.md)
 Visual reference: [log-time-flow-v1.png](design/log-time-flow-v1.png)

@@ -3,66 +3,104 @@ import 'package:luqa/core/network/luqa_api_client.dart';
 import 'package:luqa/features/auth/data/secure_credential_store.dart';
 import 'package:luqa/features/today/data/remote_today_repository.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
+import 'package:luqa/features/today/domain/category.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa_api/api.dart' as api;
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 void main() {
-  test(
-    'refresh maps API data, filters archived categories, and caches it',
-    () async {
-      final cache = MemoryTodayCache();
-      final repository = RemoteTodayRepository(
-        client: FakeLuqaApi(),
-        cache: cache,
-      );
+  final from = DateTime(2026, 8, 17);
+  final to = DateTime(2026, 9, 7);
 
-      final snapshot = await repository.refresh(DateTime(2026, 8, 27, 14));
+  test('loadWindow maps entries and sleep, then caches the window', () async {
+    final cache = MemoryTimelineCache();
+    final api = FakeLuqaApi();
+    final repository = RemoteTodayRepository(client: api, cache: cache);
 
-      expect(snapshot.day, DateTime(2026, 8, 27));
-      expect(snapshot.categories.map((value) => value.name), ['Thesis']);
-      expect(snapshot.categories.single.colorValue, 0xFF6543E8);
-      expect(snapshot.entries.single.description, 'Writing');
-      expect(snapshot.recentActivities.single.description, 'Writing');
-      expect(snapshot.sleep, isNull);
-      expect(cache.snapshot, same(snapshot));
-    },
-  );
+    final window = await repository.loadWindow(from, to);
 
-  test('new entries update the cached timeline immediately', () async {
-    final cache = MemoryTodayCache();
+    expect(window.entries.single.description, 'Writing');
+    expect(window.entries.single.start, DateTime.utc(2026, 8, 27, 8).toLocal());
+    expect(window.sleep.single.asleep, const Duration(minutes: 400));
+    expect(window.sleep.single.attribution, 'Pixel Watch');
+    expect(cache.window?.entries, hasLength(1));
+  });
+
+  test('loadWindow reaches a day further back so blocks arrive whole', () async {
+    final api = FakeLuqaApi();
+    final repository = RemoteTodayRepository(
+      client: api,
+      cache: MemoryTimelineCache(),
+    );
+
+    await repository.loadWindow(from, to);
+
+    // A block that began the evening before the window would otherwise be
+    // missing its first half on the window's opening day.
+    expect(api.entriesFrom, from.subtract(const Duration(days: 1)));
+  });
+
+  test('loadCategories drops archived categories and caches them', () async {
+    final cache = MemoryTimelineCache();
     final repository = RemoteTodayRepository(
       client: FakeLuqaApi(),
       cache: cache,
     );
-    await repository.refresh(DateTime(2026, 8, 27));
 
-    final created = await repository.addEntry(
-      NewTimeEntry(
-        description: 'Walk',
-        categoryId: null,
-        start: DateTime(2026, 8, 27, 18),
-        end: DateTime(2026, 8, 27, 18, 30),
-      ),
-    );
+    final categories = await repository.loadCategories();
 
-    expect(created.description, 'Walk');
-    expect(cache.snapshot?.entries.map((value) => value.description), [
-      'Writing',
-      'Walk',
-    ]);
-    expect(cache.writes, 2);
+    expect(categories.map((value) => value.name), ['Thesis']);
+    expect(categories.single.colorValue, 0xFF6543E8);
+    expect(cache.categories, hasLength(1));
   });
 
-  test('persistent read cache is isolated by user', () async {
+  test('a patch only sends the fields it actually changes', () async {
+    final api = FakeLuqaApi();
+    final repository = RemoteTodayRepository(
+      client: api,
+      cache: MemoryTimelineCache(),
+    );
+
+    await repository.updateEntry(
+      'entry-1',
+      EntryPatch(end: DateTime.utc(2026, 8, 27, 12)),
+    );
+
+    final patch = api.lastPatch!;
+    expect(patch.endTime.isPresent, isTrue);
+    expect(patch.description.isPresent, isFalse);
+    expect(patch.startTime.isPresent, isFalse);
+    expect(patch.categoryId.isPresent, isFalse);
+  });
+
+  test('clearing a category sends an explicit null', () async {
+    final api = FakeLuqaApi();
+    final repository = RemoteTodayRepository(
+      client: api,
+      cache: MemoryTimelineCache(),
+    );
+
+    await repository.updateEntry(
+      'entry-1',
+      const EntryPatch(clearCategory: true),
+    );
+
+    final patch = api.lastPatch!;
+    expect(patch.categoryId.isPresent, isTrue);
+    expect(patch.categoryId.value, isNull);
+  });
+
+  test('the persistent read cache is isolated by user', () async {
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
     addTearDown(() => SharedPreferencesAsyncPlatform.instance = null);
-    final firstUser = SharedPreferencesTodayCache(namespace: 'user-a');
-    final secondUser = SharedPreferencesTodayCache(namespace: 'user-b');
-    final snapshot = TodaySnapshot(
-      day: DateTime(2026, 8, 27),
+
+    final firstUser = SharedPreferencesTimelineCache(namespace: 'user-a');
+    final secondUser = SharedPreferencesTimelineCache(namespace: 'user-b');
+    final window = TimelineWindow(
+      from: from,
+      to: to,
       entries: [
         TimeEntry(
           id: 'entry-1',
@@ -72,36 +110,57 @@ void main() {
           end: DateTime(2026, 8, 27, 10),
         ),
       ],
-      categories: const [],
-      recentActivities: const [],
-      habits: const [],
-      sleep: null,
+      sleep: const [],
     );
 
-    await firstUser.write(snapshot);
+    await firstUser.writeWindow(window);
 
-    expect((await firstUser.read(snapshot.day))?.entries, hasLength(1));
-    expect(await secondUser.read(snapshot.day), isNull);
+    expect((await firstUser.readWindow(from, to))?.entries, hasLength(1));
+    expect(await secondUser.readWindow(from, to), isNull);
+  });
+
+  test('a cached window for another range is not reused', () async {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+    addTearDown(() => SharedPreferencesAsyncPlatform.instance = null);
+
+    final cache = SharedPreferencesTimelineCache(namespace: 'user-a');
+    await cache.writeWindow(
+      TimelineWindow(from: from, to: to, entries: const [], sleep: const []),
+    );
+
+    expect(await cache.readWindow(from, to), isNotNull);
+    expect(await cache.readWindow(from, to.add(const Duration(days: 7))), isNull);
   });
 }
 
-class MemoryTodayCache implements TodayCache {
-  TodaySnapshot? snapshot;
-  int writes = 0;
+class MemoryTimelineCache implements TimelineCache {
+  TimelineWindow? window;
+  List<Category>? categories;
 
   @override
-  Future<TodaySnapshot?> read(DateTime day) async => snapshot;
+  Future<List<Category>?> readCategories() async => categories;
 
   @override
-  Future<void> write(TodaySnapshot value) async {
-    writes += 1;
-    snapshot = value;
+  Future<void> writeCategories(List<Category> value) async {
+    categories = value;
+  }
+
+  @override
+  Future<TimelineWindow?> readWindow(DateTime from, DateTime to) async => window;
+
+  @override
+  Future<void> writeWindow(TimelineWindow value) async {
+    window = value;
   }
 }
 
 class FakeLuqaApi implements LuqaApi {
+  DateTime? entriesFrom;
+  api.UpdateTimeEntryRequest? lastPatch;
+
   // Health sync is exercised in test/features/health; this fake only needs to
-  // satisfy the interface for the Today repository.
+  // satisfy the interface for the timeline repository.
   @override
   Future<api.HealthSyncResponse> pushHealthSync(api.HealthSyncRequest request) =>
       throw UnimplementedError();
@@ -121,17 +180,38 @@ class FakeLuqaApi implements LuqaApi {
   ];
 
   @override
-  Future<List<api.TimeEntry>> listTimeEntries(
+  Future<List<api.TimeEntry>> listTimeEntries(DateTime from, DateTime to) async {
+    entriesFrom = from;
+    return [
+      api.TimeEntry(
+        id: 'entry-1',
+        description: 'Writing',
+        categoryId: 'thesis',
+        startTime: DateTime.utc(2026, 8, 27, 8),
+        endTime: DateTime.utc(2026, 8, 27, 10),
+        source_: api.EntrySource.APP,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<api.SleepEntry>> listSleepEntries(
     DateTime from,
     DateTime to,
   ) async => [
-    api.TimeEntry(
-      id: 'entry-1',
-      description: 'Writing',
-      categoryId: 'thesis',
-      startTime: DateTime.utc(2026, 8, 27, 8),
-      endTime: DateTime.utc(2026, 8, 27, 10),
-      source_: api.EntrySource.APP,
+    api.SleepEntry(
+      id: 'sleep-1',
+      source_: api.SleepSource.HEALTH_CONNECT,
+      title: null,
+      sourceApp: 'Pixel Watch',
+      startTime: DateTime.utc(2026, 8, 26, 22),
+      endTime: DateTime.utc(2026, 8, 27, 6),
+      sleepMinutes: 400,
+      awakeMinutes: 20,
+      lightMinutes: 200,
+      deepMinutes: 100,
+      remMinutes: 100,
+      isNap: false,
     ),
   ];
 
@@ -140,7 +220,7 @@ class FakeLuqaApi implements LuqaApi {
     required String description,
     required String? categoryId,
     required DateTime start,
-    required DateTime end,
+    required DateTime? end,
   }) async => api.TimeEntry(
     id: 'entry-2',
     description: description,
@@ -149,6 +229,25 @@ class FakeLuqaApi implements LuqaApi {
     endTime: end,
     source_: api.EntrySource.APP,
   );
+
+  @override
+  Future<api.TimeEntry> updateTimeEntry(
+    String id,
+    api.UpdateTimeEntryRequest patch,
+  ) async {
+    lastPatch = patch;
+    return api.TimeEntry(
+      id: id,
+      description: patch.description.orElse(null) ?? 'Writing',
+      categoryId: patch.categoryId.orElse(null),
+      startTime: DateTime.utc(2026, 8, 27, 8),
+      endTime: patch.endTime.orElse(null),
+      source_: api.EntrySource.APP,
+    );
+  }
+
+  @override
+  Future<void> deleteTimeEntry(String id) async {}
 
   @override
   Future<api.Category> createCategory(String name) =>

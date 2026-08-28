@@ -124,8 +124,8 @@ class _HealthConnectTileState extends ConsumerState<HealthConnectTile> {
         }
         final last = state.lastSyncedAt;
         return last == null
-            ? 'Ready. Sleep has not been imported yet.'
-            : 'Last synced ${_relative(last)}.';
+            ? 'Ready. Syncs automatically when you open Luqa.'
+            : 'Syncs automatically · last synced ${_relative(last)}.';
     }
   }
 

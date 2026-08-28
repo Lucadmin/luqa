@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../helpers/pump_luqa.dart';
 
 void main() {
-  testWidgets('Today screen light', (tester) async {
+  testWidgets('Timeline light', (tester) async {
     await pumpLuqa(tester);
     await expectLater(
       find.byType(MaterialApp),
@@ -12,7 +12,7 @@ void main() {
     );
   });
 
-  testWidgets('Today screen dark', (tester) async {
+  testWidgets('Timeline dark', (tester) async {
     await pumpLuqa(tester, themeMode: ThemeMode.dark);
     await expectLater(
       find.byType(MaterialApp),
@@ -20,23 +20,12 @@ void main() {
     );
   });
 
-  testWidgets('Log time sheet light', (tester) async {
+  testWidgets('Composing a block on the grid', (tester) async {
     await pumpLuqa(tester);
-    await tester.tap(find.byKey(const ValueKey('log-time-button')));
-    await tester.pumpAndSettle();
+    await tapTimelineAt(tester, const Offset(200, 560));
     await expectLater(
       find.byType(MaterialApp),
-      matchesGoldenFile('log_time_light.png'),
-    );
-  });
-
-  testWidgets('Log time sheet dark', (tester) async {
-    await pumpLuqa(tester, themeMode: ThemeMode.dark);
-    await tester.tap(find.byKey(const ValueKey('log-time-button')));
-    await tester.pumpAndSettle();
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile('log_time_dark.png'),
+      matchesGoldenFile('draft_composer_light.png'),
     );
   });
 }

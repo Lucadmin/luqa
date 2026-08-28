@@ -74,6 +74,9 @@ String parameterToString(dynamic value) {
   if (value is HealthMetricType) {
     return HealthMetricTypeTypeTransformer().encode(value).toString();
   }
+  if (value is SleepSource) {
+    return SleepSourceTypeTransformer().encode(value).toString();
+  }
   return value.toString();
 }
 

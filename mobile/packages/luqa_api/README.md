@@ -66,8 +66,11 @@ Class | Method | HTTP request | Description
 *CategoriesApi* | [**listCategories**](doc//CategoriesApi.md#listcategories) | **GET** /categories | List the current user's categories
 *HealthApi* | [**getHealthSyncState**](doc//HealthApi.md#gethealthsyncstate) | **GET** /health/sync | Read what the server last accepted, per source and metric
 *HealthApi* | [**pushHealthSync**](doc//HealthApi.md#pushhealthsync) | **POST** /health/sync | Push sleep sessions and samples read from the device
+*SleepApi* | [**listSleepEntries**](doc//SleepApi.md#listsleepentries) | **GET** /sleep-entries | List sleep sessions that ended inside a half-open UTC window
 *TimeEntriesApi* | [**createTimeEntry**](doc//TimeEntriesApi.md#createtimeentry) | **POST** /time-entries | Create a completed block or running timer
+*TimeEntriesApi* | [**deleteTimeEntry**](doc//TimeEntriesApi.md#deletetimeentry) | **DELETE** /time-entries/{id} | Soft-delete an entry
 *TimeEntriesApi* | [**listTimeEntries**](doc//TimeEntriesApi.md#listtimeentries) | **GET** /time-entries | List entries overlapping a half-open UTC window
+*TimeEntriesApi* | [**updateTimeEntry**](doc//TimeEntriesApi.md#updatetimeentry) | **PATCH** /time-entries/{id} | Edit an entry, or stop a running timer by giving it an end
 
 
 ## Documentation For Models
@@ -93,13 +96,17 @@ Class | Method | HTTP request | Description
  - [MobileUser](doc//MobileUser.md)
  - [RefreshSessionRequest](doc//RefreshSessionRequest.md)
  - [SessionCredentials](doc//SessionCredentials.md)
+ - [SleepEntry](doc//SleepEntry.md)
+ - [SleepEntryListResponse](doc//SleepEntryListResponse.md)
  - [SleepSessionImport](doc//SleepSessionImport.md)
+ - [SleepSource](doc//SleepSource.md)
  - [SleepStage](doc//SleepStage.md)
  - [SleepSyncPayload](doc//SleepSyncPayload.md)
  - [SleepSyncWindow](doc//SleepSyncWindow.md)
  - [TimeEntry](doc//TimeEntry.md)
  - [TimeEntryListResponse](doc//TimeEntryListResponse.md)
  - [TimeEntryResponse](doc//TimeEntryResponse.md)
+ - [UpdateTimeEntryRequest](doc//UpdateTimeEntryRequest.md)
 
 
 ## Documentation For Authorization

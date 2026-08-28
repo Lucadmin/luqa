@@ -1,9 +1,14 @@
 import { db } from "@/lib/db";
-import { pushEntryCreate } from "@/lib/google/push-sync";
-import { toCategoryDTO, toEntryDTO } from "@/lib/serializers";
+import {
+  pushEntryCreate,
+  pushEntryDelete,
+  pushEntryUpdate,
+} from "@/lib/google/push-sync";
+import { toCategoryDTO, toEntryDTO, toSleepDTO } from "@/lib/serializers";
 import type {
   CreateCategoryInput,
   CreateEntryInput,
+  UpdateEntryInput,
 } from "@/lib/validations";
 
 const CATEGORY_PALETTE = [
@@ -143,4 +148,107 @@ export async function createTimeEntry(
     );
   }
   return toEntryDTO(entry);
+}
+
+export class EntryRangeError extends Error {
+  constructor() {
+    super("End must be after start");
+    this.name = "EntryRangeError";
+  }
+}
+
+/**
+ * Apply a partial edit. Returns null when the entry does not exist or belongs
+ * to someone else, so callers can answer 404 without a second lookup.
+ */
+export async function updateTimeEntry(
+  userId: string,
+  id: string,
+  input: UpdateEntryInput,
+) {
+  const existing = await db.timeEntry.findFirst({
+    where: { id, userId, deletedAt: null },
+  });
+  if (!existing) return null;
+
+  const { description, categoryId, startTime, endTime } = input;
+
+  if (categoryId) {
+    const owns = await db.category.findFirst({
+      where: { id: categoryId, userId },
+      select: { id: true },
+    });
+    if (!owns) throw new InvalidCategoryError();
+  }
+
+  // One side of the range may be unchanged, so validate the resulting pair
+  // rather than the payload alone.
+  const nextStart = startTime ? new Date(startTime) : existing.startTime;
+  const nextEnd =
+    endTime === undefined
+      ? existing.endTime
+      : endTime === null
+        ? null
+        : new Date(endTime);
+  if (nextEnd && nextEnd <= nextStart) throw new EntryRangeError();
+
+  const updated = await db.timeEntry.update({
+    where: { id },
+    data: {
+      ...(description !== undefined ? { description } : {}),
+      ...(categoryId !== undefined ? { categoryId } : {}),
+      ...(startTime !== undefined ? { startTime: nextStart } : {}),
+      ...(endTime !== undefined ? { endTime: nextEnd } : {}),
+    },
+  });
+
+  // Push to Google Calendar (swallows its own errors).
+  if (updated.endTime) {
+    await pushEntryUpdate(
+      userId,
+      updated.id,
+      updated.description,
+      updated.categoryId,
+      updated.startTime.toISOString(),
+      updated.endTime.toISOString(),
+    );
+  }
+
+  return toEntryDTO(updated);
+}
+
+/** Soft-delete an entry. False when it does not exist or is not this user's. */
+export async function deleteTimeEntry(userId: string, id: string) {
+  const existing = await db.timeEntry.findFirst({
+    where: { id, userId, deletedAt: null },
+    select: { id: true, googleEventId: true },
+  });
+  if (!existing) return false;
+
+  await db.timeEntry.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+
+  // Remove from Google Calendar (swallows its own errors).
+  if (existing.googleEventId) {
+    await pushEntryDelete(userId, existing.googleEventId);
+  }
+  return true;
+}
+
+/**
+ * Sleep sessions that *woke up* inside the window — sleep is attributed to the
+ * day it ends in, which is the day the timeline shows it under.
+ */
+export async function listSleepEntries(userId: string, window: EntryWindow) {
+  const entries = await db.sleepEntry.findMany({
+    where: {
+      userId,
+      deletedAt: null,
+      endTime: { gte: window.from, lt: window.to },
+    },
+    orderBy: { endTime: "asc" },
+  });
+  return entries.map(toSleepDTO);
 }

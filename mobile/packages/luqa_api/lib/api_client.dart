@@ -246,8 +246,14 @@ class ApiClient {
           return RefreshSessionRequest.fromJson(value);
         case 'SessionCredentials':
           return SessionCredentials.fromJson(value);
+        case 'SleepEntry':
+          return SleepEntry.fromJson(value);
+        case 'SleepEntryListResponse':
+          return SleepEntryListResponse.fromJson(value);
         case 'SleepSessionImport':
           return SleepSessionImport.fromJson(value);
+        case 'SleepSource':
+          return SleepSourceTypeTransformer().decode(value);
         case 'SleepStage':
           return SleepStage.fromJson(value);
         case 'SleepSyncPayload':
@@ -260,6 +266,8 @@ class ApiClient {
           return TimeEntryListResponse.fromJson(value);
         case 'TimeEntryResponse':
           return TimeEntryResponse.fromJson(value);
+        case 'UpdateTimeEntryRequest':
+          return UpdateTimeEntryRequest.fromJson(value);
         default:
           dynamic match;
           if (value is List &&

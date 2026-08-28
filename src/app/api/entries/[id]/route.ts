@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
-import { db } from "@/lib/db";
-import { pushEntryDelete, pushEntryUpdate } from "@/lib/google/push-sync";
-import { toEntryDTO } from "@/lib/serializers";
+import {
+  EntryRangeError,
+  InvalidCategoryError,
+  deleteTimeEntry,
+  updateTimeEntry,
+} from "@/lib/server/today";
 import { updateEntrySchema } from "@/lib/validations";
 
 type Params = { params: Promise<{ id: string }> };
@@ -29,63 +32,19 @@ export async function PATCH(request: Request, { params }: Params) {
     );
   }
 
-  const existing = await db.timeEntry.findFirst({
-    where: { id, userId, deletedAt: null },
-  });
-  if (!existing) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const { description, categoryId, startTime, endTime } = parsed.data;
-
-  if (categoryId) {
-    const owns = await db.category.findFirst({
-      where: { id: categoryId, userId },
-      select: { id: true },
-    });
-    if (!owns) {
+  try {
+    const entry = await updateTimeEntry(userId, id, parsed.data);
+    if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ entry });
+  } catch (error) {
+    if (error instanceof InvalidCategoryError) {
       return NextResponse.json({ error: "Unknown category" }, { status: 400 });
     }
+    if (error instanceof EntryRangeError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
   }
-
-  // Validate the resulting start/end pair (one side may be unchanged).
-  const nextStart = startTime ? new Date(startTime) : existing.startTime;
-  const nextEnd =
-    endTime === undefined
-      ? existing.endTime
-      : endTime === null
-        ? null
-        : new Date(endTime);
-  if (nextEnd && nextEnd <= nextStart) {
-    return NextResponse.json(
-      { error: "End must be after start" },
-      { status: 400 },
-    );
-  }
-
-  const updated = await db.timeEntry.update({
-    where: { id },
-    data: {
-      ...(description !== undefined ? { description } : {}),
-      ...(categoryId !== undefined ? { categoryId } : {}),
-      ...(startTime !== undefined ? { startTime: nextStart } : {}),
-      ...(endTime !== undefined ? { endTime: nextEnd } : {}),
-    },
-  });
-
-  // Push update to Google Calendar (swallows its own errors).
-  if (updated.endTime) {
-    await pushEntryUpdate(
-      userId,
-      updated.id,
-      updated.description,
-      updated.categoryId,
-      updated.startTime.toISOString(),
-      updated.endTime.toISOString(),
-    );
-  }
-
-  return NextResponse.json({ entry: toEntryDTO(updated) });
 }
 
 // DELETE /api/entries/:id — soft delete + propagate to Google Calendar.
@@ -94,24 +53,8 @@ export async function DELETE(_request: Request, { params }: Params) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-
-  const existing = await db.timeEntry.findFirst({
-    where: { id, userId, deletedAt: null },
-    select: { id: true, googleEventId: true },
-  });
-  if (!existing) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  await db.timeEntry.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  });
-
-  // Remove from Google Calendar (swallows its own errors).
-  if (existing.googleEventId) {
-    await pushEntryDelete(userId, existing.googleEventId);
-  }
+  const deleted = await deleteTimeEntry(userId, id);
+  if (!deleted) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json({ ok: true });
 }

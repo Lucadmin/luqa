@@ -4,4 +4,9 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Android blocks cleartext HTTP by default. The dev server runs plain
+         HTTP on the host machine, so allow it for loopback hosts only, and
+         only in this non-release variant. -->
+    <application android:networkSecurityConfig="@xml/network_security_config" />
 </manifest>

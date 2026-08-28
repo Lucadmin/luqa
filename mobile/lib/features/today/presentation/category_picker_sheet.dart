@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
-import 'package:luqa/features/today/application/today_controller.dart';
+import 'package:luqa/features/today/application/timeline_controller.dart';
 
 class CategorySelection {
   const CategorySelection(this.categoryId);
@@ -50,7 +50,7 @@ class _CategoryPickerSheetState extends ConsumerState<_CategoryPickerSheet> {
     if (_creating || _query.trim().isEmpty) return;
     setState(() => _creating = true);
     final category = await ref
-        .read(todayControllerProvider.notifier)
+        .read(timelineControllerProvider.notifier)
         .addCategory(_query);
     if (!mounted) return;
     setState(() => _creating = false);
@@ -61,7 +61,7 @@ class _CategoryPickerSheetState extends ConsumerState<_CategoryPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(todayControllerProvider);
+    final state = ref.watch(timelineControllerProvider);
     final theme = Theme.of(context);
     final normalized = _query.trim().toLowerCase();
     final filtered = state.categories
