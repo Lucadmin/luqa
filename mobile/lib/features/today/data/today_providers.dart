@@ -34,6 +34,15 @@ final outboxProvider = Provider<Outbox<TimelineMutation>>((ref) {
   );
 });
 
+/// Where an abandoned write is recorded so the user can still be told about
+/// it — including after a relaunch, since a queue often drains on the resume
+/// that precedes the phone going back in a pocket.
+final discardLogProvider = Provider<DiscardLog>((ref) {
+  final userId = ref.watch(_namespaceProvider);
+  if (userId == null) return const NullDiscardLog();
+  return SharedPreferencesDiscardLog(key: 'timeline', namespace: userId);
+});
+
 /// What screens use. Writes land here and return immediately.
 final todayRepositoryProvider = Provider<TodayRepository>((ref) {
   return LocalFirstTodayRepository(

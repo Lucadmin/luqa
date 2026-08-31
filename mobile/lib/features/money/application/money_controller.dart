@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/core/network/network_failure.dart';
+import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/money/application/money_sync_engine.dart';
 import 'package:luqa/features/money/data/money_providers.dart';
 import 'package:luqa/features/money/data/money_repository.dart';
@@ -22,6 +23,7 @@ class MoneyState {
     this.isRefreshing = false,
     this.isLoadingMore = false,
     this.pendingWrites = 0,
+    this.discarded = const [],
     this.error,
     this.feedError,
   });
@@ -43,6 +45,10 @@ class MoneyState {
   /// can say so quietly.
   final int pendingWrites;
 
+  /// Changes the server refused outright, which this device has given up on.
+  /// The user has to be told; there is nothing to retry.
+  final List<DiscardedWrite> discarded;
+
   /// Set only when there is nothing to show at all.
   final String? error;
 
@@ -61,6 +67,7 @@ class MoneyState {
     bool? isRefreshing,
     bool? isLoadingMore,
     int? pendingWrites,
+    List<DiscardedWrite>? discarded,
     String? error,
     bool clearError = false,
     String? feedError,
@@ -73,6 +80,7 @@ class MoneyState {
     isRefreshing: isRefreshing ?? this.isRefreshing,
     isLoadingMore: isLoadingMore ?? this.isLoadingMore,
     pendingWrites: pendingWrites ?? this.pendingWrites,
+    discarded: discarded ?? this.discarded,
     error: clearError ? null : error ?? this.error,
     feedError: clearFeedError ? null : feedError ?? this.feedError,
   );
@@ -91,8 +99,12 @@ class MoneyController extends Notifier<MoneyState> {
     // pull them down and drop the local overlay.
     ref.listen(moneySyncEngineProvider, (previous, next) {
       if (!ref.mounted) return;
-      if (next.pending != state.pendingWrites) {
-        state = state.copyWith(pendingWrites: next.pending);
+      if (next.pending != state.pendingWrites ||
+          next.discarded != state.discarded) {
+        state = state.copyWith(
+          pendingWrites: next.pending,
+          discarded: next.discarded,
+        );
       }
       if (previous != null && next.rounds > previous.rounds) {
         unawaited(load(refresh: true));
@@ -177,6 +189,10 @@ class MoneyController extends Notifier<MoneyState> {
       );
     }
   }
+
+  /// The user has read the notice about a change that could not be saved.
+  Future<void> acknowledgeDiscarded() =>
+      ref.read(moneySyncEngineProvider.notifier).acknowledgeDiscarded();
 
   /// One gesture, one meaning: catch up with the server. Sending first means
   /// the reload that follows cannot overwrite local work with an older copy.

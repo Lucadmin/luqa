@@ -15,6 +15,19 @@ sealed class GymMutation implements PendingMutation {
   @override
   final DateTime queuedAt;
 
+  /// Named the way the user would name it, because this is only ever read
+  /// when they are being told the change did not survive.
+  @override
+  String describe() => switch (this) {
+    CreateSession(:final session) => "${session.dateKey}'s workout",
+    SaveSession(:final write) => write.exercises.isEmpty
+        ? "your ${write.dateKey} workout"
+        : 'your ${write.dateKey} workout '
+              '(${write.exercises.length} exercises)',
+    CreateLocation(:final location) => 'the gym ${location.name}',
+    UpdateLocation(:final name) => 'your edit to ${name ?? 'a gym'}',
+  };
+
   static GymMutation? fromJson(Map<String, Object?> json) {
     final queuedAt = DateTime.tryParse(json['queuedAt'] as String? ?? '');
     if (queuedAt == null) return null;

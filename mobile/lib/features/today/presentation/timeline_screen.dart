@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:luqa/design_system/discarded_writes_notice.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
 import 'package:luqa/features/auth/application/auth_controller.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
@@ -255,6 +256,14 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
             onOpenSettings: () => context.push('/settings'),
             onOpenProfile: () => context.push('/profile'),
           ),
+          if (state.discarded.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: DiscardedWritesNotice(
+                discarded: state.discarded,
+                onAcknowledge: _controller.acknowledgeDiscarded,
+              ),
+            ),
           if (draft == null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),

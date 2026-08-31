@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/core/network/network_failure.dart';
+import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/gym/application/gym_sync_engine.dart';
 import 'package:luqa/features/gym/data/gym_providers.dart';
 import 'package:luqa/features/gym/data/gym_repository.dart';
@@ -20,6 +21,7 @@ class GymOverviewState {
     this.isLoading = true,
     this.isRefreshing = false,
     this.pendingWrites = 0,
+    this.discarded = const [],
     this.error,
   });
 
@@ -30,6 +32,10 @@ class GymOverviewState {
   /// Workouts and gyms recorded here that the server has not acknowledged yet.
   /// Nothing waits on them; the count exists so the screen can say so quietly.
   final int pendingWrites;
+
+  /// Writes the server refused outright, which this device has given up on.
+  /// The user has to be told; there is nothing to retry.
+  final List<DiscardedWrite> discarded;
 
   final String? error;
 
@@ -47,6 +53,7 @@ class GymOverviewState {
     bool? isLoading,
     bool? isRefreshing,
     int? pendingWrites,
+    List<DiscardedWrite>? discarded,
     String? error,
     bool clearError = false,
   }) => GymOverviewState(
@@ -54,6 +61,7 @@ class GymOverviewState {
     isLoading: isLoading ?? this.isLoading,
     isRefreshing: isRefreshing ?? this.isRefreshing,
     pendingWrites: pendingWrites ?? this.pendingWrites,
+    discarded: discarded ?? this.discarded,
     error: clearError ? null : error ?? this.error,
   );
 }
@@ -71,8 +79,12 @@ class GymOverviewController extends Notifier<GymOverviewState> {
     // pull them down and drop the local overlay.
     ref.listen(gymSyncEngineProvider, (previous, next) {
       if (!ref.mounted) return;
-      if (next.pending != state.pendingWrites) {
-        state = state.copyWith(pendingWrites: next.pending);
+      if (next.pending != state.pendingWrites ||
+          next.discarded != state.discarded) {
+        state = state.copyWith(
+          pendingWrites: next.pending,
+          discarded: next.discarded,
+        );
       }
       if (previous != null && next.rounds > previous.rounds) {
         unawaited(load(refresh: true));
@@ -134,6 +146,10 @@ class GymOverviewController extends Notifier<GymOverviewState> {
       );
     }
   }
+
+  /// The user has read the notice about a workout that could not be saved.
+  Future<void> acknowledgeDiscarded() =>
+      ref.read(gymSyncEngineProvider.notifier).acknowledgeDiscarded();
 
   Future<void> refresh() async {
     // One gesture, one meaning: catch up with the server. Sending first means

@@ -188,6 +188,7 @@ class _Harness {
       overrides: [
         remoteTodayRepositoryProvider.overrideWithValue(remote),
         outboxProvider.overrideWithValue(outbox ?? MemoryOutbox()),
+        discardLogProvider.overrideWithValue(const NullDiscardLog()),
       ],
     );
     engine = container.read(syncEngineProvider.notifier);

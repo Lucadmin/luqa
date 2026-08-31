@@ -20,7 +20,7 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
 
   @override
   SyncState build() {
-    adoptOutbox(ref.watch(moneyOutboxProvider));
+    adoptOutbox(ref.watch(moneyOutboxProvider), ref.watch(moneyDiscardLogProvider));
     return const SyncState();
   }
 

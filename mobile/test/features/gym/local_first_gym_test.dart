@@ -31,6 +31,7 @@ class _Stack {
       overrides: [
         remoteGymRepositoryProvider.overrideWithValue(remote),
         gymOutboxProvider.overrideWithValue(this.outbox),
+        gymDiscardLogProvider.overrideWithValue(const NullDiscardLog()),
         gymCacheProvider.overrideWithValue(this.cache),
         gymNowProvider.overrideWithValue(DateTime(2026, 8, 27, 16)),
         authControllerProvider.overrideWith(FixedAuthController.new),

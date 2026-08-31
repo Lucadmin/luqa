@@ -32,6 +32,22 @@ class _MemoryOutbox implements Outbox<MoneyMutation> {
   }
 }
 
+/// A discard log that round-trips through json, because that is what a real
+/// relaunch reads back.
+class _MemoryDiscardLog implements DiscardLog {
+  List<DiscardedWrite> stored = const [];
+
+  @override
+  Future<List<DiscardedWrite>> read() async => [
+    for (final entry in stored) DiscardedWrite.fromJson(entry.toJson())!,
+  ];
+
+  @override
+  Future<void> write(List<DiscardedWrite> entries) async {
+    stored = List.of(entries);
+  }
+}
+
 class _MemoryCache implements MoneyCache {
   MoneyOverview? overview;
   List<Expense>? expenses;
@@ -65,15 +81,22 @@ api.ApiException _transportFailure() => api.ApiException.withInner(
 /// real local-first repository over the real sync engine, with only the
 /// network and the disk faked.
 class _Stack {
-  _Stack({bool offline = false, _MemoryOutbox? outbox, _MemoryCache? cache}) {
+  _Stack({
+    bool offline = false,
+    _MemoryOutbox? outbox,
+    _MemoryCache? cache,
+    _MemoryDiscardLog? discardLog,
+  }) {
     remote = _FlakyMoneyRepository(FakeMoneyRepository.sample())
       ..offline = offline;
     this.outbox = outbox ?? _MemoryOutbox();
     this.cache = cache ?? _MemoryCache();
+    this.discardLog = discardLog ?? _MemoryDiscardLog();
     container = ProviderContainer(
       overrides: [
         remoteMoneyRepositoryProvider.overrideWithValue(remote),
         moneyOutboxProvider.overrideWithValue(this.outbox),
+        moneyDiscardLogProvider.overrideWithValue(this.discardLog),
         moneyCacheProvider.overrideWithValue(this.cache),
         moneyNowProvider.overrideWithValue(DateTime(2026, 8, 27, 12)),
         authControllerProvider.overrideWith(FixedAuthController.new),
@@ -84,6 +107,7 @@ class _Stack {
   late final _FlakyMoneyRepository remote;
   late final _MemoryOutbox outbox;
   late final _MemoryCache cache;
+  late final _MemoryDiscardLog discardLog;
   late final ProviderContainer container;
 
   MoneyController get money => container.read(moneyControllerProvider.notifier);
@@ -155,7 +179,12 @@ class _FlakyMoneyRepository implements MoneyRepository {
   Future<Expense> createExpense({String? id, required ExpenseWrite write}) async {
     _guard();
     if (write.participants.any((p) => p.personId == rejectExpensesFor)) {
-      throw api.ApiException(400, 'Unknown person');
+      // Shaped exactly like the route's refusal, so the reason the user is
+      // shown is the one the server actually gave.
+      throw api.ApiException(
+        400,
+        '{"error":{"code":"invalid_input","message":"Unknown person"}}',
+      );
     }
     return inner.createExpense(id: id, write: write);
   }
@@ -380,6 +409,98 @@ void main() {
     // the queue jamming behind a request that can never succeed.
     expect(stack.syncState.pending, 0);
     expect(stack.remote.inner.savedExpenses.single.amountCents, 5500);
+  });
+
+  test('a write the server refused is reported, not silently lost', () async {
+    final stack = _Stack();
+    addTearDown(stack.dispose);
+    await stack.warmUp();
+
+    stack.remote.rejectExpensesFor = 'ghost';
+    await stack.money.saveExpense(
+      write: _dinner(amountCents: 4250).copyWith(
+        participants: const [SplitParticipant(personId: 'ghost')],
+      ),
+    );
+    await stack.settle();
+    await stack.engine.sync();
+    await stack.settle();
+
+    // The queue emptying is exactly the moment the old code wiped this.
+    expect(stack.syncState.pending, 0);
+    expect(stack.syncState.discarded, hasLength(1));
+    final lost = stack.syncState.discarded.single;
+    // Named so the user knows what to enter again.
+    expect(lost.description, contains('42.50'));
+    expect(lost.description, contains('Dinner'));
+    expect(lost.reason, contains('Unknown person'));
+    // And the screen hears about it.
+    expect(stack.state.discarded, hasLength(1));
+  });
+
+  test('the notice survives the relaunch after the drain that lost it',
+      () async {
+    final log = _MemoryDiscardLog();
+    final first = _Stack(discardLog: log);
+    await first.warmUp();
+    first.remote.rejectExpensesFor = 'ghost';
+    await first.money.saveExpense(
+      write: _dinner().copyWith(
+        participants: const [SplitParticipant(personId: 'ghost')],
+      ),
+    );
+    await first.settle();
+    await first.engine.sync();
+    await first.settle();
+    expect(log.stored, hasLength(1));
+    // A queue very often drains on the resume before the phone goes back in a
+    // pocket; the notice cannot live only in memory.
+    first.dispose();
+
+    final second = _Stack(discardLog: log);
+    addTearDown(second.dispose);
+    await second.warmUp();
+
+    expect(second.syncState.discarded, hasLength(1));
+    expect(second.state.discarded, hasLength(1));
+  });
+
+  test('acknowledging it is the only thing left to do, and it sticks',
+      () async {
+    final log = _MemoryDiscardLog();
+    final stack = _Stack(discardLog: log);
+    addTearDown(stack.dispose);
+    await stack.warmUp();
+
+    stack.remote.rejectExpensesFor = 'ghost';
+    await stack.money.saveExpense(
+      write: _dinner().copyWith(
+        participants: const [SplitParticipant(personId: 'ghost')],
+      ),
+    );
+    await stack.settle();
+    await stack.engine.sync();
+    await stack.settle();
+    expect(stack.state.discarded, hasLength(1));
+
+    await stack.money.acknowledgeDiscarded();
+    await stack.settle();
+
+    expect(stack.state.discarded, isEmpty);
+    expect(log.stored, isEmpty);
+  });
+
+  test('a queue that merely stalls reports nothing lost', () async {
+    final stack = _Stack(offline: true);
+    addTearDown(stack.dispose);
+    await stack.warmUp();
+
+    await stack.money.saveExpense(write: _dinner());
+    await stack.settle();
+
+    // Offline is not loss: the write is still queued and still coming.
+    expect(stack.syncState.pending, 1);
+    expect(stack.syncState.discarded, isEmpty);
   });
 
   test('the balances on screen include work that has not been sent', () async {

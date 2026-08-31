@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:luqa/design_system/discarded_writes_notice.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
 import 'package:luqa/features/money/application/money_controller.dart';
 import 'package:luqa/features/money/domain/money_models.dart';
@@ -75,6 +76,13 @@ class MoneyScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: LuqaSpacing.xl),
                   _Headline(overview: overview),
+                  if (state.discarded.isNotEmpty) ...[
+                    const SizedBox(height: LuqaSpacing.lg),
+                    DiscardedWritesNotice(
+                      discarded: state.discarded,
+                      onAcknowledge: controller.acknowledgeDiscarded,
+                    ),
+                  ],
                   if (state.error != null) ...[
                     const SizedBox(height: LuqaSpacing.md),
                     _InlineError(

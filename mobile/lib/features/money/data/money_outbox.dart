@@ -19,6 +19,26 @@ sealed class MoneyMutation implements PendingMutation {
   @override
   final DateTime queuedAt;
 
+  /// Named the way the user would name it, because this is only ever read
+  /// when they are being told the change did not survive.
+  @override
+  String describe() => switch (this) {
+    CreateExpense(:final write) => 'the ${_amount(write.amountCents)} '
+        '${write.description.isEmpty ? 'expense' : write.description}',
+    UpdateExpense(:final write) => 'your edit to the '
+        '${write.description.isEmpty ? 'expense' : write.description}',
+    DeleteExpense(:final previous) => 'deleting ${previous.title}',
+    CreatePerson(:final person) => 'adding ${person.name}',
+    UpdatePerson(:final name) => 'your edit to ${name ?? 'a person'}',
+    DeletePerson() => 'removing a person',
+    CreateGroup(:final group) => 'the group ${group.name}',
+    UpdateGroup(:final name) => 'your edit to ${name ?? 'a group'}',
+    DeleteGroup() => 'deleting a group',
+    CreateSettlement(:final settlement) =>
+      'the ${_amount(settlement.amountCents)} payback',
+    DeleteSettlement() => 'undoing a payback',
+  };
+
   static MoneyMutation? fromJson(Map<String, Object?> json) {
     final queuedAt = DateTime.tryParse(json['queuedAt'] as String? ?? '');
     if (queuedAt == null) return null;
@@ -397,6 +417,13 @@ final class DeleteSettlement extends MoneyMutation {
     'previous': settlementToJson(previous),
   };
 }
+
+/// Cents as a bare figure. The notice this appears in has no currency to hand
+/// — it is written from a queue, not from a loaded overview — and a wrong
+/// symbol would be worse than none.
+String _amount(int cents) => cents % 100 == 0
+    ? '${cents ~/ 100}'
+    : '${cents ~/ 100}.${(cents % 100).toString().padLeft(2, '0')}';
 
 /// The money tab's durable queue.
 class SharedPreferencesMoneyOutbox

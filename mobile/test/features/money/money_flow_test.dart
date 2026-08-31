@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:luqa/app/luqa_app.dart';
+import 'package:luqa/core/sync/outbox.dart';
+import 'package:luqa/features/money/application/money_controller.dart';
+import 'package:luqa/features/money/application/money_sync_engine.dart';
 
 import '../../helpers/fake_money_repository.dart';
 import '../../helpers/pump_luqa.dart';
@@ -238,6 +243,40 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('The flat'), findsOneWidget);
     expect(find.text('Mira, Jonas'), findsOneWidget);
+  });
+
+  testWidgets('a change the server refused is reported on the tab itself', (
+    tester,
+  ) async {
+    await pumpLuqa(tester, moneyRepository: FakeMoneyRepository.sample());
+    await _openMoney(tester);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(LuqaApp)),
+    );
+    expect(find.byKey(const ValueKey('discarded-writes')), findsNothing);
+
+    // What the engine does when the server understood a write and refused it.
+    container.read(moneySyncEngineProvider.notifier).state = container
+        .read(moneySyncEngineProvider)
+        .copyWith(
+          discarded: [
+            DiscardedWrite(
+              description: 'the 42.50 Dinner',
+              reason: 'Unknown person (invalid_input).',
+              discardedAt: fixedNow,
+            ),
+          ],
+        );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('discarded-writes')), findsOneWidget);
+    expect(find.text("Couldn't save the 42.50 Dinner"), findsOneWidget);
+    expect(container.read(moneyControllerProvider).discarded, hasLength(1));
+
+    await tester.tap(find.byKey(const ValueKey('discarded-writes-dismiss')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('discarded-writes')), findsNothing);
   });
 
   testWidgets('a person ledger reflows at large text', (tester) async {

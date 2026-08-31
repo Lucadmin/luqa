@@ -10,6 +10,20 @@ sealed class TimelineMutation implements PendingMutation {
   @override
   final DateTime queuedAt;
 
+  /// Named the way the user would name it, because this is only ever read
+  /// when they are being told the change did not survive.
+  @override
+  String describe() => switch (this) {
+    CreateEntry(:final entry) => entry.description.isEmpty
+        ? 'the block you logged at ${_clock(entry.start)}'
+        : '"${entry.description}" at ${_clock(entry.start)}',
+    UpdateEntry(:final patch) => patch.description == null
+        ? 'your edit to a timeline block'
+        : 'your edit to "${patch.description}"',
+    DeleteEntry() => 'deleting a timeline block',
+    CreateCategory(:final category) => 'the category ${category.name}',
+  };
+
   static TimelineMutation? fromJson(Map<String, Object?> json) {
     final queuedAt = DateTime.tryParse(json['queuedAt'] as String? ?? '');
     if (queuedAt == null) return null;
@@ -36,6 +50,13 @@ sealed class TimelineMutation implements PendingMutation {
     };
   }
 }
+
+/// "14:05". The notice has no locale to hand — it is written from a queue,
+/// not from a built screen — so this stays to the 24-hour form the timeline
+/// itself uses.
+String _clock(DateTime value) =>
+    '${value.hour.toString().padLeft(2, '0')}:'
+    '${value.minute.toString().padLeft(2, '0')}';
 
 final class CreateEntry extends TimelineMutation {
   const CreateEntry({required this.entry, required super.queuedAt});

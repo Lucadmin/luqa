@@ -21,7 +21,7 @@ class SyncEngine extends Notifier<SyncState> with SyncQueue<TimelineMutation> {
 
   @override
   SyncState build() {
-    adoptOutbox(ref.watch(outboxProvider));
+    adoptOutbox(ref.watch(outboxProvider), ref.watch(discardLogProvider));
     return const SyncState();
   }
 

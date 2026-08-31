@@ -19,7 +19,7 @@ class GymSyncEngine extends Notifier<SyncState> with SyncQueue<GymMutation> {
 
   @override
   SyncState build() {
-    adoptOutbox(ref.watch(gymOutboxProvider));
+    adoptOutbox(ref.watch(gymOutboxProvider), ref.watch(gymDiscardLogProvider));
     return const SyncState();
   }
 

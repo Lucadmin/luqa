@@ -74,9 +74,12 @@ Future<FakeTimelineRepository> pumpLuqa(
         // Same reason for the write queues: OutboxAutoSync is mounted next to
         // HealthAutoSync, and the real stores want a platform channel.
         outboxProvider.overrideWithValue(const NullOutbox()),
+        discardLogProvider.overrideWithValue(const NullDiscardLog()),
         gymOutboxProvider.overrideWithValue(const NullOutbox()),
+        gymDiscardLogProvider.overrideWithValue(const NullDiscardLog()),
         gymCacheProvider.overrideWithValue(const NullGymCache()),
         moneyOutboxProvider.overrideWithValue(const NullOutbox()),
+        moneyDiscardLogProvider.overrideWithValue(const NullDiscardLog()),
         moneyCacheProvider.overrideWithValue(const NullMoneyCache()),
         luqaApiProvider.overrideWithValue(FakeHealthApi()),
         gymRepositoryProvider.overrideWithValue(

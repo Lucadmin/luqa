@@ -339,6 +339,25 @@ spacing and dividers instead of a card per row.
 - The single filled sheet action is `Add entry` or `Save changes`. Category
   selection and spatial timeline adjustment use progressive disclosure.
 
+### Abandoned writes
+
+Luqa answers every write from the device and sends it later, so there is one
+case the interface has to be able to admit: the server understood a change and
+refused it, the queue gave up, and the user's work is gone.
+
+- It is reported in place, on the surface that owns the queue, not in a
+  snackbar. A snackbar is gone in four seconds whether or not anybody read it,
+  and this is the last trace of work somebody did.
+- It names what was lost in the user's own terms — "the €42.50 dinner",
+  "Tuesday's workout" — because the only useful response is entering it again.
+- It offers no retry. The server understood the request and said no; a retry
+  button would be a lie.
+- It is recorded durably. A queue often drains on the resume just before the
+  phone goes back in a pocket, so a notice that lived only in memory would be
+  the second time that change vanished without anybody being told.
+- It stays until the user dismisses it. A stuck queue clears itself when the
+  network returns; a lost write never stops being lost.
+
 ### Money hierarchy
 
 - The money tab has one focal object: the net position, at display size, above

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/core/network/network_failure.dart';
+import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/today/application/sync_engine.dart';
 import 'package:luqa/features/today/data/today_providers.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
@@ -70,6 +71,7 @@ class TimelineState {
     this.isRefreshing = false,
     this.isOffline = false,
     this.pendingWrites = 0,
+    this.discarded = const [],
     this.error,
   });
 
@@ -112,6 +114,10 @@ class TimelineState {
   /// Changes made here that the server has not acknowledged yet. Nothing waits
   /// on them; the count exists so the header can say so quietly.
   final int pendingWrites;
+
+  /// Changes the server refused outright, which this device has given up on.
+  /// The user has to be told; there is nothing to retry.
+  final List<DiscardedWrite> discarded;
 
   final String? error;
 
@@ -188,6 +194,7 @@ class TimelineState {
     bool? isRefreshing,
     bool? isOffline,
     int? pendingWrites,
+    List<DiscardedWrite>? discarded,
     String? error,
     bool clearError = false,
   }) => TimelineState(
@@ -202,6 +209,7 @@ class TimelineState {
     isRefreshing: isRefreshing ?? this.isRefreshing,
     isOffline: isOffline ?? this.isOffline,
     pendingWrites: pendingWrites ?? this.pendingWrites,
+    discarded: discarded ?? this.discarded,
     error: clearError ? null : error ?? this.error,
   );
 }
@@ -226,8 +234,12 @@ class TimelineController extends Notifier<TimelineState> {
     // pull them down and drop the local overlay.
     ref.listen(syncEngineProvider, (previous, next) {
       if (!ref.mounted) return;
-      if (next.pending != state.pendingWrites) {
-        state = state.copyWith(pendingWrites: next.pending);
+      if (next.pending != state.pendingWrites ||
+          next.discarded != state.discarded) {
+        state = state.copyWith(
+          pendingWrites: next.pending,
+          discarded: next.discarded,
+        );
       }
       if (previous != null && next.rounds > previous.rounds) {
         unawaited(_load(state.windowFrom, state.windowTo));
@@ -325,6 +337,10 @@ class TimelineController extends Notifier<TimelineState> {
       _load(target, addDays(target, TimelineState.windowDays));
     });
   }
+
+  /// The user has read the notice about a change that could not be saved.
+  Future<void> acknowledgeDiscarded() =>
+      ref.read(syncEngineProvider.notifier).acknowledgeDiscarded();
 
   Future<void> refresh() async {
     state = state.copyWith(

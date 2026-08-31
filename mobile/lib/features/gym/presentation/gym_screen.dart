@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:luqa/design_system/discarded_writes_notice.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
 import 'package:luqa/features/gym/application/gym_overview_controller.dart';
 import 'package:luqa/features/gym/domain/gym_models.dart';
@@ -104,6 +105,13 @@ class GymScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  if (state.discarded.isNotEmpty) ...[
+                    const SizedBox(height: LuqaSpacing.xl),
+                    DiscardedWritesNotice(
+                      discarded: state.discarded,
+                      onAcknowledge: controller.acknowledgeDiscarded,
+                    ),
+                  ],
                   const SizedBox(height: LuqaSpacing.xxl),
                   if (current != null)
                     _CurrentWorkout(

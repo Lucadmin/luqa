@@ -32,6 +32,15 @@ final gymOutboxProvider = Provider<Outbox<GymMutation>>((ref) {
   return SharedPreferencesGymOutbox(namespace: userId);
 });
 
+/// Where an abandoned write is recorded so the user can still be told about
+/// it — including after a relaunch, since a queue often drains on the resume
+/// that precedes the phone going back in a pocket.
+final gymDiscardLogProvider = Provider<DiscardLog>((ref) {
+  final userId = ref.watch(_namespaceProvider);
+  if (userId == null) return const NullDiscardLog();
+  return SharedPreferencesDiscardLog(key: 'gym', namespace: userId);
+});
+
 /// What screens use. Writes land here and return immediately.
 final gymRepositoryProvider = Provider<GymRepository>((ref) {
   return LocalFirstGymRepository(

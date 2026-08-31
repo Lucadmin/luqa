@@ -12,6 +12,7 @@ class SyncState {
     this.isSyncing = false,
     this.error,
     this.rounds = 0,
+    this.discarded = const [],
   });
 
   /// Writes made on this device that the server has not acknowledged.
@@ -27,7 +28,17 @@ class SyncState {
   /// canonical rows back down once their local copies have landed.
   final int rounds;
 
+  /// Writes this device gave up on, newest first.
+  ///
+  /// Deliberately not folded into [error]: that describes a queue that is
+  /// stuck right now and clears itself the moment it unsticks, which is
+  /// exactly the wrong lifetime for "something you entered is gone". These
+  /// stay until the user acknowledges them.
+  final List<DiscardedWrite> discarded;
+
   bool get hasPendingWork => pending > 0;
+
+  bool get hasDiscardedWork => discarded.isNotEmpty;
 
   SyncState copyWith({
     int? pending,
@@ -35,11 +46,13 @@ class SyncState {
     String? error,
     bool clearError = false,
     int? rounds,
+    List<DiscardedWrite>? discarded,
   }) => SyncState(
     pending: pending ?? this.pending,
     isSyncing: isSyncing ?? this.isSyncing,
     error: clearError ? null : error ?? this.error,
     rounds: rounds ?? this.rounds,
+    discarded: discarded ?? this.discarded,
   );
 }
 
@@ -64,7 +77,9 @@ mixin SyncQueue<T extends PendingMutation> on Notifier<SyncState>
   ];
 
   Outbox<T>? _outbox;
+  DiscardLog? _discardLog;
   List<T> _queue = const [];
+  List<DiscardedWrite> _discarded = const [];
   Future<void>? _ready;
   Future<void>? _draining;
   Timer? _retry;
@@ -72,10 +87,12 @@ mixin SyncQueue<T extends PendingMutation> on Notifier<SyncState>
 
   /// Called from the subclass's `build`. Rebuilding — which is what signing in
   /// or out does — starts again against the new user's queue.
-  void adoptOutbox(Outbox<T> outbox) {
+  void adoptOutbox(Outbox<T> outbox, DiscardLog discardLog) {
     _retry?.cancel();
     _outbox = outbox;
+    _discardLog = discardLog;
     _queue = const [];
+    _discarded = const [];
     _failures = 0;
     _ready = _restore();
     ref.onDispose(() => _retry?.cancel());
@@ -143,6 +160,7 @@ mixin SyncQueue<T extends PendingMutation> on Notifier<SyncState>
     final outbox = _outbox;
     if (outbox == null) return;
     List<T> stored;
+    List<DiscardedWrite> abandoned;
     try {
       stored = await outbox.read();
     } on Object {
@@ -150,10 +168,20 @@ mixin SyncQueue<T extends PendingMutation> on Notifier<SyncState>
       // still works, it just has nothing older to send.
       stored = const [];
     }
+    try {
+      abandoned = await _discardLog?.read() ?? const [];
+    } on Object {
+      abandoned = const [];
+    }
     if (!ref.mounted) return;
     _queue = stored;
+    _discarded = abandoned;
+    // A write abandoned on the drain that followed the last resume has to
+    // still be reportable on the next launch — the phone can go back in a
+    // pocket the moment the queue empties.
+    if (stored.isEmpty && abandoned.isEmpty) return;
+    state = state.copyWith(pending: _queue.length, discarded: _discarded);
     if (stored.isEmpty) return;
-    state = state.copyWith(pending: _queue.length);
     unawaited(sync());
   }
 
@@ -183,12 +211,16 @@ mixin SyncQueue<T extends PendingMutation> on Notifier<SyncState>
             // Repeating this will fail the same way for ever. Dropping it lets
             // the writes behind it through; anything that depended on it fails
             // next and is dropped in turn, which is how the queue heals.
+            //
+            // The user's change is gone, though, so it is recorded rather than
+            // merely logged. Putting it in `error` here would be worse than
+            // saying nothing: the drain clears that field as soon as the queue
+            // empties, which is moments later.
             reachedServer = true;
             await _drop(head);
             if (!ref.mounted) return;
-            state = state.copyWith(
-              error: describeNetworkFailure(error, whileDoing: 'syncing'),
-            );
+            await _recordDiscard(head, error);
+            if (!ref.mounted) return;
             continue;
           }
           _scheduleRetry(error);
@@ -205,6 +237,26 @@ mixin SyncQueue<T extends PendingMutation> on Notifier<SyncState>
         );
       }
     }
+  }
+
+  /// Keeps an abandoned write where the user can be told about it.
+  Future<void> _recordDiscard(T mutation, Object error) async {
+    final entry = DiscardedWrite(
+      description: mutation.describe(),
+      reason: describeNetworkFailure(error, whileDoing: 'saving it'),
+      discardedAt: DateTime.now(),
+    );
+    _discarded = [entry, ..._discarded];
+    if (ref.mounted) state = state.copyWith(discarded: _discarded);
+    await _discardLog?.write(_discarded);
+  }
+
+  /// The user has seen the notice. Forgetting it is the only thing left to do
+  /// — the write itself is long gone.
+  Future<void> acknowledgeDiscarded() async {
+    _discarded = const [];
+    if (ref.mounted) state = state.copyWith(discarded: _discarded);
+    await _discardLog?.write(const []);
   }
 
   Future<void> _drop(T mutation) async {
