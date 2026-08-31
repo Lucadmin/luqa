@@ -8,6 +8,7 @@ import 'package:luqa_api/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**id** | **Optional<String?>** | Preferred identity for a category minted offline. Honoured only when free; the response is authoritative, since a category with the same name may already exist under a different id. | [optional]
 **name** | **String** |  |
 **color** | **Optional<String?>** |  | [optional]
 

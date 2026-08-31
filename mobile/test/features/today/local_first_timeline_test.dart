@@ -1,0 +1,197 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:luqa/features/auth/application/auth_controller.dart';
+import 'package:luqa/features/today/application/sync_engine.dart';
+import 'package:luqa/features/today/application/timeline_controller.dart';
+import 'package:luqa/features/today/data/remote_today_repository.dart';
+import 'package:luqa/features/today/data/today_providers.dart';
+import 'package:luqa/features/today/data/today_repository.dart';
+import 'package:luqa/features/today/domain/category.dart';
+import 'package:luqa/features/today/domain/time_entry.dart';
+
+import '../../helpers/pump_luqa.dart';
+import 'sync_engine_harness.dart';
+
+/// The whole stack, minus the widget tree: a real controller over a real
+/// local-first repository over a real sync engine, with only the network faked.
+class _Stack {
+  _Stack({bool offline = false, List<TimeEntry> seed = const []}) {
+    // Seeded before the controller exists, so its first load already sees the
+    // rows and no test has to race that load.
+    api.entries.addAll(seed);
+    api.offline = offline;
+    final remote = RemoteTodayRepository(client: api, cache: MemoryCache());
+    container = ProviderContainer(
+      overrides: [
+        remoteTodayRepositoryProvider.overrideWithValue(remote),
+        outboxProvider.overrideWithValue(outbox),
+        currentTimeProvider.overrideWithValue(fixedNow),
+        authControllerProvider.overrideWith(FixedAuthController.new),
+      ],
+    );
+    // autoDispose: without a listener the controller is thrown away between
+    // reads and never finishes its first load.
+    container.listen(timelineControllerProvider, (_, _) {});
+  }
+
+  final FakeApi api = FakeApi();
+  final MemoryOutbox outbox = MemoryOutbox();
+  late final ProviderContainer container;
+
+  TimelineController get controller =>
+      container.read(timelineControllerProvider.notifier);
+
+  TimelineState get state => container.read(timelineControllerProvider);
+
+  Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+  void dispose() => container.dispose();
+}
+
+final _writing = TimeEntry(
+  id: 'server-1',
+  description: 'Writing',
+  categoryId: null,
+  start: DateTime(2026, 8, 27, 9),
+  end: DateTime(2026, 8, 27, 10),
+);
+
+void main() {
+  test(
+    'a block drawn with no network is on the timeline immediately',
+    () async {
+      final stack = _Stack(offline: true);
+      addTearDown(stack.dispose);
+      await stack.settle();
+
+      stack.controller.beginDraft(
+        DateTime(2026, 8, 27, 14),
+        DateTime(2026, 8, 27, 15),
+      );
+      stack.controller.describeDraft('Reading');
+      final saved = await stack.controller.commitDraft();
+
+      expect(saved, isTrue);
+      expect(stack.state.draft, isNull, reason: 'the composer should close');
+      expect(stack.state.error, isNull);
+      expect(
+        stack.state.entries.map((entry) => entry.description),
+        contains('Reading'),
+      );
+      expect(stack.state.pendingWrites, 1);
+    },
+  );
+
+  test('a block drawn offline is still there after a reload', () async {
+    final stack = _Stack(offline: true);
+    addTearDown(stack.dispose);
+    await stack.settle();
+
+    stack.controller.beginDraft(
+      DateTime(2026, 8, 27, 14),
+      DateTime(2026, 8, 27, 15),
+    );
+    stack.controller.describeDraft('Reading');
+    await stack.controller.commitDraft();
+
+    await stack.controller.refresh();
+
+    expect(
+      stack.state.entries.map((entry) => entry.description),
+      contains('Reading'),
+    );
+  });
+
+  test('the block reaches the server under the id it was given', () async {
+    final stack = _Stack();
+    addTearDown(stack.dispose);
+    await stack.settle();
+
+    stack.controller.beginDraft(
+      DateTime(2026, 8, 27, 14),
+      DateTime(2026, 8, 27, 15),
+    );
+    stack.controller.describeDraft('Reading');
+    await stack.controller.commitDraft();
+    await stack.container.read(syncEngineProvider.notifier).sync();
+
+    final local = stack.state.entries.firstWhere(
+      (entry) => entry.description == 'Reading',
+    );
+    expect(stack.api.created.single.id, local.id);
+    expect(stack.state.pendingWrites, 0);
+  });
+
+  test('a timer starts without waiting for the server', () async {
+    final stack = _Stack(offline: true);
+    addTearDown(stack.dispose);
+    await stack.settle();
+
+    final started = await stack.controller.startTimer(description: 'Thesis');
+
+    expect(started, isTrue);
+    expect(stack.state.runningEntry?.description, 'Thesis');
+    expect(stack.state.error, isNull);
+  });
+
+  test(
+    'a category invented offline can be used on a block right away',
+    () async {
+      final stack = _Stack(offline: true);
+      addTearDown(stack.dispose);
+      await stack.settle();
+
+      final category = await stack.controller.addCategory('Admin');
+
+      expect(category, isNotNull);
+      expect(stack.state.categoryById(category!.id)?.name, 'Admin');
+    },
+  );
+
+  test('an edit made offline survives being reloaded', () async {
+    final stack = _Stack(seed: [_writing]);
+    addTearDown(stack.dispose);
+    await stack.settle();
+    expect(stack.state.entries, hasLength(1));
+
+    stack.api.offline = true;
+    await stack.controller.editEntry(
+      'server-1',
+      const EntryPatch(description: 'Editing'),
+    );
+    await stack.controller.refresh();
+
+    expect(stack.state.entries.single.description, 'Editing');
+    expect(stack.state.entries.single.pendingSync, isTrue);
+  });
+
+  test('once the edit lands, the server copy is what is shown', () async {
+    final stack = _Stack(seed: [_writing]);
+    addTearDown(stack.dispose);
+    await stack.settle();
+
+    await stack.controller.editEntry(
+      'server-1',
+      const EntryPatch(description: 'Editing'),
+    );
+    await stack.controller.refresh();
+
+    expect(stack.state.entries.single.description, 'Editing');
+    expect(stack.state.entries.single.pendingSync, isFalse);
+    expect(stack.state.pendingWrites, 0);
+  });
+
+  test('categories offered to the picker include the unsent one', () async {
+    final stack = _Stack(offline: true);
+    addTearDown(stack.dispose);
+    await stack.settle();
+
+    await stack.controller.addCategory('Admin');
+    await stack.controller.refresh();
+
+    expect(
+      stack.state.categories.map((Category value) => value.name),
+      contains('Admin'),
+    );
+  });
+}

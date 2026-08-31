@@ -184,8 +184,7 @@ api.SleepSessionImportRecordingMethodEnum _recordingMethod(
     api.SleepSessionImportRecordingMethodEnum.ACTIVELY_RECORDED,
   RecordingMethod.manual =>
     api.SleepSessionImportRecordingMethodEnum.MANUAL_ENTRY,
-  RecordingMethod.unknown =>
-    api.SleepSessionImportRecordingMethodEnum.UNKNOWN,
+  RecordingMethod.unknown => api.SleepSessionImportRecordingMethodEnum.UNKNOWN,
 };
 
 /// Rebuilds whole sleep sessions from the flat point list the plugin returns.
@@ -227,7 +226,9 @@ List<api.SleepSessionImport> buildSleepSessions(List<HealthDataPoint> points) {
               .reduce((a, b) => a.isBefore(b) ? a : b);
     final end = own.isEmpty
         ? session.dateTo
-        : own.map((point) => point.dateTo).reduce((a, b) => a.isAfter(b) ? a : b);
+        : own
+              .map((point) => point.dateTo)
+              .reduce((a, b) => a.isAfter(b) ? a : b);
     final windowStart = session.type == HealthDataType.SLEEP_SESSION
         ? session.dateFrom
         : start;

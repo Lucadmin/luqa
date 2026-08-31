@@ -56,7 +56,7 @@ class TimelineDayPane extends StatelessWidget {
 
     final laidOut = layOutEntries(entries, dayStart, now);
     final sleepBands = layOutSleep(sleep, dayStart);
-    final gaps = computeGaps(entries, dayStart, now, isToday: isToday);
+    final gaps = computeGaps(entries, sleep, dayStart, now, isToday: isToday);
 
     return SizedBox(
       height: metrics.dayHeight,

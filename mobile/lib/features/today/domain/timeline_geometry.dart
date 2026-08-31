@@ -104,8 +104,14 @@ class TimelineGap {
 }
 
 class _Raw {
-  _Raw(this.entry, this.startMin, this.endMin, this.running, this.clippedTop,
-      this.clippedBottom);
+  _Raw(
+    this.entry,
+    this.startMin,
+    this.endMin,
+    this.running,
+    this.clippedTop,
+    this.clippedBottom,
+  );
 
   final TimeEntry entry;
   final double startMin;
@@ -223,26 +229,39 @@ List<LaidOutSleep> layOutSleep(List<SleepEntry> sessions, DateTime dayStart) {
   return result;
 }
 
-/// Untracked stretches between logged activity, plus the trailing stretch up
-/// to now on the current day. Slivers shorter than one snap step are ignored.
+/// Stretches of the day nothing accounts for, plus the trailing stretch up to
+/// now on the current day. Slivers shorter than one snap step are ignored.
+///
+/// Sleep counts as accounted-for even though it is not tracked time: those
+/// hours are spoken for, so a gap must not run through them, and filling the
+/// gap beside a night should stop at the moment it ended.
 List<TimelineGap> computeGaps(
   List<TimeEntry> entries,
+  List<SleepEntry> sleep,
   DateTime dayStart,
   DateTime now, {
   required bool isToday,
 }) {
-  final raw = _toRaw(entries, dayStart, now);
-  if (raw.isEmpty) return const [];
+  final spans = <TimelineGap>[
+    for (final item in _toRaw(entries, dayStart, now))
+      TimelineGap(startMin: item.startMin, endMin: item.endMin),
+    for (final band in layOutSleep(sleep, dayStart))
+      TimelineGap(startMin: band.startMin, endMin: band.endMin),
+  ]..sort((left, right) => left.startMin.compareTo(right.startMin));
+  if (spans.isEmpty) return const [];
 
   final nowMin = isToday
-      ? math.min(now.difference(dayStart).inSeconds / 60, minutesPerDay.toDouble())
+      ? math.min(
+          now.difference(dayStart).inSeconds / 60,
+          minutesPerDay.toDouble(),
+        )
       : null;
 
   // Merge everything covered, then read the holes off the merged spans.
   final merged = <TimelineGap>[];
-  var spanStart = raw.first.startMin;
-  var spanEnd = raw.first.endMin;
-  for (final item in raw.skip(1)) {
+  var spanStart = spans.first.startMin;
+  var spanEnd = spans.first.endMin;
+  for (final item in spans.skip(1)) {
     if (item.startMin <= spanEnd) {
       spanEnd = math.max(spanEnd, item.endMin);
     } else {

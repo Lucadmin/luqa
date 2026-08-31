@@ -13,11 +13,21 @@ part of openapi.api;
 class CreateTimeEntryRequest {
   /// Returns a new [CreateTimeEntryRequest] instance.
   CreateTimeEntryRequest({
+    this.id = const Optional.absent(),
     this.description = const Optional.present(''),
     this.categoryId = const Optional.absent(),
     required this.startTime,
     this.endTime = const Optional.absent(),
   });
+
+  /// Client-minted identity for the row, so a device can name a block before the server has seen it. Supplying it makes the create idempotent: repeating the request returns the row it already made.
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<String?> id;
 
   final Optional<String?> description;
 
@@ -43,6 +53,7 @@ class CreateTimeEntryRequest {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is CreateTimeEntryRequest &&
+          other.id == id &&
           other.description == description &&
           other.categoryId == categoryId &&
           other.startTime == startTime &&
@@ -51,6 +62,7 @@ class CreateTimeEntryRequest {
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
+      (id == null ? 0 : id!.hashCode) +
       (description.hashCode) +
       (categoryId == null ? 0 : categoryId!.hashCode) +
       (startTime.hashCode) +
@@ -58,10 +70,14 @@ class CreateTimeEntryRequest {
 
   @override
   String toString() =>
-      'CreateTimeEntryRequest[description=$description, categoryId=$categoryId, startTime=$startTime, endTime=$endTime]';
+      'CreateTimeEntryRequest[id=$id, description=$description, categoryId=$categoryId, startTime=$startTime, endTime=$endTime]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
+    if (this.id.isPresent) {
+      final value = this.id.value;
+      json[r'id'] = value;
+    }
     if (this.description.isPresent) {
       final value = this.description.value;
       json[r'description'] = value;
@@ -81,12 +97,14 @@ class CreateTimeEntryRequest {
   /// Clones this instance of [CreateTimeEntryRequest] and returns a new one where some of the
   /// properties have changed.
   CreateTimeEntryRequest copyWith({
+    Optional<String?>? id,
     Optional<String?>? description,
     Optional<String?>? categoryId,
     DateTime? startTime,
     Optional<DateTime?>? endTime,
   }) =>
       CreateTimeEntryRequest(
+        id: id ?? this.id,
         description: description ?? this.description,
         categoryId: categoryId ?? this.categoryId,
         startTime: startTime ?? this.startTime,
@@ -112,6 +130,9 @@ class CreateTimeEntryRequest {
       }());
 
       return CreateTimeEntryRequest(
+        id: json.containsKey(r'id')
+            ? Optional.present(mapValueOfType<String>(json, r'id'))
+            : const Optional.absent(),
         description: json.containsKey(r'description')
             ? Optional.present(mapValueOfType<String>(json, r'description'))
             : const Optional.absent(),

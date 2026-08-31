@@ -26,12 +26,16 @@ class SharedPreferencesTimelineCache implements TimelineCache {
     required String namespace,
     SharedPreferencesAsync? preferences,
   }) : _namespace = base64Url.encode(utf8.encode(namespace)),
-       _preferences = preferences ?? SharedPreferencesAsync();
+       _injected = preferences;
 
   static const _version = 'v2';
 
   final String _namespace;
-  final SharedPreferencesAsync _preferences;
+  final SharedPreferencesAsync? _injected;
+
+  // Deferred, so building the cache does not require the platform channel.
+  late final SharedPreferencesAsync _preferences =
+      _injected ?? SharedPreferencesAsync();
 
   String get _categoriesKey => 'luqa.timeline.$_version.$_namespace.categories';
   String get _windowKey => 'luqa.timeline.$_version.$_namespace.window';
@@ -51,8 +55,11 @@ class SharedPreferencesTimelineCache implements TimelineCache {
   }
 
   @override
-  Future<void> writeCategories(List<Category> categories) => _preferences
-      .setString(_categoriesKey, jsonEncode(categories.map(_categoryToJson).toList()));
+  Future<void> writeCategories(List<Category> categories) =>
+      _preferences.setString(
+        _categoriesKey,
+        jsonEncode(categories.map(_categoryToJson).toList()),
+      );
 
   @override
   Future<TimelineWindow?> readWindow(DateTime from, DateTime to) async {
@@ -118,23 +125,29 @@ class RemoteTodayRepository implements TodayRepository {
 
   @override
   Future<TimelineWindow> loadWindow(DateTime from, DateTime to) async {
-    // Sleep is attributed to the day it wakes up in, so a session that began
-    // the evening before still belongs to this window. Reach a day further
-    // back for entries so a block crossing the boundary arrives whole.
-    final results = await Future.wait<Object>([
-      client.listTimeEntries(from.subtract(const Duration(days: 1)), to),
-      client.listSleepEntries(from, to),
-    ]);
+    // Reach a day further back for entries so a block that crosses the
+    // window's opening midnight arrives whole.
     final entries =
-        (results[0] as List<api.TimeEntry>)
-            .map(_entryFromApi)
-            .toList(growable: false)
+        (await client.listTimeEntries(
+            from.subtract(const Duration(days: 1)),
+            to,
+          )).map(_entryFromApi).toList(growable: false)
           ..sort((left, right) => left.start.compareTo(right.start));
-    final sleep =
-        (results[1] as List<api.SleepEntry>)
-            .map(_sleepFromApi)
-            .toList(growable: false)
-          ..sort((left, right) => left.start.compareTo(right.start));
+
+    // Sleep is context, not the point of the screen. A server that cannot
+    // serve it — an older deployment, a transient error — must not take the
+    // tracked day down with it.
+    final sleep = <SleepEntry>[];
+    try {
+      // Sleep is attributed to the day it wakes up in, so a session that began
+      // the evening before still belongs to this window.
+      sleep.addAll(
+        (await client.listSleepEntries(from, to)).map(_sleepFromApi),
+      );
+      sleep.sort((left, right) => left.start.compareTo(right.start));
+    } on Object {
+      // Leave the day without sleep bands rather than without a timeline.
+    }
 
     final window = TimelineWindow(
       from: from,
@@ -149,6 +162,7 @@ class RemoteTodayRepository implements TodayRepository {
   @override
   Future<TimeEntry> addEntry(NewTimeEntry draft) async => _entryFromApi(
     await client.createTimeEntry(
+      id: draft.id,
       description: draft.description,
       categoryId: draft.categoryId,
       start: draft.start,
@@ -157,7 +171,11 @@ class RemoteTodayRepository implements TodayRepository {
   );
 
   @override
-  Future<TimeEntry> updateEntry(String id, EntryPatch patch) async {
+  Future<TimeEntry> updateEntry(TimeEntry entry, EntryPatch patch) =>
+      updateEntryById(entry.id, patch);
+
+  /// The queue only carries the id of an edited row, not the row itself.
+  Future<TimeEntry> updateEntryById(String id, EntryPatch patch) async {
     return _entryFromApi(
       await client.updateTimeEntry(
         id,
@@ -187,6 +205,14 @@ class RemoteTodayRepository implements TodayRepository {
   @override
   Future<Category> addCategory(String name) async =>
       _categoryFromApi(await client.createCategory(name));
+
+  /// Creates a category under an id this device already handed out. The server
+  /// may answer with a different one when the name is already taken, so the
+  /// returned category is the authority.
+  Future<Category> addCategoryWithId(Category category) async =>
+      _categoryFromApi(
+        await client.createCategory(category.name, id: category.id),
+      );
 }
 
 Category _categoryFromApi(api.Category value) => Category(
@@ -212,10 +238,30 @@ SleepEntry _sleepFromApi(api.SleepEntry value) => SleepEntry(
   end: value.endTime.toLocal(),
   sleepMinutes: value.sleepMinutes,
   awakeMinutes: value.awakeMinutes,
+  awakeInBedMinutes: value.awakeInBedMinutes,
+  outOfBedMinutes: value.outOfBedMinutes,
   lightMinutes: value.lightMinutes,
   deepMinutes: value.deepMinutes,
   remMinutes: value.remMinutes,
+  unknownMinutes: value.unknownMinutes,
+  inBedMinutes: value.inBedMinutes,
+  efficiencyPercent: value.efficiencyPercent?.toDouble(),
+  latencyMinutes: value.latencyMinutes,
+  wasoMinutes: value.wasoMinutes,
+  awakeningCount: value.awakeningCount,
+  midpoint: value.midpoint?.toLocal(),
   isNap: value.isNap,
+  recordingMethod: value.recordingMethod,
+  deviceModel: value.deviceModel,
+  stages: value.stages
+      .map(
+        (stage) => SleepStage(
+          stage: stage.stage,
+          start: stage.startTime.toLocal(),
+          end: stage.endTime.toLocal(),
+        ),
+      )
+      .toList(growable: false),
 );
 
 int _colorValue(String value) {
@@ -267,10 +313,29 @@ Map<String, Object?> _sleepToJson(SleepEntry value) => {
   'end': value.end.toUtc().toIso8601String(),
   'sleepMinutes': value.sleepMinutes,
   'awakeMinutes': value.awakeMinutes,
+  'awakeInBedMinutes': value.awakeInBedMinutes,
+  'outOfBedMinutes': value.outOfBedMinutes,
   'lightMinutes': value.lightMinutes,
   'deepMinutes': value.deepMinutes,
   'remMinutes': value.remMinutes,
+  'unknownMinutes': value.unknownMinutes,
+  'inBedMinutes': value.inBedMinutes,
+  'efficiencyPercent': value.efficiencyPercent,
+  'latencyMinutes': value.latencyMinutes,
+  'wasoMinutes': value.wasoMinutes,
+  'awakeningCount': value.awakeningCount,
+  'midpoint': value.midpoint?.toUtc().toIso8601String(),
   'isNap': value.isNap,
+  'recordingMethod': value.recordingMethod,
+  'deviceModel': value.deviceModel,
+  'stages': [
+    for (final stage in value.stages)
+      {
+        'stage': stage.stage,
+        'start': stage.start.toUtc().toIso8601String(),
+        'end': stage.end.toUtc().toIso8601String(),
+      },
+  ],
 };
 
 SleepEntry _sleepFromJson(Map<String, Object?> value) => SleepEntry(
@@ -282,8 +347,31 @@ SleepEntry _sleepFromJson(Map<String, Object?> value) => SleepEntry(
   end: DateTime.parse(value['end']! as String).toLocal(),
   sleepMinutes: value['sleepMinutes'] as int?,
   awakeMinutes: value['awakeMinutes'] as int?,
+  awakeInBedMinutes: value['awakeInBedMinutes'] as int?,
+  outOfBedMinutes: value['outOfBedMinutes'] as int?,
   lightMinutes: value['lightMinutes'] as int?,
   deepMinutes: value['deepMinutes'] as int?,
   remMinutes: value['remMinutes'] as int?,
+  unknownMinutes: value['unknownMinutes'] as int?,
+  inBedMinutes: value['inBedMinutes'] as int?,
+  efficiencyPercent: (value['efficiencyPercent'] as num?)?.toDouble(),
+  latencyMinutes: value['latencyMinutes'] as int?,
+  wasoMinutes: value['wasoMinutes'] as int?,
+  awakeningCount: value['awakeningCount'] as int?,
+  midpoint: value['midpoint'] == null
+      ? null
+      : DateTime.parse(value['midpoint']! as String).toLocal(),
   isNap: value['isNap']! as bool,
+  recordingMethod: value['recordingMethod'] as String?,
+  deviceModel: value['deviceModel'] as String?,
+  stages: [
+    for (final stage in (value['stages'] as List<Object?>? ?? const []))
+      SleepStage(
+        stage: (stage! as Map<String, Object?>)['stage']! as String,
+        start: DateTime.parse(
+          (stage as Map<String, Object?>)['start']! as String,
+        ).toLocal(),
+        end: DateTime.parse(stage['end']! as String).toLocal(),
+      ),
+  ],
 );

@@ -19,9 +19,7 @@ setUpContainer({FakeHealthReader? reader, InMemoryHealthSyncStore? store}) {
         store ?? InMemoryHealthSyncStore(),
       ),
       luqaApiProvider.overrideWithValue(luqa),
-      secureCredentialStoreProvider.overrideWithValue(
-        _UnusedCredentialStore(),
-      ),
+      secureCredentialStoreProvider.overrideWithValue(_UnusedCredentialStore()),
     ],
   );
   addTearDown(container.dispose);
@@ -35,16 +33,19 @@ class _UnusedCredentialStore implements SecureCredentialStore {
 
 void main() {
   group('autoSync', () {
-    test('syncs on the first run, when nothing has been attempted yet', () async {
-      final harness = setUpContainer();
+    test(
+      'syncs on the first run, when nothing has been attempted yet',
+      () async {
+        final harness = setUpContainer();
 
-      await harness.container
-          .read(healthSyncControllerProvider.notifier)
-          .autoSync();
+        await harness.container
+            .read(healthSyncControllerProvider.notifier)
+            .autoSync();
 
-      expect(harness.reader.reads, 1);
-      expect(harness.api.pushes, 1);
-    });
+        expect(harness.reader.reads, 1);
+        expect(harness.api.pushes, 1);
+      },
+    );
 
     test('does not sync again inside the throttle interval', () async {
       final harness = setUpContainer();
@@ -77,25 +78,28 @@ void main() {
       expect(harness.api.pushes, 2);
     });
 
-    test('backs off after a failure instead of retrying every resume', () async {
-      final store = InMemoryHealthSyncStore();
-      final harness = setUpContainer(store: store);
-      harness.api.pushError = api.ApiException(500, 'boom');
-      final controller = harness.container.read(
-        healthSyncControllerProvider.notifier,
-      );
+    test(
+      'backs off after a failure instead of retrying every resume',
+      () async {
+        final store = InMemoryHealthSyncStore();
+        final harness = setUpContainer(store: store);
+        harness.api.pushError = api.ApiException(500, 'boom');
+        final controller = harness.container.read(
+          healthSyncControllerProvider.notifier,
+        );
 
-      await controller.autoSync();
-      await controller.autoSync();
+        await controller.autoSync();
+        await controller.autoSync();
 
-      expect(harness.api.pushes, 1);
-      expect(await store.lastAttemptedAt(), isNotNull);
-      expect(
-        await store.lastSyncedAt(),
-        isNull,
-        reason: 'a failed sync must not look successful',
-      );
-    });
+        expect(harness.api.pushes, 1);
+        expect(await store.lastAttemptedAt(), isNotNull);
+        expect(
+          await store.lastSyncedAt(),
+          isNull,
+          reason: 'a failed sync must not look successful',
+        );
+      },
+    );
 
     test('stays silent about automatic failures', () async {
       final harness = setUpContainer();
@@ -127,9 +131,7 @@ void main() {
     });
 
     test('does nothing when permission has not been granted', () async {
-      final harness = setUpContainer(
-        reader: FakeHealthReader(granted: false),
-      );
+      final harness = setUpContainer(reader: FakeHealthReader(granted: false));
 
       await harness.container
           .read(healthSyncControllerProvider.notifier)
@@ -140,9 +142,7 @@ void main() {
     });
 
     test('never prompts for permission on its own', () async {
-      final harness = setUpContainer(
-        reader: FakeHealthReader(granted: false),
-      );
+      final harness = setUpContainer(reader: FakeHealthReader(granted: false));
 
       await harness.container
           .read(healthSyncControllerProvider.notifier)
@@ -153,9 +153,7 @@ void main() {
 
     test('does nothing when Health Connect is unavailable', () async {
       final harness = setUpContainer(
-        reader: FakeHealthReader(
-          available: HealthAvailability.notInstalled,
-        ),
+        reader: FakeHealthReader(available: HealthAvailability.notInstalled),
       );
 
       await harness.container
@@ -174,10 +172,7 @@ void main() {
 
       final sleep = harness.api.requests.single.sleep.value!;
       expect(sleep.window.value, isNotNull);
-      expect(
-        sleep.window.value!.to.isAfter(sleep.window.value!.from),
-        isTrue,
-      );
+      expect(sleep.window.value!.to.isAfter(sleep.window.value!.from), isTrue);
     });
   });
 }

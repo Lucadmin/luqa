@@ -64,7 +64,9 @@ abstract interface class TodayRepository {
   /// A null `end` starts a running timer and stops whichever one was running.
   Future<TimeEntry> addEntry(NewTimeEntry draft);
 
-  Future<TimeEntry> updateEntry(String id, EntryPatch patch);
+  /// Takes the whole entry rather than its id so a local-first implementation
+  /// can answer with the patched row without going looking for it.
+  Future<TimeEntry> updateEntry(TimeEntry entry, EntryPatch patch);
 
   Future<void> deleteEntry(String id);
 

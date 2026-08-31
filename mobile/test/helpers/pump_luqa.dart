@@ -6,9 +6,11 @@ import 'package:luqa/app/router.dart';
 import 'package:luqa/app/theme_mode_controller.dart';
 import 'package:luqa/features/auth/application/auth_controller.dart';
 import 'package:luqa/features/auth/domain/auth_user.dart';
-import 'package:luqa/features/today/application/timeline_controller.dart';
 import 'package:luqa/features/health/application/health_sync_controller.dart';
 import 'package:luqa/features/health/data/health_connect_reader.dart';
+import 'package:luqa/features/today/application/timeline_controller.dart';
+import 'package:luqa/features/today/data/outbox.dart';
+import 'package:luqa/features/today/data/today_providers.dart';
 import 'package:luqa/features/today/presentation/widgets/timeline_view.dart';
 
 import 'fake_health.dart';
@@ -56,6 +58,9 @@ Future<FakeTimelineRepository> pumpLuqa(
           FakeHealthReader(available: HealthAvailability.unsupportedPlatform),
         ),
         healthSyncStoreProvider.overrideWithValue(InMemoryHealthSyncStore()),
+        // Same reason for the write queue: OutboxAutoSync is mounted next to
+        // HealthAutoSync, and the real store wants a platform channel.
+        outboxProvider.overrideWithValue(const NullOutbox()),
         luqaApiProvider.overrideWithValue(FakeHealthApi()),
         currentTimeProvider.overrideWithValue(fixedNow),
         todayRepositoryProvider.overrideWithValue(repository),

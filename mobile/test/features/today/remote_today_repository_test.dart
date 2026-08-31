@@ -4,6 +4,7 @@ import 'package:luqa/features/auth/data/secure_credential_store.dart';
 import 'package:luqa/features/today/data/remote_today_repository.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
 import 'package:luqa/features/today/domain/category.dart';
+import 'package:luqa/features/today/domain/sleep_entry.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa_api/api.dart' as api;
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
@@ -24,22 +25,30 @@ void main() {
     expect(window.entries.single.start, DateTime.utc(2026, 8, 27, 8).toLocal());
     expect(window.sleep.single.asleep, const Duration(minutes: 400));
     expect(window.sleep.single.attribution, 'Pixel Watch');
+    expect(window.sleep.single.awakeningCount, 3);
+    expect(window.sleep.single.latencyMinutes, 14);
+    expect(window.sleep.single.stages, hasLength(2));
+    expect(window.sleep.single.stages.first.kind, SleepStageKind.light);
+    expect(window.sleep.single.stages.last.kind, SleepStageKind.deep);
     expect(cache.window?.entries, hasLength(1));
   });
 
-  test('loadWindow reaches a day further back so blocks arrive whole', () async {
-    final api = FakeLuqaApi();
-    final repository = RemoteTodayRepository(
-      client: api,
-      cache: MemoryTimelineCache(),
-    );
+  test(
+    'loadWindow reaches a day further back so blocks arrive whole',
+    () async {
+      final api = FakeLuqaApi();
+      final repository = RemoteTodayRepository(
+        client: api,
+        cache: MemoryTimelineCache(),
+      );
 
-    await repository.loadWindow(from, to);
+      await repository.loadWindow(from, to);
 
-    // A block that began the evening before the window would otherwise be
-    // missing its first half on the window's opening day.
-    expect(api.entriesFrom, from.subtract(const Duration(days: 1)));
-  });
+      // A block that began the evening before the window would otherwise be
+      // missing its first half on the window's opening day.
+      expect(api.entriesFrom, from.subtract(const Duration(days: 1)));
+    },
+  );
 
   test('loadCategories drops archived categories and caches them', () async {
     final cache = MemoryTimelineCache();
@@ -62,7 +71,7 @@ void main() {
       cache: MemoryTimelineCache(),
     );
 
-    await repository.updateEntry(
+    await repository.updateEntryById(
       'entry-1',
       EntryPatch(end: DateTime.utc(2026, 8, 27, 12)),
     );
@@ -81,7 +90,7 @@ void main() {
       cache: MemoryTimelineCache(),
     );
 
-    await repository.updateEntry(
+    await repository.updateEntryById(
       'entry-1',
       const EntryPatch(clearCategory: true),
     );
@@ -130,7 +139,10 @@ void main() {
     );
 
     expect(await cache.readWindow(from, to), isNotNull);
-    expect(await cache.readWindow(from, to.add(const Duration(days: 7))), isNull);
+    expect(
+      await cache.readWindow(from, to.add(const Duration(days: 7))),
+      isNull,
+    );
   });
 }
 
@@ -147,7 +159,8 @@ class MemoryTimelineCache implements TimelineCache {
   }
 
   @override
-  Future<TimelineWindow?> readWindow(DateTime from, DateTime to) async => window;
+  Future<TimelineWindow?> readWindow(DateTime from, DateTime to) async =>
+      window;
 
   @override
   Future<void> writeWindow(TimelineWindow value) async {
@@ -162,8 +175,9 @@ class FakeLuqaApi implements LuqaApi {
   // Health sync is exercised in test/features/health; this fake only needs to
   // satisfy the interface for the timeline repository.
   @override
-  Future<api.HealthSyncResponse> pushHealthSync(api.HealthSyncRequest request) =>
-      throw UnimplementedError();
+  Future<api.HealthSyncResponse> pushHealthSync(
+    api.HealthSyncRequest request,
+  ) => throw UnimplementedError();
 
   @override
   Future<List<api.HealthSyncState>> healthSyncStates() async => const [];
@@ -180,7 +194,10 @@ class FakeLuqaApi implements LuqaApi {
   ];
 
   @override
-  Future<List<api.TimeEntry>> listTimeEntries(DateTime from, DateTime to) async {
+  Future<List<api.TimeEntry>> listTimeEntries(
+    DateTime from,
+    DateTime to,
+  ) async {
     entriesFrom = from;
     return [
       api.TimeEntry(
@@ -208,21 +225,45 @@ class FakeLuqaApi implements LuqaApi {
       endTime: DateTime.utc(2026, 8, 27, 6),
       sleepMinutes: 400,
       awakeMinutes: 20,
+      awakeInBedMinutes: 12,
+      outOfBedMinutes: 8,
       lightMinutes: 200,
       deepMinutes: 100,
       remMinutes: 100,
+      unknownMinutes: null,
+      inBedMinutes: 480,
+      efficiencyPercent: 83.3,
+      latencyMinutes: 14,
+      wasoMinutes: 20,
+      awakeningCount: 3,
+      midpoint: DateTime.utc(2026, 8, 27, 2),
       isNap: false,
+      recordingMethod: 'AUTOMATICALLY_RECORDED',
+      deviceModel: 'Pixel Watch 3',
+      stages: [
+        api.SleepStage(
+          stage: 'LIGHT',
+          startTime: DateTime.utc(2026, 8, 26, 22),
+          endTime: DateTime.utc(2026, 8, 27, 0),
+        ),
+        api.SleepStage(
+          stage: 'DEEP',
+          startTime: DateTime.utc(2026, 8, 27, 0),
+          endTime: DateTime.utc(2026, 8, 27, 2),
+        ),
+      ],
     ),
   ];
 
   @override
   Future<api.TimeEntry> createTimeEntry({
+    String? id,
     required String description,
     required String? categoryId,
     required DateTime start,
     required DateTime? end,
   }) async => api.TimeEntry(
-    id: 'entry-2',
+    id: id ?? 'entry-2',
     description: description,
     categoryId: categoryId,
     startTime: start,
@@ -250,7 +291,7 @@ class FakeLuqaApi implements LuqaApi {
   Future<void> deleteTimeEntry(String id) async {}
 
   @override
-  Future<api.Category> createCategory(String name) =>
+  Future<api.Category> createCategory(String name, {String? id}) =>
       throw UnimplementedError();
 
   @override

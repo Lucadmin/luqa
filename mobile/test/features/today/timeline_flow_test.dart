@@ -57,32 +57,33 @@ void main() {
     expect(_draftStart(tester), isNot(first));
   });
 
-  testWidgets('dragging the end handle resizes the block in five-minute steps', (
-    tester,
-  ) async {
-    final repository = await pumpLuqa(tester);
-    const metrics = TimelineMetrics();
+  testWidgets(
+    'dragging the end handle resizes the block in five-minute steps',
+    (tester) async {
+      final repository = await pumpLuqa(tester);
+      const metrics = TimelineMetrics();
 
-    await tapTimelineAt(tester, const Offset(220, 470));
-    expect(_draftDuration(tester), const Duration(minutes: 30));
+      await tapTimelineAt(tester, const Offset(220, 470));
+      expect(_draftDuration(tester), const Duration(minutes: 30));
 
-    // One hour further down the grid is one hour more on the block.
-    await tester.drag(
-      find.byKey(const ValueKey('draft-end-handle')),
-      Offset(0, metrics.hourHeight),
-    );
-    await tester.pumpAndSettle();
+      // One hour further down the grid is one hour more on the block.
+      await tester.drag(
+        find.byKey(const ValueKey('draft-end-handle')),
+        Offset(0, metrics.hourHeight),
+      );
+      await tester.pumpAndSettle();
 
-    expect(_draftDuration(tester), const Duration(minutes: 90));
+      expect(_draftDuration(tester), const Duration(minutes: 90));
 
-    await tester.tap(find.byKey(const ValueKey('save-draft-button')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('save-draft-button')));
+      await tester.pumpAndSettle();
 
-    expect(
-      repository.entries.last.end!.difference(repository.entries.last.start),
-      const Duration(minutes: 90),
-    );
-  });
+      expect(
+        repository.entries.last.end!.difference(repository.entries.last.start),
+        const Duration(minutes: 90),
+      );
+    },
+  );
 
   testWidgets('dragging the start handle cannot cross the end', (tester) async {
     await pumpLuqa(tester);
@@ -144,7 +145,10 @@ void main() {
     await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
 
-    expect(repository.entries.any((entry) => entry.description == 'Gym'), isTrue);
+    expect(
+      repository.entries.any((entry) => entry.description == 'Gym'),
+      isTrue,
+    );
   });
 
   testWidgets('long-pressing an entry lifts it into the composer', (
@@ -207,10 +211,8 @@ void main() {
 
 /// Narrows a text finder to the grid, so a label that also appears in the
 /// navigation bar cannot match twice.
-Finder _onGrid(String text) => find.descendant(
-  of: find.byType(TimelineView),
-  matching: find.text(text),
-);
+Finder _onGrid(String text) =>
+    find.descendant(of: find.byType(TimelineView), matching: find.text(text));
 
 Duration _draftDuration(WidgetTester tester) =>
     tester.widget<DraftComposer>(find.byType(DraftComposer)).draft.duration;

@@ -4,12 +4,18 @@ abstract final class AppConfig {
     defaultValue: 'development',
   );
 
-  // `localhost` works on both the emulator and a USB-attached physical device
-  // once `adb reverse tcp:3000 tcp:3000` forwards the port to the dev machine.
-  // The emulator-only `10.0.2.2` alias is unroutable from a real phone.
+  // The deployed API is the default, so a plain `flutter run` works on any
+  // device with no port forwarding and no separate development data. Point
+  // this at a local server only when a change to the API itself needs testing
+  // before it ships:
+  //
+  //   flutter run --dart-define=LUQA_API_BASE_URL=http://localhost:3000
+  //
+  // That path additionally needs `adb reverse tcp:3000 tcp:3000`, which has to
+  // be re-established after every reconnect.
   static const apiBaseUrl = String.fromEnvironment(
     'LUQA_API_BASE_URL',
-    defaultValue: 'http://localhost:3000',
+    defaultValue: 'https://luqa-pearl.vercel.app',
   );
 
   static bool get isProduction => environment == 'production';

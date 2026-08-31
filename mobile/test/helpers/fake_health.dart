@@ -69,7 +69,8 @@ class InMemoryHealthSyncStore implements HealthSyncStore {
   Future<DateTime?> backfilledThrough() async => _backfilled;
 
   @override
-  Future<void> setBackfilledThrough(DateTime value) async => _backfilled = value;
+  Future<void> setBackfilledThrough(DateTime value) async =>
+      _backfilled = value;
 
   @override
   Future<void> clear() async {

@@ -41,8 +41,11 @@ export async function POST(request: Request) {
     );
   }
   try {
-    const entry = await createTimeEntry(userId, parsed.data);
-    return NextResponse.json({ entry }, { status: 201 });
+    const result = await createTimeEntry(userId, parsed.data);
+    return NextResponse.json(
+      { entry: result.entry },
+      { status: result.created ? 201 : 200 },
+    );
   } catch (error) {
     if (error instanceof InvalidCategoryError) {
       return NextResponse.json({ error: "Unknown category" }, { status: 400 });

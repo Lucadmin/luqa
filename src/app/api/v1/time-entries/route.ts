@@ -7,6 +7,7 @@ import {
 } from "@/lib/mobile-api-response";
 import { authenticateMobileRequest } from "@/lib/server/mobile-auth";
 import {
+  EntryIdConflictError,
   InvalidCategoryError,
   createTimeEntry,
   listTimeEntries,
@@ -56,8 +57,11 @@ export async function POST(request: Request) {
   if (!parsed.success) return invalidInput(parsed.error.flatten());
 
   try {
-    const entry = await createTimeEntry(session.userId, parsed.data);
-    return mobileJson({ entry }, { status: 201 });
+    const result = await createTimeEntry(session.userId, parsed.data);
+    return mobileJson(
+      { entry: result.entry },
+      { status: result.created ? 201 : 200 },
+    );
   } catch (error) {
     if (error instanceof InvalidCategoryError) {
       return mobileJson(
@@ -68,6 +72,17 @@ export async function POST(request: Request) {
           },
         },
         { status: 400 },
+      );
+    }
+    if (error instanceof EntryIdConflictError) {
+      return mobileJson(
+        {
+          error: {
+            code: "id_conflict",
+            message: "That id is already in use",
+          },
+        },
+        { status: 409 },
       );
     }
     throw error;

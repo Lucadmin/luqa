@@ -14,7 +14,6 @@ class NowBar extends StatefulWidget {
   const NowBar({
     required this.running,
     required this.runningCategory,
-    required this.busy,
     required this.onStart,
     required this.onStop,
     required this.onOpenRunning,
@@ -26,7 +25,6 @@ class NowBar extends StatefulWidget {
 
   final TimeEntry? running;
   final Category? runningCategory;
-  final bool busy;
   final Future<void> Function(String description) onStart;
   final Future<void> Function() onStop;
   final VoidCallback onOpenRunning;
@@ -96,7 +94,6 @@ class _NowBarState extends State<NowBar> {
           ? _RunningBar(
               entry: running,
               category: widget.runningCategory,
-              busy: widget.busy,
               onStop: _stop,
               onOpen: widget.onOpenRunning,
             )
@@ -104,7 +101,6 @@ class _NowBarState extends State<NowBar> {
           ? _StartComposer(
               controller: _description,
               focus: _focus,
-              busy: widget.busy,
               category: widget.pendingCategory,
               onPickCategory: widget.onPickCategory,
               onStart: _start,
@@ -190,7 +186,6 @@ class _StartComposer extends StatelessWidget {
   const _StartComposer({
     required this.controller,
     required this.focus,
-    required this.busy,
     required this.category,
     required this.onPickCategory,
     required this.onStart,
@@ -199,7 +194,6 @@ class _StartComposer extends StatelessWidget {
 
   final TextEditingController controller;
   final FocusNode focus;
-  final bool busy;
   final Category? category;
   final Future<void> Function() onPickCategory;
   final Future<void> Function() onStart;
@@ -255,7 +249,7 @@ class _StartComposer extends StatelessWidget {
           child: IconButton.filled(
             key: const ValueKey('start-timer-button'),
             tooltip: 'Start timer',
-            onPressed: busy ? null : onStart,
+            onPressed: onStart,
             icon: const Icon(Icons.play_arrow_rounded),
           ),
         ),
@@ -268,14 +262,12 @@ class _RunningBar extends StatelessWidget {
   const _RunningBar({
     required this.entry,
     required this.category,
-    required this.busy,
     required this.onStop,
     required this.onOpen,
   });
 
   final TimeEntry entry;
   final Category? category;
-  final bool busy;
   final Future<void> Function() onStop;
   final VoidCallback onOpen;
 
@@ -352,7 +344,7 @@ class _RunningBar extends StatelessWidget {
               const SizedBox(width: LuqaSpacing.sm),
               FilledButton(
                 key: const ValueKey('stop-timer-button'),
-                onPressed: busy ? null : onStop,
+                onPressed: onStop,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(64, 44),
                   padding: const EdgeInsets.symmetric(horizontal: 16),

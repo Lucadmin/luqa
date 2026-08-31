@@ -48,6 +48,12 @@ class StoredMobileSession {
 
   bool refreshIsExpired(DateTime now) => !refreshExpiresAt.isAfter(now);
 
+  /// The contract requires a refresh token of at least 32 characters, so a
+  /// stored one below that can never be redeemed. Treating it as a session
+  /// would leave the app "signed in" while every request is refused, with no
+  /// route back to the sign-in screen.
+  bool get hasRedeemableRefreshToken => refreshToken.trim().length >= 32;
+
   Map<String, Object?> toJson() => {
     'userId': user.id,
     'email': user.email,

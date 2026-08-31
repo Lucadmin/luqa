@@ -14,7 +14,6 @@ class DraftComposer extends ConsumerStatefulWidget {
     required this.draft,
     required this.categories,
     required this.recents,
-    required this.saving,
     required this.error,
     required this.onEditTimes,
     required this.onDelete,
@@ -24,7 +23,6 @@ class DraftComposer extends ConsumerStatefulWidget {
   final TimelineDraft draft;
   final List<Category> categories;
   final List<RecentActivity> recents;
-  final bool saving;
   final String? error;
   final VoidCallback onEditTimes;
 
@@ -190,15 +188,13 @@ class _DraftComposerState extends ConsumerState<DraftComposer> {
                       IconButton(
                         tooltip: 'Delete',
                         visualDensity: VisualDensity.compact,
-                        onPressed: widget.saving ? null : widget.onDelete,
+                        onPressed: widget.onDelete,
                         icon: const Icon(Icons.delete_outline_rounded),
                       ),
                     IconButton(
                       tooltip: 'Discard',
                       visualDensity: VisualDensity.compact,
-                      onPressed: widget.saving
-                          ? null
-                          : () => _controller.cancelDraft(),
+                      onPressed: () => _controller.cancelDraft(),
                       icon: const Icon(Icons.close_rounded),
                     ),
                   ],
@@ -230,15 +226,8 @@ class _DraftComposerState extends ConsumerState<DraftComposer> {
                       child: IconButton.filled(
                         key: const ValueKey('save-draft-button'),
                         tooltip: draft.isNew ? 'Add entry' : 'Save changes',
-                        onPressed: widget.saving ? null : _save,
-                        icon: widget.saving
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.check_rounded),
+                        onPressed: _save,
+                        icon: const Icon(Icons.check_rounded),
                       ),
                     ),
                   ],

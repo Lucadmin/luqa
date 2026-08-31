@@ -48,8 +48,20 @@ the browser companion:
 - A running timer can be started and stopped from the bar above the grid, and
   the now-line and the running block track the clock once a minute.
 - Sleep sessions read from `/api/v1/sleep-entries` sit behind the day as
-  measured context, with a read-only detail sheet. Corrections belong where the
-  data is recorded, so the app does not offer to edit them.
+  measured context. They are not tracked time and stay out of the tracked
+  total, but they do occupy the day: a gap never runs through a night, and
+  filling the gap beside one starts the moment it ended.
+- Tapping a night opens a read-only detail sheet with a hypnogram, a stage
+  breakdown, and the derived metrics (efficiency, latency, wake after sleep
+  onset, awakenings, midpoint). Corrections belong where the data is recorded,
+  so the app does not offer to edit them.
+
+The stage colours are a validated categorical palette, not a hand-picked one.
+Sleep depth looks like a job for one hue at three lightnesses, but three steps
+of a single hue cannot clear the normal-vision separation floor inside a usable
+lightness range. The four stages therefore get four hues, fixed per stage
+across both themes, and every segment is directly labelled so identity never
+rests on colour alone. See `presentation/widgets/sleep_stage_palette.dart`.
 
 The grid has fixed geometry, so block text is capped at 1.2x scaling and every
 block is drawn at least 26 dp high. The full text always reaches a screen
@@ -86,8 +98,7 @@ flutter run
 ```
 
 The app opens the native sign-in screen and uses the same owner credentials as
-the web companion. No Neon connection string or server secret is shipped in the
-APK.
+the web companion, against the same deployed data the browser sees.
 
 For a physical phone running Android 11 or newer, enable Developer options and
 Wireless debugging, then choose **Pair device with pairing code**. On this Mac:
@@ -112,30 +123,37 @@ flutter test --update-goldens test/goldens
 
 ## Build-time configuration
 
-No Neon credential or privileged server secret belongs in the app. The public
-API origin is injected at build time through `lib/app/app_config.dart`:
+The app talks to the deployed API by default, so a plain `flutter run` works on
+any device with no port forwarding and no separate development data:
 
 ```bash
+flutter run
+```
+
+The public API origin is injected at build time through
+`lib/app/app_config.dart` and defaults to `https://luqa-pearl.vercel.app`. No
+Neon credential or privileged server secret belongs in the app; the device only
+ever holds its own bearer tokens.
+
+Point it at a local server only when a change to the API itself needs testing
+before it ships:
+
+```bash
+npm run dev            # in the repo root; Next listens on :3000
+adb reverse tcp:3000 tcp:3000
+
 flutter run \
   --dart-define=LUQA_ENV=development \
   --dart-define=LUQA_API_BASE_URL=http://localhost:3000
 ```
 
-That is also the default, so a plain `flutter run` works. It relies on ADB port
-forwarding, which has to be re-established after every reconnect or `adb
-kill-server`:
-
-```bash
-npm run dev            # in the repo root; Next listens on :3000
-adb reverse tcp:3000 tcp:3000
-```
-
 `adb reverse` points the device's own `localhost:3000` at the Mac, so the same
 origin works on the emulator and on a USB- or Wi-Fi-attached phone, and it
-survives changing Wi-Fi networks. Without it, sign-in fails with "The server
-took too long to respond" — the request is sent and nothing answers. The
-emulator-only `10.0.2.2` alias is silently dropped on a physical device, which
-produces the identical timeout.
+survives changing Wi-Fi networks. **It has to be re-established after every
+reconnect or `adb kill-server`.** Without it the device refuses the connection
+outright, which the app reports as "Cannot reach http://localhost:3000". The
+emulator-only `10.0.2.2` alias is silently dropped on a physical device and
+produces the same message.
 
 Cleartext HTTP to `localhost`, `127.0.0.1` and `10.0.2.2` is permitted only in
 the debug and profile variants, via
@@ -144,13 +162,12 @@ Android's HTTPS-only default, and refuse a non-HTTPS API origin outright:
 
 ```bash
 flutter build apk --release \
-  --dart-define=LUQA_ENV=production \
-  --dart-define=LUQA_API_BASE_URL=https://your-luqa-domain.example
+  --dart-define=LUQA_ENV=production
 ```
 
-The backend and legacy browser UI continue to deploy together on Vercel. The
-mobile client talks only to `/api/v1`; browser Auth.js cookies and native bearer
-tokens are deliberately separate.
+The backend and browser UI deploy together on Vercel. The mobile client talks
+only to `/api/v1`; browser Auth.js cookies and native bearer tokens are
+deliberately separate.
 
 Regenerate the Dart package after changing the contract:
 

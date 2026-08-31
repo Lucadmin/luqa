@@ -1,21 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:luqa/features/auth/application/auth_controller.dart';
-import 'package:luqa/features/today/data/remote_today_repository.dart';
+import 'package:luqa/core/network/network_failure.dart';
+import 'package:luqa/features/today/application/sync_engine.dart';
+import 'package:luqa/features/today/data/today_providers.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
 import 'package:luqa/features/today/domain/category.dart';
 import 'package:luqa/features/today/domain/sleep_entry.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa/features/today/domain/timeline_geometry.dart';
-
-final todayRepositoryProvider = Provider<TodayRepository>((ref) {
-  final userId = ref.watch(authControllerProvider).value?.user?.id;
-  return RemoteTodayRepository(
-    client: ref.watch(luqaApiProvider),
-    cache: SharedPreferencesTimelineCache(namespace: userId ?? 'signed-out'),
-  );
-});
 
 /// The clock the screen opens on. Overridden in tests so every date-dependent
 /// widget is deterministic.
@@ -76,7 +69,7 @@ class TimelineState {
     this.isLoading = false,
     this.isRefreshing = false,
     this.isOffline = false,
-    this.isSaving = false,
+    this.pendingWrites = 0,
     this.error,
   });
 
@@ -115,7 +108,11 @@ class TimelineState {
   final bool isLoading;
   final bool isRefreshing;
   final bool isOffline;
-  final bool isSaving;
+
+  /// Changes made here that the server has not acknowledged yet. Nothing waits
+  /// on them; the count exists so the header can say so quietly.
+  final int pendingWrites;
+
   final String? error;
 
   TimeEntry? get runningEntry {
@@ -190,7 +187,7 @@ class TimelineState {
     bool? isLoading,
     bool? isRefreshing,
     bool? isOffline,
-    bool? isSaving,
+    int? pendingWrites,
     String? error,
     bool clearError = false,
   }) => TimelineState(
@@ -204,7 +201,7 @@ class TimelineState {
     isLoading: isLoading ?? this.isLoading,
     isRefreshing: isRefreshing ?? this.isRefreshing,
     isOffline: isOffline ?? this.isOffline,
-    isSaving: isSaving ?? this.isSaving,
+    pendingWrites: pendingWrites ?? this.pendingWrites,
     error: clearError ? null : error ?? this.error,
   );
 }
@@ -223,6 +220,20 @@ class TimelineController extends Notifier<TimelineState> {
     _repository = ref.watch(todayRepositoryProvider);
     final now = ref.watch(currentTimeProvider);
     ref.onDispose(() => _windowDebounce?.cancel());
+
+    // Local writes are already on screen; this is about what came back. Once a
+    // round of the queue reaches the server, its rows are canonical there, so
+    // pull them down and drop the local overlay.
+    ref.listen(syncEngineProvider, (previous, next) {
+      if (!ref.mounted) return;
+      if (next.pending != state.pendingWrites) {
+        state = state.copyWith(pendingWrites: next.pending);
+      }
+      if (previous != null && next.rounds > previous.rounds) {
+        unawaited(_load(state.windowFrom, state.windowTo));
+      }
+    });
+
     final initial = TimelineState.initial(now);
     Future<void>.microtask(
       () => _load(initial.windowFrom, initial.windowTo, allowCache: true),
@@ -278,8 +289,10 @@ class TimelineController extends Notifier<TimelineState> {
         isOffline: false,
         clearError: true,
       );
-    } on Object {
+    } on Object catch (error) {
       if (!ref.mounted || generation != _loadGeneration) return;
+      // Cached days are better than an error page, so a failed refresh over
+      // something already on screen only demotes the status to offline.
       final hasSomethingToShow = painted || state.entries.isNotEmpty;
       state = state.copyWith(
         isLoading: false,
@@ -287,7 +300,7 @@ class TimelineController extends Notifier<TimelineState> {
         isOffline: hasSomethingToShow,
         error: hasSomethingToShow
             ? null
-            : 'The timeline could not load. Check the connection and try again.',
+            : describeNetworkFailure(error, whileDoing: 'loading the timeline'),
         clearError: hasSomethingToShow,
       );
     }
@@ -319,6 +332,11 @@ class TimelineController extends Notifier<TimelineState> {
       isOffline: false,
       clearError: true,
     );
+    // One gesture, one meaning: catch up with the server. Sending first means
+    // the reload that follows cannot overwrite a local change with an older
+    // server copy of the same row.
+    await ref.read(syncEngineProvider.notifier).sync();
+    if (!ref.mounted) return;
     await _load(state.windowFrom, state.windowTo);
   }
 
@@ -349,7 +367,9 @@ class TimelineController extends Notifier<TimelineState> {
   void moveDraft(DateTime start, DateTime end) {
     final draft = state.draft;
     if (draft == null) return;
-    state = state.copyWith(draft: draft.copyWith(start: start, end: end));
+    state = state.copyWith(
+      draft: draft.copyWith(start: start, end: end),
+    );
   }
 
   void describeDraft(String description) {
@@ -374,17 +394,18 @@ class TimelineController extends Notifier<TimelineState> {
   }
 
   /// Commit the draft, whether it is a new block or an entry being reshaped.
+  ///
+  /// The block is on the timeline before this returns. Sending it is the sync
+  /// engine's problem, and one it can take all day over.
   Future<bool> commitDraft() async {
     final draft = state.draft;
-    if (draft == null || state.isSaving) return false;
+    if (draft == null) return false;
     if (!draft.end.isAfter(draft.start)) {
       state = state.copyWith(error: 'End must be after start.');
       return false;
     }
 
     final previous = state.entries;
-    state = state.copyWith(isSaving: true, clearError: true);
-
     try {
       if (draft.isNew) {
         final created = await _repository.addEntry(
@@ -398,12 +419,14 @@ class TimelineController extends Notifier<TimelineState> {
         if (!ref.mounted) return false;
         state = state.copyWith(
           entries: _sorted([...state.entries, created]),
-          isSaving: false,
           clearDraft: true,
+          clearError: true,
         );
       } else {
+        final existing = _entryById(draft.entryId!);
+        if (existing == null) return false;
         final updated = await _repository.updateEntry(
-          draft.entryId!,
+          existing,
           EntryPatch(
             description: draft.description.trim(),
             categoryId: draft.categoryId,
@@ -415,17 +438,18 @@ class TimelineController extends Notifier<TimelineState> {
         if (!ref.mounted) return false;
         state = state.copyWith(
           entries: _replace(state.entries, updated),
-          isSaving: false,
           clearDraft: true,
+          clearError: true,
         );
       }
       return true;
-    } on Object {
+    } on Object catch (error) {
+      // Only a failure to record the change locally reaches here, and that one
+      // really does mean the block was not kept.
       if (!ref.mounted) return false;
       state = state.copyWith(
         entries: previous,
-        isSaving: false,
-        error: 'That could not be saved. Try again.',
+        error: describeNetworkFailure(error, whileDoing: 'saving that block'),
       );
       return false;
     }
@@ -435,27 +459,24 @@ class TimelineController extends Notifier<TimelineState> {
 
   Future<bool> editEntry(String id, EntryPatch patch) async {
     if (patch.isEmpty) return true;
+    final existing = _entryById(id);
+    if (existing == null) return false;
+
     final previous = state.entries;
-    // Show the edit immediately; the server's copy replaces it a moment later.
     state = state.copyWith(
       entries: _sorted(_applyLocally(previous, id, patch)),
-      isSaving: true,
       clearError: true,
     );
     try {
-      final updated = await _repository.updateEntry(id, patch);
+      final updated = await _repository.updateEntry(existing, patch);
       if (!ref.mounted) return false;
-      state = state.copyWith(
-        entries: _replace(state.entries, updated),
-        isSaving: false,
-      );
+      state = state.copyWith(entries: _replace(state.entries, updated));
       return true;
-    } on Object {
+    } on Object catch (error) {
       if (!ref.mounted) return false;
       state = state.copyWith(
         entries: previous,
-        isSaving: false,
-        error: 'That change could not be saved.',
+        error: describeNetworkFailure(error, whileDoing: 'saving that change'),
       );
       return false;
     }
@@ -481,11 +502,11 @@ class TimelineController extends Notifier<TimelineState> {
     try {
       await _repository.deleteEntry(id);
       return removed;
-    } on Object {
+    } on Object catch (error) {
       if (!ref.mounted) return null;
       state = state.copyWith(
         entries: previous,
-        error: 'That entry could not be deleted.',
+        error: describeNetworkFailure(error, whileDoing: 'deleting that entry'),
       );
       return null;
     }
@@ -504,9 +525,14 @@ class TimelineController extends Notifier<TimelineState> {
       );
       if (!ref.mounted) return;
       state = state.copyWith(entries: _sorted([...state.entries, created]));
-    } on Object {
+    } on Object catch (error) {
       if (!ref.mounted) return;
-      state = state.copyWith(error: 'That entry could not be restored.');
+      state = state.copyWith(
+        error: describeNetworkFailure(
+          error,
+          whileDoing: 'restoring that entry',
+        ),
+      );
     }
   }
 
@@ -517,8 +543,6 @@ class TimelineController extends Notifier<TimelineState> {
     String? categoryId,
     DateTime? at,
   }) async {
-    if (state.isSaving) return false;
-    state = state.copyWith(isSaving: true, clearError: true);
     try {
       final started = await _repository.addEntry(
         NewTimeEntry(
@@ -539,13 +563,12 @@ class TimelineController extends Notifier<TimelineState> {
             entry,
         started,
       ];
-      state = state.copyWith(entries: _sorted(entries), isSaving: false);
+      state = state.copyWith(entries: _sorted(entries), clearError: true);
       return true;
-    } on Object {
+    } on Object catch (error) {
       if (!ref.mounted) return false;
       state = state.copyWith(
-        isSaving: false,
-        error: 'The timer could not be started.',
+        error: describeNetworkFailure(error, whileDoing: 'starting the timer'),
       );
       return false;
     }
@@ -555,6 +578,13 @@ class TimelineController extends Notifier<TimelineState> {
     final running = state.runningEntry;
     if (running == null) return false;
     return editEntry(running.id, EntryPatch(end: at ?? DateTime.now()));
+  }
+
+  TimeEntry? _entryById(String id) {
+    for (final entry in state.entries) {
+      if (entry.id == id) return entry;
+    }
+    return null;
   }
 
   Future<Category?> addCategory(String name) async {
@@ -570,9 +600,14 @@ class TimelineController extends Notifier<TimelineState> {
               ..sort((left, right) => left.name.compareTo(right.name)));
       state = state.copyWith(categories: categories, clearError: true);
       return category;
-    } on Object {
+    } on Object catch (error) {
       if (!ref.mounted) return null;
-      state = state.copyWith(error: 'The category could not be created.');
+      state = state.copyWith(
+        error: describeNetworkFailure(
+          error,
+          whileDoing: 'creating that category',
+        ),
+      );
       return null;
     }
   }

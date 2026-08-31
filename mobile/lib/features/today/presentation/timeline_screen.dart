@@ -245,6 +245,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
             sleep: state.sleepOn(state.visibleDay),
             isRefreshing: state.isRefreshing,
             isOffline: state.isOffline,
+            pendingWrites: state.pendingWrites,
             initial: user?.initial,
             onPreviousDay: () => _timeline.currentState?.shiftDays(-1),
             onNextDay: () => _timeline.currentState?.shiftDays(1),
@@ -262,7 +263,6 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
                 runningCategory: state.categoryById(
                   state.runningEntry?.categoryId,
                 ),
-                busy: state.isSaving,
                 pendingCategory: state.categoryById(_pendingTimerCategoryId),
                 onStart: _startTimer,
                 onStop: () => _controller.stopTimer(),
@@ -309,7 +309,6 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
               draft: draft,
               categories: state.categories,
               recents: state.recentActivities,
-              saving: state.isSaving,
               error: state.error,
               onEditTimes: () => _expandDraft(draft),
               onDelete: draft.isNew ? null : () => _deleteEntry(draft.entryId!),
@@ -328,6 +327,7 @@ class _Header extends StatelessWidget {
     required this.sleep,
     required this.isRefreshing,
     required this.isOffline,
+    required this.pendingWrites,
     required this.initial,
     required this.onPreviousDay,
     required this.onNextDay,
@@ -344,6 +344,7 @@ class _Header extends StatelessWidget {
   final Duration sleep;
   final bool isRefreshing;
   final bool isOffline;
+  final int pendingWrites;
   final String? initial;
   final VoidCallback onPreviousDay;
   final VoidCallback onNextDay;
@@ -457,6 +458,7 @@ class _Header extends StatelessWidget {
               sleep: sleep,
               isRefreshing: isRefreshing,
               isOffline: isOffline,
+              pendingWrites: pendingWrites,
               onRetry: onRetry,
             ),
           ),
@@ -493,6 +495,7 @@ class _DaySummary extends StatelessWidget {
     required this.sleep,
     required this.isRefreshing,
     required this.isOffline,
+    required this.pendingWrites,
     required this.onRetry,
   });
 
@@ -500,6 +503,7 @@ class _DaySummary extends StatelessWidget {
   final Duration sleep;
   final bool isRefreshing;
   final bool isOffline;
+  final int pendingWrites;
   final VoidCallback onRetry;
 
   @override
@@ -549,7 +553,32 @@ class _DaySummary extends StatelessWidget {
             style: quiet,
           ),
         ),
-        if (isOffline)
+        // What is waiting to go out matters more than what is coming in: it
+        // is the user's own work, and it is the one thing they might want to
+        // stay on this screen for.
+        if (pendingWrites > 0)
+          Semantics(
+            liveRegion: true,
+            child: IconButton(
+              key: const ValueKey('pending-writes-chip'),
+              tooltip: pendingWrites == 1
+                  ? '1 change waiting to sync. Tap to retry'
+                  : '$pendingWrites changes waiting to sync. Tap to retry',
+              onPressed: onRetry,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints.tightFor(width: 40, height: 32),
+              padding: EdgeInsets.zero,
+              icon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.cloud_upload_outlined, size: 15, color: muted),
+                  const SizedBox(width: 3),
+                  Text('$pendingWrites', style: quiet),
+                ],
+              ),
+            ),
+          )
+        else if (isOffline)
           IconButton(
             tooltip: 'Offline. Tap to retry',
             onPressed: onRetry,

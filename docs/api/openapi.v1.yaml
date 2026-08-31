@@ -163,6 +163,14 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateTimeEntryRequest"
       responses:
+        "200":
+          description: >-
+            The `id` was already used by an earlier create from this account;
+            the existing entry is returned untouched.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntryResponse"
         "201":
           description: Time entry created
           content:
@@ -173,6 +181,8 @@ paths:
           $ref: "#/components/responses/InvalidInput"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/IdConflict"
   /time-entries/{id}:
     parameters:
       - name: id
@@ -314,6 +324,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    IdConflict:
+      description: The client-supplied id already belongs to another account
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     RateLimited:
       description: Too many credential attempts
       headers:
@@ -407,6 +423,15 @@ components:
       additionalProperties: false
       required: [name]
       properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: >-
+            Preferred identity for a category minted offline. Honoured only
+            when free; the response is authoritative, since a category with
+            the same name may already exist under a different id.
         name:
           type: string
           minLength: 1
@@ -463,6 +488,15 @@ components:
       additionalProperties: false
       required: [startTime]
       properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: >-
+            Client-minted identity for the row, so a device can name a block
+            before the server has seen it. Supplying it makes the create
+            idempotent: repeating the request returns the row it already made.
         description:
           type: string
           maxLength: 500
@@ -522,10 +556,22 @@ components:
         - endTime
         - sleepMinutes
         - awakeMinutes
+        - awakeInBedMinutes
+        - outOfBedMinutes
         - lightMinutes
         - deepMinutes
         - remMinutes
+        - unknownMinutes
+        - inBedMinutes
+        - efficiencyPercent
+        - latencyMinutes
+        - wasoMinutes
+        - awakeningCount
+        - midpoint
         - isNap
+        - recordingMethod
+        - deviceModel
+        - stages
       properties:
         id:
           type: string
@@ -547,16 +593,51 @@ components:
           description: Asleep minutes. Null when the provider only reported time in bed.
         awakeMinutes:
           type: [integer, "null"]
+        awakeInBedMinutes:
+          type: [integer, "null"]
+        outOfBedMinutes:
+          type: [integer, "null"]
         lightMinutes:
           type: [integer, "null"]
         deepMinutes:
           type: [integer, "null"]
         remMinutes:
           type: [integer, "null"]
+        unknownMinutes:
+          type: [integer, "null"]
+          description: Staged time the provider could not classify.
+        inBedMinutes:
+          type: [integer, "null"]
+          description: Wall-clock session length.
         efficiencyPercent:
           type: [number, "null"]
+          description: Asleep over time in bed, 0-100.
+        latencyMinutes:
+          type: [integer, "null"]
+          description: Session start until the first asleep stage.
+        wasoMinutes:
+          type: [integer, "null"]
+          description: Wake after sleep onset, before the final wake.
+        awakeningCount:
+          type: [integer, "null"]
+          description: Distinct awake blocks after sleep onset.
+        midpoint:
+          type: [string, "null"]
+          format: date-time
+          description: Midpoint of the asleep span, for chronotype drift.
         isNap:
           type: boolean
+        recordingMethod:
+          type: [string, "null"]
+        deviceModel:
+          type: [string, "null"]
+        stages:
+          type: array
+          description: >-
+            The night's stage timeline, normalized server-side. Empty when the
+            provider reported totals only.
+          items:
+            $ref: "#/components/schemas/SleepStage"
     SleepEntryListResponse:
       type: object
       additionalProperties: false

@@ -61,10 +61,10 @@ void main() {
       expect(session.startTime, night);
       expect(session.endTime, night.add(const Duration(hours: 8)));
       expect(session.sourceApp.value, 'Samsung Health');
-      expect(
-        session.stages.value?.map((stage) => stage.stage).toList(),
-        ['DEEP', 'REM'],
-      );
+      expect(session.stages.value?.map((stage) => stage.stage).toList(), [
+        'DEEP',
+        'REM',
+      ]);
     });
 
     test('keeps sessions apart and does not merge stages across records', () {

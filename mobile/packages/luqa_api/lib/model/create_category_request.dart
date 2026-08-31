@@ -13,9 +13,19 @@ part of openapi.api;
 class CreateCategoryRequest {
   /// Returns a new [CreateCategoryRequest] instance.
   CreateCategoryRequest({
+    this.id = const Optional.absent(),
     required this.name,
     this.color = const Optional.absent(),
   });
+
+  /// Preferred identity for a category minted offline. Honoured only when free; the response is authoritative, since a category with the same name may already exist under a different id.
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<String?> id;
 
   final String name;
 
@@ -31,19 +41,27 @@ class CreateCategoryRequest {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is CreateCategoryRequest &&
+          other.id == id &&
           other.name == name &&
           other.color == color;
 
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (name.hashCode) + (color == null ? 0 : color!.hashCode);
+      (id == null ? 0 : id!.hashCode) +
+      (name.hashCode) +
+      (color == null ? 0 : color!.hashCode);
 
   @override
-  String toString() => 'CreateCategoryRequest[name=$name, color=$color]';
+  String toString() =>
+      'CreateCategoryRequest[id=$id, name=$name, color=$color]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
+    if (this.id.isPresent) {
+      final value = this.id.value;
+      json[r'id'] = value;
+    }
     json[r'name'] = this.name;
     if (this.color.isPresent) {
       final value = this.color.value;
@@ -55,10 +73,12 @@ class CreateCategoryRequest {
   /// Clones this instance of [CreateCategoryRequest] and returns a new one where some of the
   /// properties have changed.
   CreateCategoryRequest copyWith({
+    Optional<String?>? id,
     String? name,
     Optional<String?>? color,
   }) =>
       CreateCategoryRequest(
+        id: id ?? this.id,
         name: name ?? this.name,
         color: color ?? this.color,
       );
@@ -82,6 +102,9 @@ class CreateCategoryRequest {
       }());
 
       return CreateCategoryRequest(
+        id: json.containsKey(r'id')
+            ? Optional.present(mapValueOfType<String>(json, r'id'))
+            : const Optional.absent(),
         name: mapValueOfType<String>(json, r'name')!,
         color: json.containsKey(r'color')
             ? Optional.present(mapValueOfType<String>(json, r'color'))

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:luqa/app/app_config.dart';
 import 'package:luqa/core/network/luqa_api_client.dart';
+import 'package:luqa/core/network/network_failure.dart';
 import 'package:luqa/features/auth/data/secure_credential_store.dart';
 import 'package:luqa/features/auth/domain/auth_user.dart';
 import 'package:luqa_api/api.dart' as api;
@@ -70,16 +71,20 @@ class AuthController extends AsyncNotifier<AuthState> {
   }
 
   Exception _friendlyError(Object error) {
-    if (error is api.ApiException && error.code == 401) {
-      return const AuthUiException('The email or password is incorrect.');
+    if (error is api.ApiException && error.innerException == null) {
+      if (error.code == 401) {
+        return const AuthUiException('The email or password is incorrect.');
+      }
+      if (error.code == 429) {
+        return const AuthUiException(
+          'Too many sign-in attempts. Wait a moment and try again.',
+        );
+      }
     }
-    if (error is TimeoutException) {
-      return const AuthUiException(
-        'The server took too long to respond. Check your connection.',
-      );
-    }
-    return const AuthUiException(
-      'Luqa could not sign in. Check the connection and try again.',
+    // Everything else shares the timeline's vocabulary, so a connection
+    // problem reads the same wherever it surfaces.
+    return AuthUiException(
+      describeNetworkFailure(error, whileDoing: 'signing in'),
     );
   }
 }

@@ -84,6 +84,12 @@ export async function createCategory(
   const count = await db.category.count({ where: { userId } });
   const category = await db.category.create({
     data: {
+      // A client-minted id is only honoured when it is free; the response is
+      // authoritative either way, so a device that loses the race just adopts
+      // whichever id came back.
+      ...(input.id && !(await idIsTaken("category", input.id))
+        ? { id: input.id }
+        : {}),
       userId,
       name: input.name,
       color: input.color ?? CATEGORY_PALETTE[count % CATEGORY_PALETTE.length],
@@ -105,10 +111,28 @@ export async function listTimeEntries(userId: string, window: EntryWindow) {
   return entries.map(toEntryDTO);
 }
 
+export class EntryIdConflictError extends Error {
+  constructor() {
+    super("That id belongs to another account");
+    this.name = "EntryIdConflictError";
+  }
+}
+
+/**
+ * Create a block or start a timer. When `input.id` is supplied the write is
+ * idempotent: a device that never saw the response can send the same request
+ * again and gets the row it already made back, rather than a duplicate. The
+ * `created` flag tells the caller which of the two happened.
+ */
 export async function createTimeEntry(
   userId: string,
   input: CreateEntryInput,
 ) {
+  if (input.id) {
+    const replay = await findReplayedEntry(userId, input.id);
+    if (replay) return { entry: replay, created: false };
+  }
+
   if (input.categoryId) {
     const category = await db.category.findFirst({
       where: { id: input.categoryId, userId },
@@ -118,24 +142,37 @@ export async function createTimeEntry(
   }
 
   const start = new Date(input.startTime);
-  const entry = await db.$transaction(async (tx) => {
-    if (!input.endTime) {
-      await tx.timeEntry.updateMany({
-        where: { userId, endTime: null, deletedAt: null },
-        data: { endTime: start },
+  let entry;
+  try {
+    entry = await db.$transaction(async (tx) => {
+      if (!input.endTime) {
+        await tx.timeEntry.updateMany({
+          where: { userId, endTime: null, deletedAt: null },
+          data: { endTime: start },
+        });
+      }
+      return tx.timeEntry.create({
+        data: {
+          ...(input.id ? { id: input.id } : {}),
+          userId,
+          description: input.description ?? "",
+          categoryId: input.categoryId ?? null,
+          startTime: start,
+          endTime: input.endTime ? new Date(input.endTime) : null,
+          source: "APP",
+        },
       });
-    }
-    return tx.timeEntry.create({
-      data: {
-        userId,
-        description: input.description ?? "",
-        categoryId: input.categoryId ?? null,
-        startTime: start,
-        endTime: input.endTime ? new Date(input.endTime) : null,
-        source: "APP",
-      },
     });
-  });
+  } catch (error) {
+    // Two retries of the same create can race each other. The loser sees a
+    // unique-key violation on the id it asked for, which is the same "already
+    // done" answer as the replay check above.
+    if (input.id && isUniqueViolation(error)) {
+      const replay = await findReplayedEntry(userId, input.id);
+      if (replay) return { entry: replay, created: false };
+    }
+    throw error;
+  }
 
   if (entry.endTime) {
     await pushEntryCreate(
@@ -147,7 +184,39 @@ export async function createTimeEntry(
       entry.endTime.toISOString(),
     );
   }
-  return toEntryDTO(entry);
+  return { entry: toEntryDTO(entry), created: true };
+}
+
+/**
+ * The row a repeated create already produced, or null when the id is free.
+ * A soft-deleted row still counts: the create did happen, and resurrecting it
+ * would undo a deletion the user has already made.
+ */
+async function findReplayedEntry(userId: string, id: string) {
+  const existing = await db.timeEntry.findUnique({ where: { id } });
+  if (!existing) return null;
+  if (existing.userId !== userId) throw new EntryIdConflictError();
+  return toEntryDTO(existing);
+}
+
+async function idIsTaken(model: "category", id: string) {
+  if (model === "category") {
+    const existing = await db.category.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    return existing !== null;
+  }
+  return false;
+}
+
+function isUniqueViolation(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
 }
 
 export class EntryRangeError extends Error {

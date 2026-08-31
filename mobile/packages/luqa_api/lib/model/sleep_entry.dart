@@ -21,11 +21,22 @@ class SleepEntry {
     required this.endTime,
     required this.sleepMinutes,
     required this.awakeMinutes,
+    required this.awakeInBedMinutes,
+    required this.outOfBedMinutes,
     required this.lightMinutes,
     required this.deepMinutes,
     required this.remMinutes,
-    this.efficiencyPercent = const Optional.absent(),
+    required this.unknownMinutes,
+    required this.inBedMinutes,
+    required this.efficiencyPercent,
+    required this.latencyMinutes,
+    required this.wasoMinutes,
+    required this.awakeningCount,
+    required this.midpoint,
     required this.isNap,
+    required this.recordingMethod,
+    required this.deviceModel,
+    this.stages = const [],
   });
 
   final String id;
@@ -46,21 +57,45 @@ class SleepEntry {
 
   final int? awakeMinutes;
 
+  final int? awakeInBedMinutes;
+
+  final int? outOfBedMinutes;
+
   final int? lightMinutes;
 
   final int? deepMinutes;
 
   final int? remMinutes;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  final Optional<num?> efficiencyPercent;
+  /// Staged time the provider could not classify.
+  final int? unknownMinutes;
+
+  /// Wall-clock session length.
+  final int? inBedMinutes;
+
+  /// Asleep over time in bed, 0-100.
+  final num? efficiencyPercent;
+
+  /// Session start until the first asleep stage.
+  final int? latencyMinutes;
+
+  /// Wake after sleep onset, before the final wake.
+  final int? wasoMinutes;
+
+  /// Distinct awake blocks after sleep onset.
+  final int? awakeningCount;
+
+  /// Midpoint of the asleep span, for chronotype drift.
+  final DateTime? midpoint;
 
   final bool isNap;
+
+  final String? recordingMethod;
+
+  final String? deviceModel;
+
+  /// The night's stage timeline, normalized server-side. Empty when the provider reported totals only.
+  final List<SleepStage> stages;
 
   @override
   bool operator ==(Object other) =>
@@ -74,11 +109,22 @@ class SleepEntry {
           other.endTime == endTime &&
           other.sleepMinutes == sleepMinutes &&
           other.awakeMinutes == awakeMinutes &&
+          other.awakeInBedMinutes == awakeInBedMinutes &&
+          other.outOfBedMinutes == outOfBedMinutes &&
           other.lightMinutes == lightMinutes &&
           other.deepMinutes == deepMinutes &&
           other.remMinutes == remMinutes &&
+          other.unknownMinutes == unknownMinutes &&
+          other.inBedMinutes == inBedMinutes &&
           other.efficiencyPercent == efficiencyPercent &&
-          other.isNap == isNap;
+          other.latencyMinutes == latencyMinutes &&
+          other.wasoMinutes == wasoMinutes &&
+          other.awakeningCount == awakeningCount &&
+          other.midpoint == midpoint &&
+          other.isNap == isNap &&
+          other.recordingMethod == recordingMethod &&
+          other.deviceModel == deviceModel &&
+          _deepEquality.equals(other.stages, stages);
 
   @override
   int get hashCode =>
@@ -91,15 +137,26 @@ class SleepEntry {
       (endTime.hashCode) +
       (sleepMinutes == null ? 0 : sleepMinutes!.hashCode) +
       (awakeMinutes == null ? 0 : awakeMinutes!.hashCode) +
+      (awakeInBedMinutes == null ? 0 : awakeInBedMinutes!.hashCode) +
+      (outOfBedMinutes == null ? 0 : outOfBedMinutes!.hashCode) +
       (lightMinutes == null ? 0 : lightMinutes!.hashCode) +
       (deepMinutes == null ? 0 : deepMinutes!.hashCode) +
       (remMinutes == null ? 0 : remMinutes!.hashCode) +
+      (unknownMinutes == null ? 0 : unknownMinutes!.hashCode) +
+      (inBedMinutes == null ? 0 : inBedMinutes!.hashCode) +
       (efficiencyPercent == null ? 0 : efficiencyPercent!.hashCode) +
-      (isNap.hashCode);
+      (latencyMinutes == null ? 0 : latencyMinutes!.hashCode) +
+      (wasoMinutes == null ? 0 : wasoMinutes!.hashCode) +
+      (awakeningCount == null ? 0 : awakeningCount!.hashCode) +
+      (midpoint == null ? 0 : midpoint!.hashCode) +
+      (isNap.hashCode) +
+      (recordingMethod == null ? 0 : recordingMethod!.hashCode) +
+      (deviceModel == null ? 0 : deviceModel!.hashCode) +
+      (stages.hashCode);
 
   @override
   String toString() =>
-      'SleepEntry[id=$id, source_=$source_, title=$title, sourceApp=$sourceApp, startTime=$startTime, endTime=$endTime, sleepMinutes=$sleepMinutes, awakeMinutes=$awakeMinutes, lightMinutes=$lightMinutes, deepMinutes=$deepMinutes, remMinutes=$remMinutes, efficiencyPercent=$efficiencyPercent, isNap=$isNap]';
+      'SleepEntry[id=$id, source_=$source_, title=$title, sourceApp=$sourceApp, startTime=$startTime, endTime=$endTime, sleepMinutes=$sleepMinutes, awakeMinutes=$awakeMinutes, awakeInBedMinutes=$awakeInBedMinutes, outOfBedMinutes=$outOfBedMinutes, lightMinutes=$lightMinutes, deepMinutes=$deepMinutes, remMinutes=$remMinutes, unknownMinutes=$unknownMinutes, inBedMinutes=$inBedMinutes, efficiencyPercent=$efficiencyPercent, latencyMinutes=$latencyMinutes, wasoMinutes=$wasoMinutes, awakeningCount=$awakeningCount, midpoint=$midpoint, isNap=$isNap, recordingMethod=$recordingMethod, deviceModel=$deviceModel, stages=$stages]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -127,6 +184,16 @@ class SleepEntry {
     } else {
       json[r'awakeMinutes'] = null;
     }
+    if (this.awakeInBedMinutes != null) {
+      json[r'awakeInBedMinutes'] = this.awakeInBedMinutes;
+    } else {
+      json[r'awakeInBedMinutes'] = null;
+    }
+    if (this.outOfBedMinutes != null) {
+      json[r'outOfBedMinutes'] = this.outOfBedMinutes;
+    } else {
+      json[r'outOfBedMinutes'] = null;
+    }
     if (this.lightMinutes != null) {
       json[r'lightMinutes'] = this.lightMinutes;
     } else {
@@ -142,11 +209,53 @@ class SleepEntry {
     } else {
       json[r'remMinutes'] = null;
     }
-    if (this.efficiencyPercent.isPresent) {
-      final value = this.efficiencyPercent.value;
-      json[r'efficiencyPercent'] = value;
+    if (this.unknownMinutes != null) {
+      json[r'unknownMinutes'] = this.unknownMinutes;
+    } else {
+      json[r'unknownMinutes'] = null;
+    }
+    if (this.inBedMinutes != null) {
+      json[r'inBedMinutes'] = this.inBedMinutes;
+    } else {
+      json[r'inBedMinutes'] = null;
+    }
+    if (this.efficiencyPercent != null) {
+      json[r'efficiencyPercent'] = this.efficiencyPercent;
+    } else {
+      json[r'efficiencyPercent'] = null;
+    }
+    if (this.latencyMinutes != null) {
+      json[r'latencyMinutes'] = this.latencyMinutes;
+    } else {
+      json[r'latencyMinutes'] = null;
+    }
+    if (this.wasoMinutes != null) {
+      json[r'wasoMinutes'] = this.wasoMinutes;
+    } else {
+      json[r'wasoMinutes'] = null;
+    }
+    if (this.awakeningCount != null) {
+      json[r'awakeningCount'] = this.awakeningCount;
+    } else {
+      json[r'awakeningCount'] = null;
+    }
+    if (this.midpoint != null) {
+      json[r'midpoint'] = this.midpoint!.toUtc().toIso8601String();
+    } else {
+      json[r'midpoint'] = null;
     }
     json[r'isNap'] = this.isNap;
+    if (this.recordingMethod != null) {
+      json[r'recordingMethod'] = this.recordingMethod;
+    } else {
+      json[r'recordingMethod'] = null;
+    }
+    if (this.deviceModel != null) {
+      json[r'deviceModel'] = this.deviceModel;
+    } else {
+      json[r'deviceModel'] = null;
+    }
+    json[r'stages'] = this.stages;
     return json;
   }
 
@@ -165,14 +274,36 @@ class SleepEntry {
     bool sleepMinutesSetToNull = false,
     int? awakeMinutes,
     bool awakeMinutesSetToNull = false,
+    int? awakeInBedMinutes,
+    bool awakeInBedMinutesSetToNull = false,
+    int? outOfBedMinutes,
+    bool outOfBedMinutesSetToNull = false,
     int? lightMinutes,
     bool lightMinutesSetToNull = false,
     int? deepMinutes,
     bool deepMinutesSetToNull = false,
     int? remMinutes,
     bool remMinutesSetToNull = false,
-    Optional<num?>? efficiencyPercent,
+    int? unknownMinutes,
+    bool unknownMinutesSetToNull = false,
+    int? inBedMinutes,
+    bool inBedMinutesSetToNull = false,
+    num? efficiencyPercent,
+    bool efficiencyPercentSetToNull = false,
+    int? latencyMinutes,
+    bool latencyMinutesSetToNull = false,
+    int? wasoMinutes,
+    bool wasoMinutesSetToNull = false,
+    int? awakeningCount,
+    bool awakeningCountSetToNull = false,
+    DateTime? midpoint,
+    bool midpointSetToNull = false,
     bool? isNap,
+    String? recordingMethod,
+    bool recordingMethodSetToNull = false,
+    String? deviceModel,
+    bool deviceModelSetToNull = false,
+    List<SleepStage>? stages,
   }) =>
       SleepEntry(
         id: id ?? this.id,
@@ -185,13 +316,41 @@ class SleepEntry {
             sleepMinutesSetToNull ? null : sleepMinutes ?? this.sleepMinutes,
         awakeMinutes:
             awakeMinutesSetToNull ? null : awakeMinutes ?? this.awakeMinutes,
+        awakeInBedMinutes: awakeInBedMinutesSetToNull
+            ? null
+            : awakeInBedMinutes ?? this.awakeInBedMinutes,
+        outOfBedMinutes: outOfBedMinutesSetToNull
+            ? null
+            : outOfBedMinutes ?? this.outOfBedMinutes,
         lightMinutes:
             lightMinutesSetToNull ? null : lightMinutes ?? this.lightMinutes,
         deepMinutes:
             deepMinutesSetToNull ? null : deepMinutes ?? this.deepMinutes,
         remMinutes: remMinutesSetToNull ? null : remMinutes ?? this.remMinutes,
-        efficiencyPercent: efficiencyPercent ?? this.efficiencyPercent,
+        unknownMinutes: unknownMinutesSetToNull
+            ? null
+            : unknownMinutes ?? this.unknownMinutes,
+        inBedMinutes:
+            inBedMinutesSetToNull ? null : inBedMinutes ?? this.inBedMinutes,
+        efficiencyPercent: efficiencyPercentSetToNull
+            ? null
+            : efficiencyPercent ?? this.efficiencyPercent,
+        latencyMinutes: latencyMinutesSetToNull
+            ? null
+            : latencyMinutes ?? this.latencyMinutes,
+        wasoMinutes:
+            wasoMinutesSetToNull ? null : wasoMinutes ?? this.wasoMinutes,
+        awakeningCount: awakeningCountSetToNull
+            ? null
+            : awakeningCount ?? this.awakeningCount,
+        midpoint: midpointSetToNull ? null : midpoint ?? this.midpoint,
         isNap: isNap ?? this.isNap,
+        recordingMethod: recordingMethodSetToNull
+            ? null
+            : recordingMethod ?? this.recordingMethod,
+        deviceModel:
+            deviceModelSetToNull ? null : deviceModel ?? this.deviceModel,
+        stages: stages ?? this.stages,
       );
 
   /// Returns a new [SleepEntry] instance and imports its values from
@@ -229,16 +388,42 @@ class SleepEntry {
             'Required key "SleepEntry[sleepMinutes]" is missing from JSON.');
         assert(json.containsKey(r'awakeMinutes'),
             'Required key "SleepEntry[awakeMinutes]" is missing from JSON.');
+        assert(json.containsKey(r'awakeInBedMinutes'),
+            'Required key "SleepEntry[awakeInBedMinutes]" is missing from JSON.');
+        assert(json.containsKey(r'outOfBedMinutes'),
+            'Required key "SleepEntry[outOfBedMinutes]" is missing from JSON.');
         assert(json.containsKey(r'lightMinutes'),
             'Required key "SleepEntry[lightMinutes]" is missing from JSON.');
         assert(json.containsKey(r'deepMinutes'),
             'Required key "SleepEntry[deepMinutes]" is missing from JSON.');
         assert(json.containsKey(r'remMinutes'),
             'Required key "SleepEntry[remMinutes]" is missing from JSON.');
+        assert(json.containsKey(r'unknownMinutes'),
+            'Required key "SleepEntry[unknownMinutes]" is missing from JSON.');
+        assert(json.containsKey(r'inBedMinutes'),
+            'Required key "SleepEntry[inBedMinutes]" is missing from JSON.');
+        assert(json.containsKey(r'efficiencyPercent'),
+            'Required key "SleepEntry[efficiencyPercent]" is missing from JSON.');
+        assert(json.containsKey(r'latencyMinutes'),
+            'Required key "SleepEntry[latencyMinutes]" is missing from JSON.');
+        assert(json.containsKey(r'wasoMinutes'),
+            'Required key "SleepEntry[wasoMinutes]" is missing from JSON.');
+        assert(json.containsKey(r'awakeningCount'),
+            'Required key "SleepEntry[awakeningCount]" is missing from JSON.');
+        assert(json.containsKey(r'midpoint'),
+            'Required key "SleepEntry[midpoint]" is missing from JSON.');
         assert(json.containsKey(r'isNap'),
             'Required key "SleepEntry[isNap]" is missing from JSON.');
         assert(json[r'isNap'] != null,
             'Required key "SleepEntry[isNap]" has a null value in JSON.');
+        assert(json.containsKey(r'recordingMethod'),
+            'Required key "SleepEntry[recordingMethod]" is missing from JSON.');
+        assert(json.containsKey(r'deviceModel'),
+            'Required key "SleepEntry[deviceModel]" is missing from JSON.');
+        assert(json.containsKey(r'stages'),
+            'Required key "SleepEntry[stages]" is missing from JSON.');
+        assert(json[r'stages'] != null,
+            'Required key "SleepEntry[stages]" has a null value in JSON.');
         return true;
       }());
 
@@ -251,15 +436,24 @@ class SleepEntry {
         endTime: mapDateTime(json, r'endTime', r'')!,
         sleepMinutes: mapValueOfType<int>(json, r'sleepMinutes'),
         awakeMinutes: mapValueOfType<int>(json, r'awakeMinutes'),
+        awakeInBedMinutes: mapValueOfType<int>(json, r'awakeInBedMinutes'),
+        outOfBedMinutes: mapValueOfType<int>(json, r'outOfBedMinutes'),
         lightMinutes: mapValueOfType<int>(json, r'lightMinutes'),
         deepMinutes: mapValueOfType<int>(json, r'deepMinutes'),
         remMinutes: mapValueOfType<int>(json, r'remMinutes'),
-        efficiencyPercent: json.containsKey(r'efficiencyPercent')
-            ? Optional.present(json[r'efficiencyPercent'] == null
-                ? null
-                : num.parse('${json[r'efficiencyPercent']}'))
-            : const Optional.absent(),
+        unknownMinutes: mapValueOfType<int>(json, r'unknownMinutes'),
+        inBedMinutes: mapValueOfType<int>(json, r'inBedMinutes'),
+        efficiencyPercent: json[r'efficiencyPercent'] == null
+            ? null
+            : num.parse('${json[r'efficiencyPercent']}'),
+        latencyMinutes: mapValueOfType<int>(json, r'latencyMinutes'),
+        wasoMinutes: mapValueOfType<int>(json, r'wasoMinutes'),
+        awakeningCount: mapValueOfType<int>(json, r'awakeningCount'),
+        midpoint: mapDateTime(json, r'midpoint', r''),
         isNap: mapValueOfType<bool>(json, r'isNap')!,
+        recordingMethod: mapValueOfType<String>(json, r'recordingMethod'),
+        deviceModel: mapValueOfType<String>(json, r'deviceModel'),
+        stages: SleepStage.listFromJson(json[r'stages']),
       );
     }
     return null;
@@ -324,9 +518,21 @@ class SleepEntry {
     'endTime',
     'sleepMinutes',
     'awakeMinutes',
+    'awakeInBedMinutes',
+    'outOfBedMinutes',
     'lightMinutes',
     'deepMinutes',
     'remMinutes',
+    'unknownMinutes',
+    'inBedMinutes',
+    'efficiencyPercent',
+    'latencyMinutes',
+    'wasoMinutes',
+    'awakeningCount',
+    'midpoint',
     'isNap',
+    'recordingMethod',
+    'deviceModel',
+    'stages',
   };
 }

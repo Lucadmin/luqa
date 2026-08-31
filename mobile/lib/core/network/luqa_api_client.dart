@@ -21,11 +21,12 @@ abstract interface class LuqaApi {
 
   Future<List<api.Category>> listCategories();
 
-  Future<api.Category> createCategory(String name);
+  Future<api.Category> createCategory(String name, {String? id});
 
   Future<List<api.TimeEntry>> listTimeEntries(DateTime from, DateTime to);
 
   Future<api.TimeEntry> createTimeEntry({
+    String? id,
     required String description,
     required String? categoryId,
     required DateTime start,
@@ -121,7 +122,7 @@ class LuqaApiClient implements LuqaApi {
       _restored = true;
       return null;
     }
-    if (stored.refreshIsExpired(_now())) {
+    if (stored.refreshIsExpired(_now()) || !stored.hasRedeemableRefreshToken) {
       await credentialStore.clearSession();
       _restored = true;
       return null;
@@ -184,10 +185,17 @@ class LuqaApiClient implements LuqaApi {
   });
 
   @override
-  Future<api.Category> createCategory(String name) =>
+  Future<api.Category> createCategory(String name, {String? id}) =>
       _authorized((client) async {
         final response = await api.CategoriesApi(client)
-            .createCategory(api.CreateCategoryRequest(name: name))
+            .createCategory(
+              api.CreateCategoryRequest(
+                name: name,
+                id: id == null
+                    ? const api.Optional.absent()
+                    : api.Optional.present(id),
+              ),
+            )
             .timeout(_requestTimeout);
         if (response == null) throw api.ApiException(500, 'Empty response');
         return response.category;
@@ -204,6 +212,7 @@ class LuqaApiClient implements LuqaApi {
 
   @override
   Future<api.TimeEntry> createTimeEntry({
+    String? id,
     required String description,
     required String? categoryId,
     required DateTime start,
@@ -212,6 +221,9 @@ class LuqaApiClient implements LuqaApi {
     final response = await api.TimeEntriesApi(client)
         .createTimeEntry(
           api.CreateTimeEntryRequest(
+            id: id == null
+                ? const api.Optional.absent()
+                : api.Optional.present(id),
             startTime: start.toUtc(),
             description: api.Optional.present(description),
             categoryId: api.Optional.present(categoryId),
@@ -251,16 +263,17 @@ class LuqaApiClient implements LuqaApi {
       });
 
   @override
-  Future<api.HealthSyncResponse> pushHealthSync(api.HealthSyncRequest request) =>
-      _authorized((client) async {
-        // A backfill carries a lot more than a routine push, so this gets a
-        // longer ceiling than the standard request timeout.
-        final response = await api.HealthApi(client)
-            .pushHealthSync(request)
-            .timeout(_syncTimeout);
-        if (response == null) throw api.ApiException(500, 'Empty response');
-        return response;
-      });
+  Future<api.HealthSyncResponse> pushHealthSync(
+    api.HealthSyncRequest request,
+  ) => _authorized((client) async {
+    // A backfill carries a lot more than a routine push, so this gets a
+    // longer ceiling than the standard request timeout.
+    final response = await api.HealthApi(
+      client,
+    ).pushHealthSync(request).timeout(_syncTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response;
+  });
 
   @override
   Future<List<api.HealthSyncState>> healthSyncStates() =>
@@ -321,7 +334,17 @@ class LuqaApiClient implements LuqaApi {
       _session = stored;
       return stored;
     } on api.ApiException catch (error) {
-      if (error.code != 401) rethrow;
+      // Any genuine refusal of the refresh token leaves the session unusable,
+      // not just a 401: propagating it would strand every screen with no way
+      // back, while expiring sends the user to sign-in, which actually fixes
+      // it.
+      //
+      // Transport failures must not take that path. The generated client
+      // reports them as a synthetic 400 carrying the real cause, so without
+      // the inner-exception check a tunnel or a dropped port forward would
+      // silently sign the user out. Server faults are not our credential's
+      // fault either.
+      if (error.innerException != null || error.code >= 500) rethrow;
       return _expireSession();
     }
   }

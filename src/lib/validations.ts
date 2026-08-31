@@ -23,8 +23,20 @@ const hexColor = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color like #6366f1");
 
+// A row's identity, minted by the client that created it. Offline devices need
+// to name a block before the server has seen it, so that a later edit, delete,
+// or category reference has something stable to point at — and so a retried
+// create is recognised as the same row rather than duplicated.
+export const clientId = z
+  .string()
+  .trim()
+  .min(8)
+  .max(64)
+  .regex(/^[A-Za-z0-9_-]+$/, "Must be url-safe");
+
 export const createEntrySchema = z
   .object({
+    id: clientId.optional(),
     description: z.string().max(500).optional().default(""),
     categoryId: z.string().nullish(),
     startTime: isoString,
@@ -51,6 +63,9 @@ export const updateEntrySchema = z
   );
 
 export const createCategorySchema = z.object({
+  // Only a preference: a category matching by name already exists, so the
+  // server may answer with that row's id instead.
+  id: clientId.optional(),
   name: z.string().trim().min(1).max(60),
   color: hexColor.optional(),
 });

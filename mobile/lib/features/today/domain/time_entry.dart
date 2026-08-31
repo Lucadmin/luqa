@@ -46,7 +46,12 @@ class NewTimeEntry {
     required this.categoryId,
     required this.start,
     required this.end,
+    this.id,
   });
+
+  /// The identity the device already gave this block. Sending it makes the
+  /// create idempotent, so a retry after a lost response cannot duplicate it.
+  final String? id;
 
   final String description;
   final String? categoryId;

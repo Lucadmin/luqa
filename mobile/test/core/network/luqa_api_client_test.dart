@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -6,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:luqa/core/network/luqa_api_client.dart';
 import 'package:luqa/features/auth/data/secure_credential_store.dart';
 import 'package:luqa/features/auth/domain/auth_user.dart';
+import 'package:luqa_api/api.dart' as api;
 
 void main() {
   final now = DateTime.utc(2026, 8, 27, 18);
@@ -100,7 +102,7 @@ void main() {
 
       expect(refreshes, 1);
       expect(protectedHeaders, ['Bearer access-new', 'Bearer access-new']);
-      expect(store.session?.refreshToken, 'refresh-new');
+      expect(store.session?.refreshToken, newRefreshToken);
     },
   );
 
@@ -137,25 +139,156 @@ void main() {
     expect(store.clears, 1);
     expect(expirationCallbacks, 1);
   });
+
+  test('a refresh refused with 400 also clears the local session', () async {
+    final store = MemoryCredentialStore(
+      session: _storedSession(
+        now: now,
+        accessExpiresAt: now.subtract(const Duration(minutes: 1)),
+      ),
+    );
+    var expirationCallbacks = 0;
+    final client = LuqaApiClient(
+      baseUrl: 'https://luqa.example',
+      credentialStore: store,
+      httpClient: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'error': {'code': 'invalid_input', 'message': 'Invalid input'},
+          }),
+          400,
+          headers: {'content-type': 'application/json'},
+        ),
+      ),
+      requireHttps: true,
+      now: () => now,
+      onSessionExpired: () async => expirationCallbacks += 1,
+    );
+
+    // A stored token the server will not accept is dead whatever the status
+    // code. Anything else strands every screen with no route back to sign-in.
+    await expectLater(
+      client.listCategories(),
+      throwsA(isA<SessionExpiredException>()),
+    );
+    expect(store.session, isNull);
+    expect(expirationCallbacks, 1);
+  });
+
+  test(
+    'a stored session with an unusable refresh token is discarded',
+    () async {
+      final store = MemoryCredentialStore(
+        session: _storedSession(
+          now: now,
+          accessExpiresAt: now.subtract(const Duration(minutes: 1)),
+          refreshToken: '',
+        ),
+      );
+      var expirationCallbacks = 0;
+      final client = LuqaApiClient(
+        baseUrl: 'https://luqa.example',
+        credentialStore: store,
+        httpClient: MockClient(
+          (_) async => throw StateError('no request should be attempted'),
+        ),
+        requireHttps: true,
+        now: () => now,
+        onSessionExpired: () async => expirationCallbacks += 1,
+      );
+
+      // A credential the server's own contract forbids is not worth a round
+      // trip; it is a sign-in prompt.
+      await expectLater(
+        client.listCategories(),
+        throwsA(isA<SessionExpiredException>()),
+      );
+      expect(store.session, isNull);
+      expect(expirationCallbacks, 0);
+    },
+  );
+
+  test('an unreachable server during refresh keeps the session', () async {
+    final store = MemoryCredentialStore(
+      session: _storedSession(
+        now: now,
+        accessExpiresAt: now.subtract(const Duration(minutes: 1)),
+      ),
+    );
+    var expirationCallbacks = 0;
+    final client = LuqaApiClient(
+      baseUrl: 'https://luqa.example',
+      credentialStore: store,
+      httpClient: MockClient(
+        (_) async => throw const SocketException('Connection refused'),
+      ),
+      requireHttps: true,
+      now: () => now,
+      onSessionExpired: () async => expirationCallbacks += 1,
+    );
+
+    // The generated client reports this as a 400. Treating it as a refused
+    // credential would sign the user out every time they lose the network.
+    await expectLater(
+      client.listCategories(),
+      throwsA(isA<api.ApiException>()),
+    );
+    expect(store.session, isNotNull);
+    expect(store.clears, 0);
+    expect(expirationCallbacks, 0);
+  });
+
+  test('a server fault during refresh keeps the session', () async {
+    final store = MemoryCredentialStore(
+      session: _storedSession(
+        now: now,
+        accessExpiresAt: now.subtract(const Duration(minutes: 1)),
+      ),
+    );
+    final client = LuqaApiClient(
+      baseUrl: 'https://luqa.example',
+      credentialStore: store,
+      httpClient: MockClient((_) async => http.Response('boom', 500)),
+      requireHttps: true,
+      now: () => now,
+      onSessionExpired: () async {},
+    );
+
+    // A broken server is not a broken credential; signing the user out here
+    // would lose a working session to someone else's outage.
+    await expectLater(
+      client.listCategories(),
+      throwsA(isA<api.ApiException>()),
+    );
+    expect(store.session, isNotNull);
+    expect(store.clears, 0);
+  });
 }
 
 Map<String, Object?> _credentialsJson({required DateTime now}) => {
   'user': {'id': 'user-1', 'email': 'luca@example.com', 'name': 'Luca'},
   'accessToken': 'access-new',
   'accessExpiresAt': now.add(const Duration(minutes: 15)).toIso8601String(),
-  'refreshToken': 'refresh-new',
+  'refreshToken': newRefreshToken,
   'refreshExpiresAt': now.add(const Duration(days: 30)).toIso8601String(),
 };
+
+/// The server issues `luqa_rt_1.` plus 43 base64url characters, and its
+/// contract refuses anything shorter than 32. Fixtures match that shape so the
+/// tests exercise credentials the real API would actually accept.
+const oldRefreshToken = 'luqa_rt_1.old00000000000000000000000000000000000000';
+const newRefreshToken = 'luqa_rt_1.new00000000000000000000000000000000000000';
 
 StoredMobileSession _storedSession({
   required DateTime now,
   String accessToken = 'access-old',
+  String refreshToken = oldRefreshToken,
   DateTime? accessExpiresAt,
 }) => StoredMobileSession(
   user: const AuthUser(id: 'user-1', email: 'luca@example.com', name: 'Luca'),
   accessToken: accessToken,
   accessExpiresAt: accessExpiresAt ?? now.add(const Duration(minutes: 15)),
-  refreshToken: 'refresh-old',
+  refreshToken: refreshToken,
   refreshExpiresAt: now.add(const Duration(days: 30)),
 );
 
