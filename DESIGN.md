@@ -400,8 +400,9 @@ refused it, the queue gave up, and the user's work is gone.
   are monochrome and readable.
 - **Habits:** today's actions remain in a slim strip on Today. The strip opens a
   dedicated planning and history route, avoiding a sixth compact destination.
-- **Account actions:** Settings and Profile use separate, adjacent targets in
-  the top-right header cluster; integrations live inside Settings.
+- **Account entry point:** one avatar target in the top-right header opens
+  Settings, which contains profile identity, account actions, preferences, and
+  integrations in one surface.
 
 ### Sheets and Focused Tasks
 

@@ -253,70 +253,7 @@ GymSet _toSet(GymSetWrite write) =>
 
 /// Lays the queue over a server snapshot, so what the user sees is what they
 /// did, whether or not it has been sent yet.
-GymOverview overlayGym(GymOverview overview, List<GymMutation> queue) {
-  if (queue.isEmpty) return overview;
 
-  final locations = <String, GymLocation>{
-    for (final location in overview.locations) location.id: location,
-  };
-  final sessions = <String, GymSession>{
-    for (final session in overview.sessions) session.id: session,
-  };
-  var total = overview.totalSessions;
-
-  for (final pending in queue) {
-    switch (pending) {
-      case CreateSession(:final session):
-        if (!sessions.containsKey(session.id)) total += 1;
-        sessions[session.id] = session;
-      case SaveSession(:final sessionId, :final write):
-        final existing = sessions[sessionId];
-        if (existing == null) continue;
-        sessions[sessionId] = applyWrite(existing, write);
-      case CreateLocation(:final location):
-        locations[location.id] = location;
-      case UpdateLocation(:final locationId):
-        final existing = locations[locationId];
-        if (existing == null) continue;
-        locations[locationId] = pending.applyTo(existing);
-    }
-  }
-
-  final ordered = sessions.values.toList()
-    ..sort((left, right) {
-      final byDate = right.dateKey.compareTo(left.dateKey);
-      return byDate != 0 ? byDate : right.createdAt.compareTo(left.createdAt);
-    });
-
-  return overview.copyWith(
-    locations: locations.values.toList()
-      ..sort((left, right) => left.order.compareTo(right.order)),
-    sessions: ordered,
-    totalSessions: total,
-  );
-}
-
-/// The workout as the user last left it, whether that was on the server or
-/// only in the queue.
-GymSession? overlayGymSession(GymSession? session, List<GymMutation> queue) {
-  var current = session;
-  for (final pending in queue) {
-    switch (pending) {
-      case CreateSession(session: final created)
-          when current == null || created.id == current.id:
-        if (session == null || created.id == session.id) current = created;
-      case SaveSession(:final sessionId, :final write)
-          when current != null && sessionId == current.id:
-        current = applyWrite(current, write);
-      case _:
-        continue;
-    }
-  }
-  return current;
-}
-
-/// Rewrites references to a gym this device named itself, once the server has
-/// answered with an id of its own.
 List<GymMutation> remapLocationId(
   List<GymMutation> queue,
   String from,

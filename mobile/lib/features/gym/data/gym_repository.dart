@@ -60,6 +60,13 @@ abstract interface class GymRepository {
     String? beforeSessionId,
   });
 
+  /// Moves every logged performance from [sourceExerciseId] to
+  /// [targetExerciseId]. The target name is kept and the source disappears.
+  Future<GymExercise> mergeExercise({
+    required String sourceExerciseId,
+    required String targetExerciseId,
+  });
+
   Future<GymLocation> createLocation({
     String? id,
     required String name,

@@ -137,12 +137,85 @@ List<MoneyMutation> foldMoney(List<MoneyMutation> queue, MoneyMutation next) {
       ];
       return createdHere ? kept : [...kept, next];
 
+    // A note written and then removed before either reached the server never
+    // has to be sent at all — and the removal would 404 on a note the server
+    // has never seen, which is a discarded write for something the user
+    // already undid.
+    case RemovePersonNote(:final noteId):
+      return _dropOrQueue(queue, next, noteId, (pending) => pending is AddPersonNote);
+    case RemovePersonGift(:final giftId):
+      return _dropOrQueue(queue, next, giftId, (pending) => pending is AddPersonGift);
+    case RemovePersonPlace(:final placeId):
+      return _dropOrQueue(queue, next, placeId, (pending) => pending is AddPersonPlace);
+
+    // Only the newest matters: seeing somebody twice before a sync is one
+    // sighting, and a note pinned then unpinned is one state.
+    case MarkPersonSeen(:final personId):
+      return _replaceMatching(
+        queue,
+        next,
+        (pending) => pending is MarkPersonSeen && pending.personId == personId,
+      );
+    case UpdatePersonNote(:final noteId):
+      return _replaceMatching(
+        queue,
+        next,
+        (pending) => pending is UpdatePersonNote && pending.noteId == noteId,
+      );
+    case SetGiftGiven(:final giftId):
+      return _replaceMatching(
+        queue,
+        next,
+        (pending) => pending is SetGiftGiven && pending.giftId == giftId,
+      );
+
     case CreateExpense() ||
         CreatePerson() ||
         CreateGroup() ||
-        CreateSettlement():
+        CreateSettlement() ||
+        AddPersonNote() ||
+        AddPersonGift() ||
+        AddPersonPlace():
       return [...queue, next];
   }
+}
+
+/// Drops a queued create and its removal, or queues the removal when the row
+/// already exists on the server.
+List<MoneyMutation> _dropOrQueue(
+  List<MoneyMutation> queue,
+  MoneyMutation removal,
+  String rowId,
+  bool Function(MoneyMutation) isCreate,
+) {
+  final createdHere = queue.any(
+    (pending) => isCreate(pending) && pending.subjectId == rowId,
+  );
+  final kept = [
+    for (final pending in queue)
+      if (pending.subjectId != rowId) pending,
+  ];
+  return createdHere ? kept : [...kept, removal];
+}
+
+/// Keeps one mutation per subject, in the position the first one took, so the
+/// order the user did things in survives the collapse.
+List<MoneyMutation> _replaceMatching(
+  List<MoneyMutation> queue,
+  MoneyMutation next,
+  bool Function(MoneyMutation) matches,
+) {
+  var absorbed = false;
+  final folded = <MoneyMutation>[];
+  for (final pending in queue) {
+    if (matches(pending)) {
+      folded.add(next);
+      absorbed = true;
+    } else {
+      folded.add(pending);
+    }
+  }
+  return absorbed ? folded : [...folded, next];
 }
 
 bool _touchesExpense(MoneyMutation pending, String expenseId) => switch (pending) {
@@ -156,6 +229,17 @@ bool _touchesPerson(MoneyMutation pending, String personId) => switch (pending) 
   CreatePerson(:final person) => person.id == personId,
   UpdatePerson(personId: final id) => id == personId,
   DeletePerson(personId: final id) => id == personId,
+  // Their record goes with them. A note still queued against somebody removed
+  // before either write synced has nowhere to land.
+  MarkPersonSeen(personId: final id) => id == personId,
+  AddPersonNote(personId: final id) => id == personId,
+  UpdatePersonNote(personId: final id) => id == personId,
+  RemovePersonNote(personId: final id) => id == personId,
+  AddPersonGift(personId: final id) => id == personId,
+  SetGiftGiven(personId: final id) => id == personId,
+  RemovePersonGift(personId: final id) => id == personId,
+  AddPersonPlace(personId: final id) => id == personId,
+  RemovePersonPlace(personId: final id) => id == personId,
   _ => false,
 };
 
@@ -219,10 +303,89 @@ List<MoneyMutation> remapPersonId(
           clearDefaultPercent: pending.clearDefaultPercent,
           order: pending.order,
           archived: pending.archived,
+          nickname: pending.nickname,
+          clearNickname: pending.clearNickname,
+          birthday: pending.birthday,
+          clearBirthday: pending.clearBirthday,
+          cadenceDays: pending.cadenceDays,
+          clearCadence: pending.clearCadence,
           queuedAt: pending.queuedAt,
         ),
         DeletePerson(:final personId) when personId == from =>
           DeletePerson(personId: to, queuedAt: pending.queuedAt),
+        // Their record follows them. A note or a gift idea still queued
+        // against the id this device made up would otherwise be sent to a
+        // person the server has never heard of, and discarded.
+        MarkPersonSeen(:final personId) when personId == from => MarkPersonSeen(
+          personId: to,
+          personName: pending.personName,
+          seenAt: pending.seenAt,
+          queuedAt: pending.queuedAt,
+        ),
+        AddPersonNote(:final personId) when personId == from => AddPersonNote(
+          personId: to,
+          personName: pending.personName,
+          noteId: pending.noteId,
+          body: pending.body,
+          pinned: pending.pinned,
+          happenedOn: pending.happenedOn,
+          queuedAt: pending.queuedAt,
+        ),
+        UpdatePersonNote(:final personId) when personId == from =>
+          UpdatePersonNote(
+            personId: to,
+            personName: pending.personName,
+            noteId: pending.noteId,
+            body: pending.body,
+            pinned: pending.pinned,
+            queuedAt: pending.queuedAt,
+          ),
+        RemovePersonNote(:final personId) when personId == from =>
+          RemovePersonNote(
+            personId: to,
+            personName: pending.personName,
+            noteId: pending.noteId,
+            queuedAt: pending.queuedAt,
+          ),
+        AddPersonGift(:final personId) when personId == from => AddPersonGift(
+          personId: to,
+          personName: pending.personName,
+          giftId: pending.giftId,
+          idea: pending.idea,
+          url: pending.url,
+          queuedAt: pending.queuedAt,
+        ),
+        SetGiftGiven(:final personId) when personId == from => SetGiftGiven(
+          personId: to,
+          personName: pending.personName,
+          giftId: pending.giftId,
+          givenAt: pending.givenAt,
+          queuedAt: pending.queuedAt,
+        ),
+        RemovePersonGift(:final personId) when personId == from =>
+          RemovePersonGift(
+            personId: to,
+            personName: pending.personName,
+            giftId: pending.giftId,
+            queuedAt: pending.queuedAt,
+          ),
+        AddPersonPlace(:final personId) when personId == from => AddPersonPlace(
+          personId: to,
+          personName: pending.personName,
+          placeId: pending.placeId,
+          label: pending.label,
+          city: pending.city,
+          country: pending.country,
+          isPrimary: pending.isPrimary,
+          queuedAt: pending.queuedAt,
+        ),
+        RemovePersonPlace(:final personId) when personId == from =>
+          RemovePersonPlace(
+            personId: to,
+            personName: pending.personName,
+            placeId: pending.placeId,
+            queuedAt: pending.queuedAt,
+          ),
         CreateSettlement(:final settlement) when settlement.personId == from =>
           CreateSettlement(
             settlement: Settlement(

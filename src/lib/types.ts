@@ -236,6 +236,77 @@ export interface PersonDTO {
   defaultPercent: number | null;
   order: number;
   archived: boolean;
+
+  // --- Profile ---
+  // All optional. Someone who has only ever been on a bill is a complete
+  // person; the rest accumulates when it is worth writing down.
+
+  nickname: string | null;
+  photoUrl: string | null;
+  /** Parts, not a date: most contacts have no birth year, and inventing one
+   *  produces a confidently wrong age. */
+  birthdayYear: number | null;
+  birthdayMonth: number | null;
+  birthdayDay: number | null;
+  /** Days between catch-ups worth aiming for. Null = no rhythm, and someone
+   *  with no rhythm is never reported as overdue. */
+  cadenceDays: number | null;
+  /** ISO instant they were last actually seen. */
+  lastSeenAt: string | null;
+  /** People API resource, e.g. "people/c123". Null = Luqa-only. */
+  googleResourceName: string | null;
+
+  // The children ride inside the person rather than syncing on their own: one
+  // row is one whole profile. Any write to them bumps the person's updatedAt,
+  // or the delta feed would never carry the change.
+  places: PersonPlaceDTO[];
+  channels: PersonChannelDTO[];
+  notes: PersonNoteDTO[];
+  gifts: PersonGiftIdeaDTO[];
+}
+
+export type PlaceSource = "GOOGLE" | "MANUAL";
+export type ChannelKind = "PHONE" | "EMAIL" | "HANDLE";
+
+export interface PersonPlaceDTO {
+  id: string;
+  label: string;
+  city: string;
+  region: string | null;
+  country: string | null;
+  address: string | null;
+  /** City centroid once geocoded — never the street coordinate. Null until
+   *  then: a place that lists but does not yet pin. */
+  latitude: number | null;
+  longitude: number | null;
+  isPrimary: boolean;
+  source: PlaceSource;
+}
+
+export interface PersonChannelDTO {
+  id: string;
+  kind: ChannelKind;
+  label: string | null;
+  value: string;
+  source: PlaceSource;
+}
+
+export interface PersonNoteDTO {
+  id: string;
+  body: string;
+  pinned: boolean;
+  /** "YYYY-MM-DD" when the note is about a moment rather than a standing fact. */
+  happenedOn: string | null;
+  createdAt: string;
+}
+
+export interface PersonGiftIdeaDTO {
+  id: string;
+  idea: string;
+  url: string | null;
+  /** Set once given. Kept rather than deleted: the list's second job is not
+   *  giving the same thing twice. */
+  givenAt: string | null;
 }
 
 /** A person plus the numbers the overview shows next to their name. */

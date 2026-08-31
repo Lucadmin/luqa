@@ -233,5 +233,16 @@ abstract interface class MutationQueue<T extends PendingMutation> {
 
   List<T> get pending;
 
-  Future<void> enqueue(T mutation);
+  /// Records a mutation and, unless told otherwise, starts sending.
+  ///
+  /// [sendNow] is how a caller says "there is more to this write than the
+  /// queue entry". A repository writes the row itself straight after
+  /// queueing, and that write yields — long enough for a drain to send this
+  /// mutation and rewrite the queue behind it. A caller that is mid-write has
+  /// to be allowed to finish before any of that happens.
+  Future<void> enqueue(T mutation, {bool sendNow = true});
+
+  /// Sends whatever is queued. Safe to call at any time; two callers never
+  /// drain at once.
+  Future<void> sync();
 }

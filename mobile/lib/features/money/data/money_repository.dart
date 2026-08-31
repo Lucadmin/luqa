@@ -1,4 +1,10 @@
 import 'package:luqa/features/money/domain/money_models.dart';
+// One write shape for a person, wherever they were added from. Identity is
+// People's; money adds a person as a side effect of splitting a bill with
+// them, and that is the same write.
+export 'package:luqa/features/people/data/people_repository.dart'
+    show PersonWrite;
+import 'package:luqa/features/people/data/people_repository.dart';
 import 'package:luqa/features/money/domain/money_split.dart';
 
 /// A bill as the editor hands it over: the total, who was there, and how it is
@@ -96,20 +102,6 @@ class SettlementWrite {
   final SettlementDirection direction;
   final String dateKey;
   final String notes;
-}
-
-class PersonWrite {
-  const PersonWrite({
-    required this.name,
-    required this.colorValue,
-    required this.emoji,
-    required this.defaultPercent,
-  });
-
-  final String name;
-  final int colorValue;
-  final String? emoji;
-  final int? defaultPercent;
 }
 
 class GroupWrite {

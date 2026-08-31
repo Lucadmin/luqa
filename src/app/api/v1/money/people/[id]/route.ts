@@ -6,6 +6,7 @@ import {
   mobileJson,
 } from "@/lib/mobile-api-response";
 import { toPersonDTO } from "@/lib/serializers";
+import { deletePerson, personInclude } from "@/lib/server/people";
 import {
   moneyRoute,
   notFound,
@@ -56,46 +57,25 @@ export const PATCH = moneyRoute<[Params]>(
       data.archivedAt = d.archived ? new Date() : null;
     }
 
-    const person = await db.person.update({ where: { id }, data });
+    const person = await db.person.update({
+      where: { id },
+      data,
+      include: personInclude,
+    });
     return mobileJson({ person: toPersonDTO(person) });
   },
 );
 
 // DELETE /api/v1/money/people/[id] — remove someone.
 //
-// Anyone who has been on a bill is archived rather than deleted, so the
-// history that produced their balance survives. Someone added by mistake, with
-// nothing attached, is removed outright. `deleted` says which happened, so the
-// client knows whether to expect the row back.
+// Shares its rules with `/v1/people/[id]`: anyone who has been on a bill is
+// archived so the history that produced everyone else's balances survives,
+// and someone with nothing attached is tombstoned. One implementation, so the
+// two contracts cannot come to disagree about what "remove" means.
 export const DELETE = moneyRoute<[Params]>(
   async (session, _request, { params }) => {
     const { id } = await params;
-    const person = await db.person.findFirst({
-      where: { id, userId: session.userId },
-    });
-    // Already gone: a delete replayed from a phone's queue must not fail on
-    // its second attempt.
-    if (!person) return mobileJson({ deleted: true });
-
-    const [shares, paid, settlements] = await Promise.all([
-      db.expenseShare.count({
-        where: { personId: id, expense: { deletedAt: null } },
-      }),
-      db.expense.count({ where: { paidByPersonId: id } }),
-      db.settlement.count({ where: { personId: id } }),
-    ]);
-
-    if (shares + paid + settlements === 0) {
-      await db.$transaction([
-        // Pure join rows with no history worth keeping, and the one reference
-        // a deleted person can still leave dangling.
-        db.groupMember.deleteMany({ where: { personId: id } }),
-        db.person.update({ where: { id }, data: { deletedAt: new Date() } }),
-      ]);
-      return mobileJson({ deleted: true });
-    }
-
-    await db.person.update({ where: { id }, data: { archivedAt: new Date() } });
-    return mobileJson({ deleted: false });
+    const result = await deletePerson(session.userId, id);
+    return mobileJson({ deleted: result.kind === "gone" });
   },
 );

@@ -1,110 +1,30 @@
 import 'package:luqa/core/network/luqa_api_client.dart';
-import 'package:luqa/core/storage/document_cache.dart';
-import 'package:luqa/core/storage/luqa_store.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
 import 'package:luqa/features/today/domain/category.dart';
 import 'package:luqa/features/today/domain/sleep_entry.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa_api/api.dart' as api;
 
-abstract interface class TimelineCache {
-  Future<List<Category>?> readCategories();
-
-  Future<void> writeCategories(List<Category> categories);
-
-  Future<TimelineWindow?> readWindow(DateTime from, DateTime to);
-
-  Future<void> writeWindow(TimelineWindow window);
-}
-
-/// App-private, user-scoped read cache. It holds the most recent window only —
-/// enough to paint a cold start instantly, small enough that it never grows
-/// without bound. No credential ever reaches it.
-class SqliteTimelineCache implements TimelineCache {
-  SqliteTimelineCache({required String namespace, LuqaStore? store})
-    : _documents = DocumentCache(
-        namespace: namespace,
-        collection: 'timeline',
-        store: store,
-      );
-
-  final DocumentCache _documents;
-
-  @override
-  Future<List<Category>?> readCategories() async {
-    final value = await _documents.read<List<Object?>>('categories');
-    if (value == null) return null;
-    try {
-      return value
-          .map((item) => _categoryFromJson(item! as Map<String, Object?>))
-          .toList(growable: false);
-    } on Object {
-      await _documents.remove('categories');
-      return null;
-    }
-  }
-
-  @override
-  Future<void> writeCategories(List<Category> categories) => _documents.write(
-    'categories',
-    categories.map(_categoryToJson).toList(),
-  );
-
-  @override
-  Future<TimelineWindow?> readWindow(DateTime from, DateTime to) async {
-    final value = await _documents.read<Map<String, Object?>>('window');
-    if (value == null) return null;
-    try {
-      // A cached window for a different range is useless; the caller is
-      // looking at other days.
-      if (value['from'] != _dayKey(from) || value['to'] != _dayKey(to)) {
-        return null;
-      }
-      return TimelineWindow(
-        from: from,
-        to: to,
-        entries: (value['entries']! as List<Object?>)
-            .map((item) => _entryFromJson(item! as Map<String, Object?>))
-            .toList(growable: false),
-        sleep: (value['sleep']! as List<Object?>)
-            .map((item) => _sleepFromJson(item! as Map<String, Object?>))
-            .toList(growable: false),
-      );
-    } on Object {
-      await _documents.remove('window');
-      return null;
-    }
-  }
-
-  @override
-  Future<void> writeWindow(TimelineWindow window) => _documents.write('window', {
-    'from': _dayKey(window.from),
-    'to': _dayKey(window.to),
-    'entries': window.entries.map(_entryToJson).toList(),
-    'sleep': window.sleep.map(_sleepToJson).toList(),
-  });
-}
-
 class RemoteTodayRepository implements TodayRepository {
-  RemoteTodayRepository({required this.client, required this.cache});
+  RemoteTodayRepository({required this.client});
 
   final LuqaApi client;
-  final TimelineCache cache;
+
+  // Nothing is kept here any more; the device owns its rows. Signed out,
+  // there is nowhere local to read from and nothing to paint early.
+  @override
+  Future<List<Category>?> loadCachedCategories() async => null;
 
   @override
-  Future<List<Category>?> loadCachedCategories() => cache.readCategories();
-
-  @override
-  Future<TimelineWindow?> loadCachedWindow(DateTime from, DateTime to) =>
-      cache.readWindow(from, to);
+  Future<TimelineWindow?> loadCachedWindow(DateTime from, DateTime to) async =>
+      null;
 
   @override
   Future<List<Category>> loadCategories() async {
     final categories = (await client.listCategories())
         .where((category) => !category.archived)
-        .map(_categoryFromApi)
+        .map(categoryFromApi)
         .toList(growable: false);
-    await cache.writeCategories(categories);
     return categories;
   }
 
@@ -116,7 +36,7 @@ class RemoteTodayRepository implements TodayRepository {
         (await client.listTimeEntries(
             from.subtract(const Duration(days: 1)),
             to,
-          )).map(_entryFromApi).toList(growable: false)
+          )).map(entryFromApi).toList(growable: false)
           ..sort((left, right) => left.start.compareTo(right.start));
 
     // Sleep is context, not the point of the screen. A server that cannot
@@ -127,7 +47,7 @@ class RemoteTodayRepository implements TodayRepository {
       // Sleep is attributed to the day it wakes up in, so a session that began
       // the evening before still belongs to this window.
       sleep.addAll(
-        (await client.listSleepEntries(from, to)).map(_sleepFromApi),
+        (await client.listSleepEntries(from, to)).map(sleepFromApi),
       );
       sleep.sort((left, right) => left.start.compareTo(right.start));
     } on Object {
@@ -140,12 +60,11 @@ class RemoteTodayRepository implements TodayRepository {
       entries: entries,
       sleep: sleep,
     );
-    await cache.writeWindow(window);
     return window;
   }
 
   @override
-  Future<TimeEntry> addEntry(NewTimeEntry draft) async => _entryFromApi(
+  Future<TimeEntry> addEntry(NewTimeEntry draft) async => entryFromApi(
     await client.createTimeEntry(
       id: draft.id,
       description: draft.description,
@@ -161,7 +80,7 @@ class RemoteTodayRepository implements TodayRepository {
 
   /// The queue only carries the id of an edited row, not the row itself.
   Future<TimeEntry> updateEntryById(String id, EntryPatch patch) async {
-    return _entryFromApi(
+    return entryFromApi(
       await client.updateTimeEntry(
         id,
         api.UpdateTimeEntryRequest(
@@ -189,24 +108,24 @@ class RemoteTodayRepository implements TodayRepository {
 
   @override
   Future<Category> addCategory(String name) async =>
-      _categoryFromApi(await client.createCategory(name));
+      categoryFromApi(await client.createCategory(name));
 
   /// Creates a category under an id this device already handed out. The server
   /// may answer with a different one when the name is already taken, so the
   /// returned category is the authority.
   Future<Category> addCategoryWithId(Category category) async =>
-      _categoryFromApi(
+      categoryFromApi(
         await client.createCategory(category.name, id: category.id),
       );
 }
 
-Category _categoryFromApi(api.Category value) => Category(
+Category categoryFromApi(api.Category value) => Category(
   id: value.id,
   name: value.name,
   colorValue: _colorValue(value.color),
 );
 
-TimeEntry _entryFromApi(api.TimeEntry value) => TimeEntry(
+TimeEntry entryFromApi(api.TimeEntry value) => TimeEntry(
   id: value.id,
   description: value.description,
   categoryId: value.categoryId,
@@ -214,7 +133,7 @@ TimeEntry _entryFromApi(api.TimeEntry value) => TimeEntry(
   end: value.endTime?.toLocal(),
 );
 
-SleepEntry _sleepFromApi(api.SleepEntry value) => SleepEntry(
+SleepEntry sleepFromApi(api.SleepEntry value) => SleepEntry(
   id: value.id,
   source: value.source_.toString(),
   sourceApp: value.sourceApp,
@@ -255,41 +174,12 @@ int _colorValue(String value) {
   return parsed == null ? 0xFF6543E8 : 0xFF000000 | parsed;
 }
 
-String _dayKey(DateTime value) =>
-    '${value.year}-${value.month.toString().padLeft(2, '0')}-'
-    '${value.day.toString().padLeft(2, '0')}';
 
-Map<String, Object?> _categoryToJson(Category value) => {
-  'id': value.id,
-  'name': value.name,
-  'colorValue': value.colorValue,
-};
 
-Category _categoryFromJson(Map<String, Object?> value) => Category(
-  id: value['id']! as String,
-  name: value['name']! as String,
-  colorValue: value['colorValue']! as int,
-);
 
-Map<String, Object?> _entryToJson(TimeEntry value) => {
-  'id': value.id,
-  'description': value.description,
-  'categoryId': value.categoryId,
-  'start': value.start.toUtc().toIso8601String(),
-  'end': value.end?.toUtc().toIso8601String(),
-};
 
-TimeEntry _entryFromJson(Map<String, Object?> value) => TimeEntry(
-  id: value['id']! as String,
-  description: value['description']! as String,
-  categoryId: value['categoryId'] as String?,
-  start: DateTime.parse(value['start']! as String).toLocal(),
-  end: value['end'] == null
-      ? null
-      : DateTime.parse(value['end']! as String).toLocal(),
-);
 
-Map<String, Object?> _sleepToJson(SleepEntry value) => {
+Map<String, Object?> sleepToJson(SleepEntry value) => {
   'id': value.id,
   'source': value.source,
   'sourceApp': value.sourceApp,
@@ -323,7 +213,7 @@ Map<String, Object?> _sleepToJson(SleepEntry value) => {
   ],
 };
 
-SleepEntry _sleepFromJson(Map<String, Object?> value) => SleepEntry(
+SleepEntry sleepFromJson(Map<String, Object?> value) => SleepEntry(
   id: value['id']! as String,
   source: value['source']! as String,
   sourceApp: value['sourceApp'] as String?,

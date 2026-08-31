@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:luqa/app/app_shell.dart';
 import 'package:luqa/app/destination_placeholder.dart';
-import 'package:luqa/app/profile_screen.dart';
 import 'package:luqa/app/settings_screen.dart';
 import 'package:luqa/design_system/component_gallery_screen.dart';
 import 'package:luqa/features/gym/presentation/exercise_history_screen.dart';
@@ -13,8 +12,12 @@ import 'package:luqa/features/gym/presentation/gym_screen.dart';
 import 'package:luqa/features/gym/presentation/workout_screen.dart';
 import 'package:luqa/features/money/presentation/groups_screen.dart';
 import 'package:luqa/features/money/presentation/money_screen.dart';
-import 'package:luqa/features/money/presentation/people_screen.dart';
+import 'package:luqa/features/money/presentation/money_people_screen.dart';
 import 'package:luqa/features/money/presentation/person_ledger_screen.dart';
+import 'package:luqa/features/people/presentation/birthdays_screen.dart';
+import 'package:luqa/features/people/presentation/people_screen.dart';
+import 'package:luqa/features/people/presentation/person_screen.dart';
+import 'package:luqa/features/people/presentation/places_screen.dart';
 import 'package:luqa/features/today/presentation/timeline_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -58,14 +61,8 @@ final luqaRouter = GoRouter(
           routes: <RouteBase>[
             GoRoute(
               path: '/people',
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: DestinationPlaceholder(
-                  title: 'People',
-                  icon: Icons.group_outlined,
-                  description:
-                      'Relationships, groups, and person-led context belong here.',
-                ),
-              ),
+              pageBuilder: (context, state) =>
+                  const NoTransitionPage(child: PeopleScreen()),
             ),
           ],
         ),
@@ -94,7 +91,7 @@ final luqaRouter = GoRouter(
     GoRoute(
       parentNavigatorKey: _rootNavigatorKey,
       path: '/profile',
-      builder: (context, state) => const ProfileScreen(),
+      redirect: (context, state) => '/settings',
     ),
     GoRoute(
       parentNavigatorKey: _rootNavigatorKey,
@@ -133,13 +130,29 @@ final luqaRouter = GoRouter(
     GoRoute(
       parentNavigatorKey: _rootNavigatorKey,
       path: '/money/people',
-      builder: (context, state) => const PeopleScreen(),
+      builder: (context, state) => const MoneyPeopleScreen(),
     ),
     GoRoute(
       parentNavigatorKey: _rootNavigatorKey,
       path: '/money/people/:personId',
       builder: (context, state) =>
           PersonLedgerScreen(personId: state.pathParameters['personId']!),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootNavigatorKey,
+      path: '/people/birthdays',
+      builder: (context, state) => const BirthdaysScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootNavigatorKey,
+      path: '/people/places',
+      builder: (context, state) => const PlacesScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootNavigatorKey,
+      path: '/people/:personId',
+      builder: (context, state) =>
+          PersonScreen(personId: state.pathParameters['personId']!),
     ),
     GoRoute(
       parentNavigatorKey: _rootNavigatorKey,

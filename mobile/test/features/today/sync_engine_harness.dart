@@ -2,33 +2,8 @@ import 'package:luqa/core/network/luqa_api_client.dart';
 import 'package:luqa/features/auth/data/secure_credential_store.dart';
 import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/today/data/outbox.dart';
-import 'package:luqa/features/today/data/remote_today_repository.dart';
-import 'package:luqa/features/today/data/today_repository.dart';
-import 'package:luqa/features/today/domain/category.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa_api/api.dart' as api;
-
-class MemoryCache implements TimelineCache {
-  List<Category>? _categories;
-  TimelineWindow? _window;
-
-  @override
-  Future<List<Category>?> readCategories() async => _categories;
-
-  @override
-  Future<void> writeCategories(List<Category> categories) async {
-    _categories = categories;
-  }
-
-  @override
-  Future<TimelineWindow?> readWindow(DateTime from, DateTime to) async =>
-      _window;
-
-  @override
-  Future<void> writeWindow(TimelineWindow window) async {
-    _window = window;
-  }
-}
 
 class MemoryOutbox implements Outbox<TimelineMutation> {
   List<TimelineMutation> stored = const [];

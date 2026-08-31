@@ -8,13 +8,14 @@ import 'package:luqa/features/money/presentation/money_formatters.dart';
 import 'package:luqa/features/money/presentation/person_editor_sheet.dart';
 import 'package:luqa/features/money/presentation/widgets/person_avatar.dart';
 
-/// Everyone the user splits with — the management view, not the balances view.
+/// Everyone the user splits with, as money sees them.
 ///
-/// The money tab answers "who owes what"; this answers "who is on my list".
+/// Narrower than the People tab on purpose: this is the split-defaults view,
+/// so it shows the usual cut and the balance and nothing about the person.
 /// Archived people keep a section of their own rather than disappearing,
 /// because the reason to come here is usually to bring one of them back.
-class PeopleScreen extends ConsumerWidget {
-  const PeopleScreen({super.key});
+class MoneyPeopleScreen extends ConsumerWidget {
+  const MoneyPeopleScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

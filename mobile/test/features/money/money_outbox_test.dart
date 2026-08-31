@@ -202,6 +202,77 @@ void main() {
     });
   });
 
+  group('remapping ids reaches the profile writes too', () {
+    test('a note queued against an invented id follows the person', () {
+      // This is the reason people and money share one queue. The device made
+      // up an id for "Mira", the server matched an existing Mira and answered
+      // with a different one, and everything queued behind that create has to
+      // be repointed — or it is sent naming somebody the server has never
+      // heard of, refused, and reported to the user as lost.
+      final queue = <MoneyMutation>[
+        AddPersonNote(
+          personId: 'local-mira',
+          personName: 'Mira',
+          noteId: 'note-1',
+          body: 'Ceramics course',
+          pinned: false,
+          happenedOn: null,
+          queuedAt: _at,
+        ),
+        MarkPersonSeen(
+          personId: 'local-mira',
+          personName: 'Mira',
+          seenAt: _at,
+          queuedAt: _at,
+        ),
+        AddPersonPlace(
+          personId: 'local-mira',
+          personName: 'Mira',
+          placeId: 'place-1',
+          label: 'Home',
+          city: 'Munich',
+          country: 'DE',
+          isPrimary: true,
+          queuedAt: _at,
+        ),
+      ];
+
+      final remapped = remapPersonId(queue, 'local-mira', 'server-mira');
+
+      expect(
+        remapped.map((m) => switch (m) {
+          AddPersonNote(:final personId) => personId,
+          MarkPersonSeen(:final personId) => personId,
+          AddPersonPlace(:final personId) => personId,
+          _ => 'unexpected',
+        }),
+        everyElement('server-mira'),
+      );
+      // The rows they create keep their own ids: only the person moved.
+      expect(
+        remapped.whereType<AddPersonNote>().single.noteId,
+        'note-1',
+      );
+    });
+
+    test('a profile write for somebody else is left alone', () {
+      final queue = <MoneyMutation>[
+        AddPersonNote(
+          personId: 'jonas',
+          personName: 'Jonas',
+          noteId: 'note-2',
+          body: 'Moving',
+          pinned: false,
+          happenedOn: null,
+          queuedAt: _at,
+        ),
+      ];
+
+      final remapped = remapPersonId(queue, 'local-mira', 'server-mira');
+      expect(remapped.whereType<AddPersonNote>().single.personId, 'jonas');
+    });
+  });
+
   group('the durable queue survives a restart', () {
     test('every mutation round-trips through json', () {
       final mutations = <MoneyMutation>[
@@ -258,6 +329,121 @@ void main() {
             notes: '',
             createdAt: _at,
           ),
+          queuedAt: _at,
+        ),
+        // The profile writes. A mutation that cannot be read back after a
+        // relaunch is a write the user made and will never be told about.
+        MarkPersonSeen(
+          personId: 'mira',
+          personName: 'Mira',
+          seenAt: _at,
+          queuedAt: _at,
+        ),
+        AddPersonNote(
+          personId: 'mira',
+          personName: 'Mira',
+          noteId: 'note-1',
+          body: 'Allergic to hazelnuts',
+          pinned: true,
+          happenedOn: '2026-08-27',
+          queuedAt: _at,
+        ),
+        UpdatePersonNote(
+          personId: 'mira',
+          personName: 'Mira',
+          noteId: 'note-1',
+          pinned: false,
+          queuedAt: _at,
+        ),
+        RemovePersonNote(
+          personId: 'mira',
+          personName: 'Mira',
+          noteId: 'note-1',
+          queuedAt: _at,
+        ),
+        AddPersonGift(
+          personId: 'mira',
+          personName: 'Mira',
+          giftId: 'gift-1',
+          idea: 'Kiln time',
+          url: null,
+          queuedAt: _at,
+        ),
+        // Given and un-given both have to survive: null is the instruction
+        // that puts an idea back on the list, not an absent field.
+        SetGiftGiven(
+          personId: 'mira',
+          personName: 'Mira',
+          giftId: 'gift-1',
+          givenAt: _at,
+          queuedAt: _at,
+        ),
+        SetGiftGiven(
+          personId: 'mira',
+          personName: 'Mira',
+          giftId: 'gift-1',
+          givenAt: null,
+          queuedAt: _at,
+        ),
+        RemovePersonGift(
+          personId: 'mira',
+          personName: 'Mira',
+          giftId: 'gift-1',
+          queuedAt: _at,
+        ),
+        AddPersonPlace(
+          personId: 'mira',
+          personName: 'Mira',
+          placeId: 'place-1',
+          label: 'Home',
+          city: 'Munich',
+          country: 'DE',
+          isPrimary: true,
+          queuedAt: _at,
+        ),
+        RemovePersonPlace(
+          personId: 'mira',
+          personName: 'Mira',
+          placeId: 'place-1',
+          queuedAt: _at,
+        ),
+        // A person carrying a whole profile, since a create queued from the
+        // People sheet already has a birthday and a rhythm on it.
+        CreatePerson(
+          person: _person('jonas', name: 'Jonas').copyWith(
+            nickname: 'Jo',
+            birthday: const Birthday(month: 2, day: 29, year: 1996),
+            cadenceDays: 61,
+            notes: [
+              PersonNote(id: 'n', body: 'Ceramics', createdAt: _at),
+            ],
+            places: const [
+              PersonPlace(
+                id: 'p',
+                label: 'Home',
+                city: 'Berlin',
+                country: 'DE',
+                isPrimary: true,
+              ),
+            ],
+            gifts: const [GiftIdea(id: 'g', idea: 'Rilke letters')],
+          ),
+          queuedAt: _at,
+        ),
+        UpdatePerson(
+          personId: 'jonas',
+          nickname: 'Jo',
+          birthday: const Birthday(month: 11, day: 12),
+          cadenceDays: 91,
+          queuedAt: _at,
+        ),
+        // Clearing has to survive too: it is a value the server must see, and
+        // it cannot ride on the same absence that means "leave it alone".
+        UpdatePerson(
+          personId: 'jonas',
+          clearNickname: true,
+          clearBirthday: true,
+          clearCadence: true,
           queuedAt: _at,
         ),
       ];

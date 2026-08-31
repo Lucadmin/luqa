@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:luqa/app/top_level_header.dart';
 import 'package:luqa/design_system/discarded_writes_notice.dart';
+import 'package:luqa/design_system/luqa_sync_status.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
 import 'package:luqa/features/gym/application/gym_overview_controller.dart';
 import 'package:luqa/features/gym/domain/gym_models.dart';
@@ -73,38 +75,31 @@ class GymScreen extends ConsumerWidget {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            SliverToBoxAdapter(
+              child: LuqaTopLevelHeader(
+                primary: Text(
+                  'Gym',
+                  style: Theme.of(context).textTheme.headlineLarge,
+                ),
+                status: state.pendingWrites > 0 || state.isRefreshing
+                    ? LuqaSyncStatus(
+                        pendingWrites: state.pendingWrites,
+                        isRefreshing: state.isRefreshing,
+                        onRetry: controller.refresh,
+                        controlKey: const ValueKey('gym-pending-writes'),
+                      )
+                    : null,
+              ),
+            ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
                 LuqaSpacing.lg,
-                LuqaSpacing.xl,
+                0,
                 LuqaSpacing.lg,
                 LuqaSpacing.section,
               ),
               sliver: SliverList.list(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Gym',
-                          style: Theme.of(context).textTheme.headlineLarge,
-                        ),
-                      ),
-                      // What is waiting to go out matters more than what is
-                      // coming in: it is the user's own training, and the one
-                      // thing they might want to stay on this screen for.
-                      if (state.pendingWrites > 0)
-                        _PendingChip(
-                          count: state.pendingWrites,
-                          onRetry: controller.refresh,
-                        ),
-                      IconButton(
-                        tooltip: 'Manage gyms',
-                        onPressed: () => context.push('/gym/locations'),
-                        icon: const Icon(Icons.location_on_outlined),
-                      ),
-                    ],
-                  ),
                   if (state.discarded.isNotEmpty) ...[
                     const SizedBox(height: LuqaSpacing.xl),
                     DiscardedWritesNotice(
@@ -189,42 +184,6 @@ class GymScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PendingChip extends StatelessWidget {
-  const _PendingChip({required this.count, required this.onRetry});
-
-  final int count;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    return Semantics(
-      liveRegion: true,
-      child: IconButton(
-        key: const ValueKey('gym-pending-writes'),
-        tooltip: count == 1
-            ? '1 change waiting to sync. Tap to retry'
-            : '$count changes waiting to sync. Tap to retry',
-        onPressed: onRetry,
-        visualDensity: VisualDensity.compact,
-        icon: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_upload_outlined, size: 16, color: muted),
-            const SizedBox(width: 3),
-            Text(
-              '$count',
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(color: muted),
             ),
           ],
         ),

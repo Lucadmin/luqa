@@ -33,7 +33,7 @@ class LuqaStore {
   /// providers build them eagerly and signed-out ones never read anything.
   static final LuqaStore shared = LuqaStore();
 
-  static const _version = 2;
+  static const _version = 5;
 
   final DatabaseFactory? _injectedFactory;
   final String? _path;
@@ -91,12 +91,23 @@ class LuqaStore {
           CREATE INDEX records_by_queue
             ON records (namespace, collection, seq)
         ''');
+        _createPeopleTables(batch);
         _createMoneyTables(batch);
+        _createGymTables(batch);
+        _createTimelineTables(batch);
+        _createRemapTable(batch);
         await batch.commit();
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         final batch = db.batch();
-        if (oldVersion < 2) _createMoneyTables(batch);
+        if (oldVersion < 2) {
+          _createPeopleTables(batch);
+          _createMoneyTables(batch);
+        }
+        if (oldVersion < 3) _createGymTables(batch);
+        if (oldVersion < 4) _createTimelineTables(batch);
+        if (oldVersion < 5) _promotePersonTable(batch, oldVersion);
+        if (oldVersion < 5) _createRemapTable(batch);
         await batch.commit();
       },
       // Going backwards means an older build opened a newer file. There is
@@ -118,9 +129,21 @@ class LuqaStore {
   ///   confirmed it. A delta must not overwrite it; the local copy is newer.
   /// * `removed` — deleted here, not yet tombstoned there. Filtered out of
   ///   every read, and dropped for real when the delta confirms it.
-  static void _createMoneyTables(Batch batch) {
+
+  /// The person, and the record hanging off them.
+  ///
+  /// Not `person` any more: the same friend appears on a bill, in the
+  /// People tab, and on a map, and one row has to serve all three. Money still
+  /// reads the identity columns for its balances; the profile columns and the
+  /// four child tables belong to People.
+  ///
+  /// The children are written whole rather than merged. The server sends a
+  /// person as one row with its notes, gifts, places and channels inside it —
+  /// one row is one profile — so applying a delta replaces a person's children
+  /// outright, and a partial write is not a state that can occur.
+  static void _createPeopleTables(Batch batch) {
     batch.execute('''
-      CREATE TABLE money_person (
+      CREATE TABLE person (
         namespace TEXT NOT NULL,
         id TEXT NOT NULL,
         name TEXT NOT NULL,
@@ -129,11 +152,121 @@ class LuqaStore {
         default_percent INTEGER,
         ord INTEGER NOT NULL DEFAULT 0,
         archived INTEGER NOT NULL DEFAULT 0,
+        nickname TEXT,
+        photo_url TEXT,
+        birthday_year INTEGER,
+        birthday_month INTEGER,
+        birthday_day INTEGER,
+        cadence_days INTEGER,
+        last_seen_at INTEGER,
+        google_resource_name TEXT,
         pending INTEGER NOT NULL DEFAULT 0,
         removed INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (namespace, id)
       )
     ''');
+    _createPersonChildTables(batch);
+  }
+
+  static void _createPersonChildTables(Batch batch) {
+    batch.execute('''
+      CREATE TABLE person_place (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        person_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        city TEXT NOT NULL,
+        region TEXT,
+        country TEXT,
+        address TEXT,
+        latitude REAL,
+        longitude REAL,
+        is_primary INTEGER NOT NULL DEFAULT 0,
+        source TEXT NOT NULL DEFAULT 'MANUAL',
+        ord INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    batch.execute('''
+      CREATE TABLE person_channel (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        person_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        label TEXT,
+        value TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'MANUAL',
+        ord INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    batch.execute('''
+      CREATE TABLE person_note (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        person_id TEXT NOT NULL,
+        body TEXT NOT NULL,
+        pinned INTEGER NOT NULL DEFAULT 0,
+        happened_on TEXT,
+        created_at INTEGER NOT NULL,
+        ord INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    batch.execute('''
+      CREATE TABLE person_gift (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        person_id TEXT NOT NULL,
+        idea TEXT NOT NULL,
+        url TEXT,
+        given_at INTEGER,
+        ord INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    for (final table in const [
+      'person_place',
+      'person_channel',
+      'person_note',
+      'person_gift',
+    ]) {
+      // Every child read is "this person's rows, in order".
+      batch.execute('''
+        CREATE INDEX ${table}_by_person
+          ON $table (namespace, person_id, ord)
+      ''');
+    }
+  }
+
+  /// Promotes `person` to `person`.
+  ///
+  /// A rename rather than a new table and a copy: the row already holds the
+  /// identity, and every pending write and remap recorded against it has to
+  /// survive the upgrade. Dropping and refetching would be simpler and would
+  /// silently discard writes a phone had not managed to send yet.
+  static void _promotePersonTable(Batch batch, int oldVersion) {
+    // A database this new was created by `_createPeopleTables` above, which
+    // already made `person` and its children. There is nothing to promote.
+    if (oldVersion < 2) return;
+
+    batch.execute('ALTER TABLE money_person RENAME TO person');
+    for (final column in const [
+      'nickname TEXT',
+      'photo_url TEXT',
+      'birthday_year INTEGER',
+      'birthday_month INTEGER',
+      'birthday_day INTEGER',
+      'cadence_days INTEGER',
+      'last_seen_at INTEGER',
+      'google_resource_name TEXT',
+    ]) {
+      batch.execute('ALTER TABLE person ADD COLUMN $column');
+    }
+    _createPersonChildTables(batch);
+  }
+
+  static void _createMoneyTables(Batch batch) {
     batch.execute('''
       CREATE TABLE money_group (
         namespace TEXT NOT NULL,
@@ -222,6 +355,207 @@ class LuqaStore {
         PRIMARY KEY (namespace, collection)
       )
     ''');
+  }
+
+  /// The gym log's own rows. Same two sync flags as the money tables.
+  ///
+  /// A workout's exercises and sets are children of the session and are
+  /// replaced with it — there is no such thing as a set that outlives the
+  /// workout it was done in, so they carry no flags of their own.
+  static void _createGymTables(Batch batch) {
+    batch.execute('''
+      CREATE TABLE gym_location (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        color INTEGER NOT NULL,
+        ord INTEGER NOT NULL DEFAULT 0,
+        archived INTEGER NOT NULL DEFAULT 0,
+        pending INTEGER NOT NULL DEFAULT 0,
+        removed INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    batch.execute('''
+      CREATE TABLE gym_exercise (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        archived INTEGER NOT NULL DEFAULT 0,
+        pending INTEGER NOT NULL DEFAULT 0,
+        removed INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    batch.execute('''
+      CREATE TABLE gym_session (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        date_key TEXT NOT NULL,
+        location_id TEXT,
+        notes TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        pending INTEGER NOT NULL DEFAULT 0,
+        removed INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    // Newest workout first, which is how every screen reads them.
+    batch.execute('''
+      CREATE INDEX gym_session_by_date
+        ON gym_session (namespace, date_key DESC, created_at DESC, id DESC)
+    ''');
+    batch.execute('''
+      CREATE TABLE gym_session_exercise (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        exercise_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        ord INTEGER NOT NULL DEFAULT 0,
+        raw TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    batch.execute('''
+      CREATE INDEX gym_session_exercise_by_session
+        ON gym_session_exercise (namespace, session_id, ord)
+    ''');
+    // The history sheet asks "every time I did this", across all workouts.
+    batch.execute('''
+      CREATE INDEX gym_session_exercise_by_exercise
+        ON gym_session_exercise (namespace, exercise_id)
+    ''');
+    batch.execute('''
+      CREATE TABLE gym_set (
+        namespace TEXT NOT NULL,
+        session_exercise_id TEXT NOT NULL,
+        ord INTEGER NOT NULL,
+        weight REAL,
+        reps INTEGER,
+        note TEXT,
+        PRIMARY KEY (namespace, session_exercise_id, ord)
+      )
+    ''');
+  }
+
+  /// The timeline's own rows.
+  ///
+  /// Sleep is kept as the JSON it arrived as, with only the columns a range
+  /// query needs pulled out alongside. It has twenty-odd fields, is never
+  /// edited on the phone, and is only ever asked for one way — "what happened
+  /// between these two days" — so columns for the rest would buy nothing.
+  static void _createTimelineTables(Batch batch) {
+    batch.execute('''
+      CREATE TABLE timeline_category (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        color INTEGER NOT NULL,
+        archived INTEGER NOT NULL DEFAULT 0,
+        pending INTEGER NOT NULL DEFAULT 0,
+        removed INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    batch.execute('''
+      CREATE TABLE timeline_entry (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        category_id TEXT,
+        start_ms INTEGER NOT NULL,
+        -- Null is a running timer, not a missing value.
+        end_ms INTEGER,
+        pending INTEGER NOT NULL DEFAULT 0,
+        removed INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    // Every read is "the blocks overlapping this stretch of days".
+    batch.execute('''
+      CREATE INDEX timeline_entry_by_start
+        ON timeline_entry (namespace, start_ms)
+    ''');
+    batch.execute('''
+      CREATE TABLE timeline_sleep (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        start_ms INTEGER NOT NULL,
+        end_ms INTEGER NOT NULL,
+        value TEXT NOT NULL,
+        removed INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    batch.execute('''
+      CREATE INDEX timeline_sleep_by_start
+        ON timeline_sleep (namespace, start_ms)
+    ''');
+  }
+
+  /// Ids this device invented that the server replaced with its own.
+  ///
+  /// The server identifies some rows by name rather than by id — a person, a
+  /// category, a gym — so creating one it already has answers with the row it
+  /// already has, under a different id. Everything queued and everything
+  /// stored is repointed when that happens, but a screen may still be holding
+  /// the id it was handed a moment earlier. This is how that id is still
+  /// understood afterwards.
+  static void _createRemapTable(Batch batch) {
+    batch.execute('''
+      CREATE TABLE id_remap (
+        namespace TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        from_id TEXT NOT NULL,
+        to_id TEXT NOT NULL,
+        PRIMARY KEY (namespace, kind, from_id)
+      )
+    ''');
+  }
+
+  Future<void> recordRemap({
+    required String namespace,
+    required String kind,
+    required String from,
+    required String to,
+    DatabaseExecutor? txn,
+  }) async {
+    final db = txn ?? await _db;
+    // Anything that already pointed at the old id now points at the new one,
+    // so a chain never grows longer than one link.
+    await db.update(
+      'id_remap',
+      {'to_id': to},
+      where: 'namespace = ? AND kind = ? AND to_id = ?',
+      whereArgs: [namespace, kind, from],
+    );
+    await db.insert('id_remap', {
+      'namespace': namespace,
+      'kind': kind,
+      'from_id': from,
+      'to_id': to,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// What [id] became, or [id] itself when nothing renamed it.
+  Future<String> resolveId({
+    required String namespace,
+    required String kind,
+    required String id,
+  }) async {
+    final db = await _db;
+    final rows = await db.query(
+      'id_remap',
+      columns: ['to_id'],
+      where: 'namespace = ? AND kind = ? AND from_id = ?',
+      whereArgs: [namespace, kind, id],
+      limit: 1,
+    );
+    return rows.isEmpty ? id : rows.first['to_id']! as String;
   }
 
   /// Runs [work] against the database in one transaction.

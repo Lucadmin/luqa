@@ -5,7 +5,7 @@ import { toGymSessionDTO } from "@/lib/serializers";
 import { dateFromKey } from "@/lib/server/money";
 import {
   namesToResolve,
-  ownedExerciseIds,
+  canonicalExerciseIds,
   resolveExerciseIds,
   sessionInclude,
   writeSessionExercises,
@@ -74,11 +74,12 @@ export async function PATCH(
 
   const exercises = d.exercises;
   let idByKey = new Map<string, string>();
+  let canonicalIds = new Map<string, string>();
 
   if (exercises) {
     const referenced = exercises.flatMap((e) => (e.exerciseId ? [e.exerciseId] : []));
-    const owned = await ownedExerciseIds(userId, referenced);
-    if (referenced.some((eid) => !owned.has(eid))) {
+    canonicalIds = await canonicalExerciseIds(userId, referenced);
+    if (referenced.some((eid) => !canonicalIds.has(eid))) {
       return NextResponse.json({ error: "Unknown exercise" }, { status: 400 });
     }
     idByKey = await resolveExerciseIds(userId, namesToResolve(exercises));
@@ -94,7 +95,9 @@ export async function PATCH(
       },
     });
 
-    if (exercises) await writeSessionExercises(tx, id, exercises, idByKey);
+    if (exercises) {
+      await writeSessionExercises(tx, id, exercises, idByKey, canonicalIds);
+    }
 
     return tx.gymSession.findUniqueOrThrow({
       where: { id },

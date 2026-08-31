@@ -68,6 +68,11 @@ abstract interface class LuqaApi {
     String? beforeSessionId,
   });
 
+  Future<api.GymExercise> mergeGymExercise(
+    String sourceExerciseId,
+    String targetExerciseId,
+  );
+
   Future<api.GymLocation> createGymLocation(
     api.CreateGymLocationRequest request,
   );
@@ -102,6 +107,47 @@ abstract interface class LuqaApi {
   Future<api.Person> updatePerson(String id, api.UpdatePersonRequest request);
 
   Future<void> deletePerson(String id);
+
+  // The People contract. Every write here answers with the whole person
+  // rather than the child it touched: one row is one profile, so the caller
+  // replaces what it holds instead of splicing a note into it.
+
+  Future<List<api.Person>> listPeople();
+
+  Future<api.Person> markPersonSeen(String id, api.MarkSeenRequest request);
+
+  Future<api.Person> addPersonNote(
+    String personId,
+    api.CreatePersonNoteRequest request,
+  );
+
+  Future<api.Person> updatePersonNote(
+    String personId,
+    String noteId,
+    api.UpdatePersonNoteRequest request,
+  );
+
+  Future<api.Person> deletePersonNote(String personId, String noteId);
+
+  Future<api.Person> addPersonGift(
+    String personId,
+    api.CreatePersonGiftRequest request,
+  );
+
+  Future<api.Person> updatePersonGift(
+    String personId,
+    String giftId,
+    api.UpdatePersonGiftRequest request,
+  );
+
+  Future<api.Person> deletePersonGift(String personId, String giftId);
+
+  Future<api.Person> addPersonPlace(
+    String personId,
+    api.CreatePersonPlaceRequest request,
+  );
+
+  Future<api.Person> deletePersonPlace(String personId, String placeId);
 
   Future<api.PersonGroup> createGroup(api.CreateGroupRequest request);
 
@@ -440,6 +486,21 @@ class LuqaApiClient implements LuqaApi {
   });
 
   @override
+  Future<api.GymExercise> mergeGymExercise(
+    String sourceExerciseId,
+    String targetExerciseId,
+  ) => _authorized((client) async {
+    final response = await api.GymApi(client)
+        .mergeGymExercise(
+          sourceExerciseId,
+          api.MergeGymExerciseRequest(targetExerciseId: targetExerciseId),
+        )
+        .timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.exercise;
+  });
+
+  @override
   Future<api.GymLocation> createGymLocation(
     api.CreateGymLocationRequest request,
   ) => _authorized((client) async {
@@ -581,6 +642,73 @@ class LuqaApiClient implements LuqaApi {
   Future<void> deletePerson(String id) => _authorized(
     (client) => api.MoneyApi(client).deletePerson(id).timeout(_requestTimeout),
   );
+
+  /// Every People write answers with the person, so they all unwrap the same
+  /// way.
+  Future<api.Person> _person(
+    Future<api.PersonResponse?> Function(api.PeopleApi api) call,
+  ) => _authorized((client) async {
+    final response = await call(api.PeopleApi(client)).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.person;
+  });
+
+  @override
+  Future<List<api.Person>> listPeople() => _authorized((client) async {
+    final response = await api.PeopleApi(
+      client,
+    ).listPeopleProfiles().timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.people;
+  });
+
+  @override
+  Future<api.Person> markPersonSeen(String id, api.MarkSeenRequest request) =>
+      _person((people) => people.markPersonSeen(id, markSeenRequest: request));
+
+  @override
+  Future<api.Person> addPersonNote(
+    String personId,
+    api.CreatePersonNoteRequest request,
+  ) => _person((people) => people.addPersonNote(personId, request));
+
+  @override
+  Future<api.Person> updatePersonNote(
+    String personId,
+    String noteId,
+    api.UpdatePersonNoteRequest request,
+  ) => _person((people) => people.updatePersonNote(personId, noteId, request));
+
+  @override
+  Future<api.Person> deletePersonNote(String personId, String noteId) =>
+      _person((people) => people.deletePersonNote(personId, noteId));
+
+  @override
+  Future<api.Person> addPersonGift(
+    String personId,
+    api.CreatePersonGiftRequest request,
+  ) => _person((people) => people.addPersonGift(personId, request));
+
+  @override
+  Future<api.Person> updatePersonGift(
+    String personId,
+    String giftId,
+    api.UpdatePersonGiftRequest request,
+  ) => _person((people) => people.updatePersonGift(personId, giftId, request));
+
+  @override
+  Future<api.Person> deletePersonGift(String personId, String giftId) =>
+      _person((people) => people.deletePersonGift(personId, giftId));
+
+  @override
+  Future<api.Person> addPersonPlace(
+    String personId,
+    api.CreatePersonPlaceRequest request,
+  ) => _person((people) => people.addPersonPlace(personId, request));
+
+  @override
+  Future<api.Person> deletePersonPlace(String personId, String placeId) =>
+      _person((people) => people.deletePersonPlace(personId, placeId));
 
   @override
   Future<api.PersonGroup> createGroup(api.CreateGroupRequest request) =>

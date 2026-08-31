@@ -119,7 +119,7 @@ mixin SyncQueue<T extends PendingMutation> on Notifier<SyncState>
   }
 
   @override
-  Future<void> enqueue(T mutation) async {
+  Future<void> enqueue(T mutation, {bool sendNow = true}) async {
     await ready;
     if (!ref.mounted) return;
     _queue = fold(_queue, mutation);
@@ -131,7 +131,7 @@ mixin SyncQueue<T extends PendingMutation> on Notifier<SyncState>
     // waiting for.
     _failures = 0;
     _retry?.cancel();
-    unawaited(sync());
+    if (sendNow) unawaited(sync());
   }
 
   /// Drains the queue, oldest first. Safe to call at any time: two callers
@@ -141,6 +141,7 @@ mixin SyncQueue<T extends PendingMutation> on Notifier<SyncState>
   /// finishes with work still queued, one more attempt is made. Otherwise a
   /// retry that arrives while a doomed request is still timing out would be
   /// answered by that request's failure and never actually retry anything.
+  @override
   Future<void> sync() async {
     final running = _draining;
     if (running != null) {

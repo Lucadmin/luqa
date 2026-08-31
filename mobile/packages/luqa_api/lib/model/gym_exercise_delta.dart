@@ -20,7 +20,7 @@ class GymExerciseDelta {
   });
 
   /// Current state of everything created or changed.
-  final List<GymExerciseReference> rows;
+  final List<SyncExercise> rows;
 
   /// Ids of rows that went away.
   final List<String> deleted;
@@ -73,7 +73,7 @@ class GymExerciseDelta {
   /// Clones this instance of [GymExerciseDelta] and returns a new one where some of the
   /// properties have changed.
   GymExerciseDelta copyWith({
-    List<GymExerciseReference>? rows,
+    List<SyncExercise>? rows,
     List<String>? deleted,
     Optional<String?>? cursor,
     bool? hasMore,
@@ -112,7 +112,7 @@ class GymExerciseDelta {
       }());
 
       return GymExerciseDelta(
-        rows: GymExerciseReference.listFromJson(json[r'rows']),
+        rows: SyncExercise.listFromJson(json[r'rows']),
         deleted: json[r'deleted'] is Iterable
             ? (json[r'deleted'] as Iterable)
                 .cast<String>()

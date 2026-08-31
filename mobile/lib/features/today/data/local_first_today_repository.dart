@@ -1,28 +1,31 @@
+import 'dart:async';
+
 import 'package:luqa/core/id/local_id.dart';
 import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/today/data/outbox.dart';
+import 'package:luqa/features/today/data/timeline_local_store.dart';
+import 'package:luqa/features/today/data/timeline_sync_service.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
 import 'package:luqa/features/today/domain/category.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 
-/// Makes every write local.
+/// Makes the timeline the phone's own.
 ///
-/// Nothing here awaits the network. A change is given an id, recorded in the
-/// queue and handed straight back, so the screen updates at the speed of the
-/// phone; the sync engine drains the queue behind it. Reads come back as the
-/// server's last known state with the queue laid over the top, which is the
-/// only view that is true both before and after a write lands.
+/// Every read comes from the device's rows and every write lands in them
+/// first, so drawing a block updates the screen at the speed of the phone and
+/// scrolling back through last month works with no signal at all.
 class LocalFirstTodayRepository implements TodayRepository {
   LocalFirstTodayRepository({
-    required this.remote,
+    required this.store,
+    required this.sync,
     required this.queue,
     String Function()? mintId,
     DateTime Function()? now,
   }) : _mintId = mintId ?? newLocalId,
        _now = now ?? DateTime.now;
 
-  /// The server, reached only for reads and by the sync engine.
-  final TodayRepository remote;
+  final TimelineLocalStore store;
+  final TimelineSyncService sync;
   final MutationQueue<TimelineMutation> queue;
 
   final String Function() _mintId;
@@ -43,82 +46,138 @@ class LocalFirstTodayRepository implements TodayRepository {
     0xFF06B6D4,
   ];
 
+  // ----------------------------------------------------------------- reads
+
+  /// Kept on the interface because the timeline paints from it before it does
+  /// anything else. It is no longer a cache, though — it is the same rows the
+  /// full read returns, so the two can never disagree.
   @override
   Future<List<Category>?> loadCachedCategories() async {
-    final cached = await remote.loadCachedCategories();
     await queue.ready;
-    if (cached == null) {
-      // Nothing from the server yet, but a category invented offline still has
-      // to be pickable.
-      final pending = overlayPendingCategories(const [], queue.pending);
-      return pending.isEmpty ? null : pending;
-    }
-    return overlayPendingCategories(cached, queue.pending);
+    final categories = await store.categories();
+    return categories.isEmpty ? null : categories;
   }
 
   @override
   Future<TimelineWindow?> loadCachedWindow(DateTime from, DateTime to) async {
-    final cached = await remote.loadCachedWindow(from, to);
     await queue.ready;
-    if (cached == null) return null;
-    return overlayPending(cached, queue.pending);
+    if (await store.isEmpty) return null;
+    return store.window(from, to);
   }
 
   @override
   Future<List<Category>> loadCategories() async {
-    final categories = await remote.loadCategories();
-    return overlayPendingCategories(categories, queue.pending);
+    await queue.ready;
+    return store.categories();
   }
 
   @override
   Future<TimelineWindow> loadWindow(DateTime from, DateTime to) async {
-    final window = await remote.loadWindow(from, to);
-    return overlayPending(window, queue.pending);
+    await queue.ready;
+    return store.window(from, to);
+  }
+
+  /// Catches up with the server. Not on the path between a tap and the screen.
+  Future<void> pull() => sync.pull();
+
+  // ---------------------------------------------------------------- writes
+
+  /// Queues the mutation, writes the row, and only then lets the queue drain.
+  ///
+  /// Queueing first survives a crash between the two: the write still sends.
+  /// Holding the drain until the row exists matters just as much — sending
+  /// straight away would let the server rename a category while the block
+  /// that refers to it is still being written.
+  Future<void> _write(
+    TimelineMutation mutation,
+    Future<void> Function() apply,
+  ) async {
+    await queue.enqueue(mutation, sendNow: false);
+    await apply();
+    unawaited(queue.sync());
   }
 
   @override
   Future<TimeEntry> addEntry(NewTimeEntry draft) async {
+    await queue.ready;
     final entry = TimeEntry(
-      id: _mintId(),
+      id: draft.id ?? _mintId(),
       description: draft.description,
-      categoryId: draft.categoryId,
+      // The screen may be holding a category id this device invented moments
+      // ago and the server has since replaced with its own.
+      categoryId: await store.resolveCategoryId(draft.categoryId),
       start: draft.start,
       end: draft.end,
       pendingSync: true,
     );
-    await queue.enqueue(CreateEntry(entry: entry, queuedAt: _now()));
+
+    // Starting a timer stops whichever one was running, the same rule the
+    // server applies. Doing it here too keeps the two from disagreeing about
+    // which block is open.
+    if (entry.end == null) {
+      final running = await store.runningEntry();
+      if (running != null && running.id != entry.id) {
+        await updateEntry(running, EntryPatch(end: entry.start));
+      }
+    }
+
+    await _write(
+      CreateEntry(entry: entry, queuedAt: _now()),
+      () => store.putEntry(entry),
+    );
     return entry;
   }
 
   @override
   Future<TimeEntry> updateEntry(TimeEntry entry, EntryPatch patch) async {
-    await queue.enqueue(
-      UpdateEntry(entryId: entry.id, patch: patch, queuedAt: _now()),
+    await queue.ready;
+    final resolved = patch.categoryId == null
+        ? patch
+        : EntryPatch(
+            description: patch.description,
+            categoryId: await store.resolveCategoryId(patch.categoryId),
+            clearCategory: patch.clearCategory,
+            start: patch.start,
+            end: patch.end,
+          );
+    final updated = applyPatch(entry, resolved).copyWith(pendingSync: true);
+    await _write(
+      UpdateEntry(entryId: entry.id, patch: resolved, queuedAt: _now()),
+      () => store.putEntry(updated),
     );
-    return applyPatch(entry, patch).copyWith(pendingSync: true);
+    return updated;
   }
 
   @override
-  Future<void> deleteEntry(String id) =>
-      queue.enqueue(DeleteEntry(entryId: id, queuedAt: _now()));
+  Future<void> deleteEntry(String id) async {
+    await queue.ready;
+    await _write(
+      DeleteEntry(entryId: id, queuedAt: _now()),
+      () => store.remove('timeline_entry', id),
+    );
+  }
 
   @override
   Future<Category> addCategory(String name) async {
+    await queue.ready;
     final trimmed = name.trim();
     // A name the device already knows is the same category, whichever screen
-    // asked for it. Reusing it keeps the queue from carrying two creates that
-    // the server would collapse into one anyway.
-    final known = await loadCachedCategories();
-    for (final existing in known ?? const <Category>[]) {
+    // asked for it. Reusing it keeps the queue from carrying two creates the
+    // server would collapse into one anyway.
+    final known = await store.categories();
+    for (final existing in known) {
       if (existing.name.toLowerCase() == trimmed.toLowerCase()) return existing;
     }
 
     final category = Category(
       id: _mintId(),
       name: trimmed,
-      colorValue: _palette[(known?.length ?? 0) % _palette.length],
+      colorValue: _palette[known.length % _palette.length],
     );
-    await queue.enqueue(CreateCategory(category: category, queuedAt: _now()));
+    await _write(
+      CreateCategory(category: category, queuedAt: _now()),
+      () => store.putCategory(category),
+    );
     return category;
   }
 }

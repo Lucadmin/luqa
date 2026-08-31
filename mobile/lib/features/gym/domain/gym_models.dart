@@ -217,6 +217,71 @@ class GymSessionPage {
   final String? nextCursor;
 }
 
+/// Applies the server's exercise merge to an already painted or cached
+/// overview. The next refresh still remains canonical; this prevents a stale
+/// duplicate from flashing back while that refresh is in flight or offline.
+GymOverview applyExerciseMerge(
+  GymOverview overview, {
+  required String sourceExerciseId,
+  required GymExercise target,
+}) {
+  final references = <GymExerciseReference>[];
+  final seenReferences = <String>{};
+  for (final reference in overview.recentReferences) {
+    final exerciseId = reference.exerciseId == sourceExerciseId
+        ? target.id
+        : reference.exerciseId;
+    final key = '$exerciseId:${reference.locationId ?? 'none'}';
+    if (!seenReferences.add(key)) continue;
+    references.add(
+      GymExerciseReference(
+        exerciseId: exerciseId,
+        sessionId: reference.sessionId,
+        dateKey: reference.dateKey,
+        locationId: reference.locationId,
+        raw: reference.raw,
+        notes: reference.notes,
+        sets: reference.sets,
+      ),
+    );
+  }
+
+  return overview.copyWith(
+    exercises: [
+      for (final exercise in overview.exercises)
+        if (exercise.id == target.id)
+          target
+        else if (exercise.id != sourceExerciseId)
+          exercise,
+    ],
+    recentReferences: references,
+    sessions: [
+      for (final session in overview.sessions)
+        GymSession(
+          id: session.id,
+          dateKey: session.dateKey,
+          locationId: session.locationId,
+          notes: session.notes,
+          exercises: [
+            for (final exercise in session.exercises)
+              exercise.exerciseId == sourceExerciseId
+                  ? GymSessionExercise(
+                      id: exercise.id,
+                      exerciseId: target.id,
+                      name: target.name,
+                      order: exercise.order,
+                      raw: exercise.raw,
+                      notes: exercise.notes,
+                      sets: exercise.sets,
+                    )
+                  : exercise,
+          ],
+          createdAt: session.createdAt,
+        ),
+    ],
+  );
+}
+
 String gymDateKey(DateTime value) =>
     '${value.year.toString().padLeft(4, '0')}-'
     '${value.month.toString().padLeft(2, '0')}-'

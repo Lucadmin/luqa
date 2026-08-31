@@ -17,7 +17,7 @@ class RemoteGymRepository implements GymRepository {
     String? id,
     required String dateKey,
     required String? locationId,
-  }) async => _sessionFromApi(
+  }) async => gymSessionFromApi(
     await client.createGymSession(
       api.CreateGymSessionRequest(
         id: id == null ? const api.Optional.absent() : api.Optional.present(id),
@@ -30,7 +30,7 @@ class RemoteGymRepository implements GymRepository {
 
   @override
   Future<GymSession> loadSession(String id) async =>
-      _sessionFromApi(await client.getGymSession(id));
+      gymSessionFromApi(await client.getGymSession(id));
 
   @override
   Future<GymSession> saveSession(String id, GymSessionWrite write) async {
@@ -59,14 +59,14 @@ class RemoteGymRepository implements GymRepository {
           ),
       ]),
     );
-    return _sessionFromApi(await client.updateGymSession(id, request));
+    return gymSessionFromApi(await client.updateGymSession(id, request));
   }
 
   @override
   Future<GymSessionPage> loadSessions({String? cursor, int limit = 20}) async {
     final response = await client.listGymSessions(cursor: cursor, limit: limit);
     return GymSessionPage(
-      sessions: response.sessions.map(_sessionFromApi).toList(growable: false),
+      sessions: response.sessions.map(gymSessionFromApi).toList(growable: false),
       nextCursor: response.nextCursor,
     );
   }
@@ -85,12 +85,20 @@ class RemoteGymRepository implements GymRepository {
   );
 
   @override
+  Future<GymExercise> mergeExercise({
+    required String sourceExerciseId,
+    required String targetExerciseId,
+  }) async => gymExerciseFromApi(
+    await client.mergeGymExercise(sourceExerciseId, targetExerciseId),
+  );
+
+  @override
   Future<GymLocation> createLocation({
     String? id,
     required String name,
     required String code,
     required int colorValue,
-  }) async => _locationFromApi(
+  }) async => gymLocationFromApi(
     await client.createGymLocation(
       api.CreateGymLocationRequest(
         id: id == null ? const api.Optional.absent() : api.Optional.present(id),
@@ -108,7 +116,7 @@ class RemoteGymRepository implements GymRepository {
     String? code,
     int? colorValue,
     bool? archived,
-  }) async => _locationFromApi(
+  }) async => gymLocationFromApi(
     await client.updateGymLocation(
       id,
       api.UpdateGymLocationRequest(
@@ -130,16 +138,16 @@ class RemoteGymRepository implements GymRepository {
 }
 
 GymOverview _overviewFromApi(api.GymOverview value) => GymOverview(
-  locations: value.locations.map(_locationFromApi).toList(growable: false),
-  exercises: value.exercises.map(_exerciseFromApi).toList(growable: false),
+  locations: value.locations.map(gymLocationFromApi).toList(growable: false),
+  exercises: value.exercises.map(gymExerciseFromApi).toList(growable: false),
   recentReferences: value.recentReferences
       .map(_referenceFromApi)
       .toList(growable: false),
-  sessions: value.sessions.map(_sessionFromApi).toList(growable: false),
+  sessions: value.sessions.map(gymSessionFromApi).toList(growable: false),
   totalSessions: value.totalSessions,
 );
 
-GymLocation _locationFromApi(api.GymLocation value) => GymLocation(
+GymLocation gymLocationFromApi(api.GymLocation value) => GymLocation(
   id: value.id,
   code: value.code,
   name: value.name,
@@ -165,7 +173,7 @@ GymSessionExercise _sessionExerciseFromApi(api.GymSessionExercise value) =>
       sets: value.sets.map(_setFromApi).toList(growable: false),
     );
 
-GymSession _sessionFromApi(api.GymSession value) => GymSession(
+GymSession gymSessionFromApi(api.GymSession value) => GymSession(
   id: value.id,
   dateKey: value.date,
   locationId: value.locationId,
@@ -176,7 +184,7 @@ GymSession _sessionFromApi(api.GymSession value) => GymSession(
   createdAt: value.createdAt.toLocal(),
 );
 
-GymExercise _exerciseFromApi(api.GymExercise value) => GymExercise(
+GymExercise gymExerciseFromApi(api.GymExercise value) => GymExercise(
   id: value.id,
   name: value.name,
   notes: value.notes,
@@ -213,7 +221,7 @@ GymExercisePoint _pointFromApi(api.GymExercisePoint value) => GymExercisePoint(
 
 GymExerciseHistory _historyFromApi(api.GymExerciseHistory value) =>
     GymExerciseHistory(
-      exercise: _exerciseFromApi(value.exercise),
+      exercise: gymExerciseFromApi(value.exercise),
       points: value.points.map(_pointFromApi).toList(growable: false),
       bestEver: value.bestEver?.toDouble(),
       heaviest: value.heaviest?.toDouble(),

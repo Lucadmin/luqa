@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { type DbTransaction, db } from "@/lib/db";
+import { type DbTransaction, db, dbWithDeleted } from "@/lib/db";
 import {
   best1RM,
   estimate1RM,
@@ -64,6 +64,23 @@ export async function resolveExerciseIds(
 
   const byKey = new Map(existing.map((e) => [exerciseKey(e.name), e.id]));
 
+  // A merge retires the source spelling but remembers its canonical target.
+  // That makes typing the old name again behave exactly like picking the
+  // target, rather than reviving the duplicate that was just cleaned up.
+  const aliases = await dbWithDeleted.exercise.findMany({
+    where: {
+      userId,
+      deletedAt: { not: null },
+      mergedIntoId: { not: null },
+    },
+    select: { name: true, mergedIntoId: true },
+  });
+  for (const alias of aliases) {
+    if (alias.mergedIntoId) {
+      byKey.set(exerciseKey(alias.name), alias.mergedIntoId);
+    }
+  }
+
   // Dedupe first: two spellings in the same payload must not create two rows.
   const missing = new Map<string, string>();
   for (const name of names) {
@@ -98,12 +115,14 @@ export async function writeSessionExercises(
   sessionId: string,
   inputs: ExerciseInput[],
   idByKey: Map<string, string>,
+  canonicalIds: Map<string, string>,
 ): Promise<void> {
   await tx.sessionExercise.deleteMany({ where: { sessionId } });
 
   for (const [index, input] of inputs.entries()) {
     const exerciseId =
-      input.exerciseId ?? (input.name ? idByKey.get(exerciseKey(input.name)) : undefined);
+      (input.exerciseId ? canonicalIds.get(input.exerciseId) : undefined) ??
+      (input.name ? idByKey.get(exerciseKey(input.name)) : undefined);
     if (!exerciseId) continue;
 
     // Drop rows the user added but never filled in — an empty set carries no
@@ -143,16 +162,22 @@ export function namesToResolve(inputs: ExerciseInput[]): string[] {
  * Verifies every referenced exercise id actually belongs to the user, so a
  * payload can't attach someone else's exercise to a session.
  */
-export async function ownedExerciseIds(
+export async function canonicalExerciseIds(
   userId: string,
   ids: string[],
-): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
-  const rows = await db.exercise.findMany({
-    where: { userId, id: { in: ids } },
-    select: { id: true },
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await dbWithDeleted.exercise.findMany({
+    where: {
+      userId,
+      id: { in: ids },
+      OR: [{ deletedAt: null }, { mergedIntoId: { not: null } }],
+    },
+    select: { id: true, mergedIntoId: true },
   });
-  return new Set(rows.map((r) => r.id));
+  return new Map(
+    rows.map((row) => [row.id, row.mergedIntoId ?? row.id]),
+  );
 }
 
 // --- exercise stats ----------------------------------------------------------
@@ -239,6 +264,84 @@ export function toExerciseDTO(
     locationIds: stats ? [...stats.locationIds] : [],
     lastRaw: stats?.lastRaw ?? null,
     lastLocationId: stats?.lastLocationId ?? null,
+  };
+}
+
+/**
+ * Moves every performance from one exercise vocabulary row to another.
+ *
+ * The source is tombstoned rather than hard-deleted so offline devices learn
+ * that it disappeared. Sessions are touched as well: their nested exercise
+ * rows changed, and the session delta feed keys off the parent timestamp.
+ */
+export async function mergeExercises(
+  userId: string,
+  sourceExerciseId: string,
+  targetExerciseId: string,
+): Promise<{ exercise: ExerciseDTO; movedEntries: number } | null> {
+  if (sourceExerciseId === targetExerciseId) return null;
+
+  const merged = await db.$transaction(async (tx) => {
+    const exercises = await tx.exercise.findMany({
+      where: {
+        userId,
+        id: { in: [sourceExerciseId, targetExerciseId] },
+      },
+    });
+    if (exercises.length !== 2) return null;
+
+    const source = exercises.find((exercise) => exercise.id === sourceExerciseId);
+    const target = exercises.find((exercise) => exercise.id === targetExerciseId);
+    if (!source || !target) return null;
+
+    const entries = await tx.sessionExercise.findMany({
+      where: { exerciseId: sourceExerciseId, session: { userId } },
+      select: { sessionId: true },
+    });
+    const sessionIds = [...new Set(entries.map((entry) => entry.sessionId))];
+    const now = new Date();
+
+    await tx.sessionExercise.updateMany({
+      where: { exerciseId: sourceExerciseId, session: { userId } },
+      data: { exerciseId: targetExerciseId },
+    });
+
+    if (sessionIds.length > 0) {
+      await tx.gymSession.updateMany({
+        where: { userId, id: { in: sessionIds } },
+        data: { updatedAt: now },
+      });
+    }
+
+    const updatedTarget = await tx.exercise.update({
+      where: { id: targetExerciseId },
+      data: {
+        // Keep the chosen target's identity. If it has no standing cue yet,
+        // preserve the source cue instead of throwing it away.
+        notes: target.notes.trim() ? target.notes : source.notes,
+        archivedAt: null,
+        updatedAt: now,
+      },
+    });
+    // If the source had aliases from an earlier merge, flatten the redirect
+    // chain. Every stale id then resolves in one lookup.
+    await tx.exercise.updateMany({
+      where: { userId, mergedIntoId: sourceExerciseId },
+      data: { mergedIntoId: targetExerciseId, updatedAt: now },
+    });
+    await tx.exercise.update({
+      where: { id: sourceExerciseId },
+      data: { deletedAt: now, mergedIntoId: targetExerciseId },
+    });
+
+    return { exercise: updatedTarget, movedEntries: entries.length };
+  });
+
+  if (!merged) return null;
+  const usage = await exerciseUsage(userId);
+  return {
+    exercise: toExerciseDTO(merged.exercise, usage),
+    movedEntries: merged.movedEntries,
   };
 }
 
@@ -337,8 +440,11 @@ export function buildPoints(
     id: string;
     raw: string;
     notes: string;
+    /// Position within the session. A merge can leave two spellings of the
+    /// same lift in one workout, and this is what tells them apart.
+    order: number;
     sets: { weight: number | null; reps: number | null; note: string | null; order: number }[];
-    session: { id: string; date: Date; locationId: string | null };
+    session: { id: string; date: Date; createdAt: Date; locationId: string | null };
   }[],
 ): ExercisePointDTO[] {
   const points = rows
@@ -361,7 +467,21 @@ export function buildPoints(
         isPr: false,
       };
     })
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    // Sorted alongside the row it came from, so the keys the ordering needs
+    // never have to live on the DTO.
+    .map((point, index) => ({ point, row: rows[index] }))
+    .sort(
+      (a, b) =>
+        // Fully ordered, not just by day. Two workouts can share a date and —
+        // since a merge folds two spellings into one exercise — a single
+        // workout can hold the same exercise twice. Without the last two keys
+        // the order of those is whatever the database felt like, which decides
+        // where the personal-record badge lands.
+        (a.point.date < b.point.date ? -1 : a.point.date > b.point.date ? 1 : 0) ||
+        a.row.session.createdAt.getTime() - b.row.session.createdAt.getTime() ||
+        a.row.order - b.row.order,
+    )
+    .map(({ point }) => point);
 
   let ceiling = 0;
   for (const point of points) {
@@ -418,10 +538,13 @@ export async function exerciseHistory(
       id: true,
       raw: true,
       notes: true,
+      order: true,
       sets: {
         select: { weight: true, reps: true, note: true, order: true },
       },
-      session: { select: { id: true, date: true, locationId: true } },
+      session: {
+        select: { id: true, date: true, createdAt: true, locationId: true },
+      },
     },
   });
 

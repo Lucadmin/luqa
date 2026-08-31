@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { exerciseKey } from "@/lib/gym";
-import { exerciseUsage, toExerciseDTO } from "@/lib/server/gym";
+import { exerciseUsage, mergeExercises, toExerciseDTO } from "@/lib/server/gym";
 import { updateExerciseSchema } from "@/lib/validations";
 
 // PATCH /api/gym/exercises/:id — rename, annotate, archive.
@@ -44,18 +44,12 @@ export async function PATCH(
     ).find((e) => e.id !== id && exerciseKey(e.name) === exerciseKey(d.name as string));
 
     if (clash) {
-      await db.$transaction([
-        db.sessionExercise.updateMany({
-          where: { exerciseId: id },
-          data: { exerciseId: clash.id },
-        }),
-        db.exercise.update({ where: { id }, data: { deletedAt: new Date() } }),
-      ]);
-
-      const usage = await exerciseUsage(userId);
-      const merged = await db.exercise.findUniqueOrThrow({ where: { id: clash.id } });
+      const merged = await mergeExercises(userId, id, clash.id);
+      if (!merged) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
       return NextResponse.json({
-        exercise: toExerciseDTO(merged, usage),
+        exercise: merged.exercise,
         mergedInto: clash.id,
       });
     }

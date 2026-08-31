@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:luqa/app/top_level_header.dart';
 import 'package:luqa/design_system/discarded_writes_notice.dart';
+import 'package:luqa/design_system/luqa_sync_status.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
-import 'package:luqa/features/auth/application/auth_controller.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
 import 'package:luqa/features/today/domain/sleep_entry.dart';
@@ -224,7 +224,6 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(timelineControllerProvider);
-    final user = ref.watch(authControllerProvider).value?.user;
     final draft = state.draft;
 
     // Surface a failed save without stealing the screen; the composer shows
@@ -247,18 +246,18 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
             isRefreshing: state.isRefreshing,
             isOffline: state.isOffline,
             pendingWrites: state.pendingWrites,
-            initial: user?.initial,
             onPreviousDay: () => _timeline.currentState?.shiftDays(-1),
             onNextDay: () => _timeline.currentState?.shiftDays(1),
             onPickDate: () => _jumpToDate(state.visibleDay),
             onGoToNow: () => _timeline.currentState?.goToNow(),
             onRetry: _controller.refresh,
-            onOpenSettings: () => context.push('/settings'),
-            onOpenProfile: () => context.push('/profile'),
           ),
           if (state.discarded.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              padding: const EdgeInsets.symmetric(
+                horizontal: LuqaSpacing.lg,
+                vertical: LuqaSpacing.xs,
+              ),
               child: DiscardedWritesNotice(
                 discarded: state.discarded,
                 onAcknowledge: _controller.acknowledgeDiscarded,
@@ -266,7 +265,12 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
             ),
           if (draft == null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+              padding: const EdgeInsets.fromLTRB(
+                LuqaSpacing.lg,
+                LuqaSpacing.xs,
+                LuqaSpacing.lg,
+                LuqaSpacing.md,
+              ),
               child: NowBar(
                 running: state.runningEntry,
                 runningCategory: state.categoryById(
@@ -337,14 +341,11 @@ class _Header extends StatelessWidget {
     required this.isRefreshing,
     required this.isOffline,
     required this.pendingWrites,
-    required this.initial,
     required this.onPreviousDay,
     required this.onNextDay,
     required this.onPickDate,
     required this.onGoToNow,
     required this.onRetry,
-    required this.onOpenSettings,
-    required this.onOpenProfile,
   });
 
   final DateTime day;
@@ -354,125 +355,89 @@ class _Header extends StatelessWidget {
   final bool isRefreshing;
   final bool isOffline;
   final int pendingWrites;
-  final String? initial;
   final VoidCallback onPreviousDay;
   final VoidCallback onNextDay;
   final VoidCallback onPickDate;
   final VoidCallback onGoToNow;
   final VoidCallback onRetry;
-  final VoidCallback onOpenSettings;
-  final VoidCallback onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isToday = dayNumber(day) == dayNumber(startOfLogicalDay(now));
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 12, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final hasSyncStatus = pendingWrites > 0 || isOffline || isRefreshing;
+
+    return LuqaTopLevelHeader(
+      primary: Row(
         children: [
-          Row(
-            children: [
-              _NavArrow(
-                icon: Icons.chevron_left_rounded,
-                tooltip: 'Previous day',
-                onPressed: onPreviousDay,
-              ),
-              Flexible(
-                child: Semantics(
-                  button: true,
-                  label: 'Showing ${fullDate(day)}. Jump to a day',
-                  child: InkWell(
-                    onTap: onPickDate,
-                    borderRadius: BorderRadius.circular(LuqaRadii.control),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              relativeDayLabel(day, now),
-                              key: const ValueKey('visible-day-label'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontSize: 19,
-                              ),
-                            ),
-                          ),
-                          Icon(
-                            Icons.arrow_drop_down_rounded,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              _NavArrow(
-                icon: Icons.chevron_right_rounded,
-                tooltip: 'Next day',
-                onPressed: onNextDay,
-              ),
-              const Spacer(),
-              if (!isToday)
-                _NavArrow(
-                  icon: Icons.my_location_rounded,
-                  tooltip: 'Back to now',
-                  onPressed: onGoToNow,
-                ),
-              _NavArrow(
-                icon: Icons.settings_outlined,
-                tooltip: 'Settings',
-                onPressed: onOpenSettings,
-              ),
-              const SizedBox(width: 2),
-              Semantics(
-                button: true,
-                label: 'Profile',
-                child: InkWell(
-                  onTap: onOpenProfile,
-                  customBorder: const CircleBorder(),
-                  child: SizedBox.square(
-                    dimension: 40,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: LuqaPalette.of(context).raised,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          initial ?? 'L',
-                          style: theme.textTheme.labelLarge,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          _NavArrow(
+            icon: Icons.chevron_left_rounded,
+            tooltip: 'Previous day',
+            onPressed: onPreviousDay,
           ),
-          Padding(
-            padding: const EdgeInsets.only(left: 14, bottom: 6),
-            child: _DaySummary(
-              tracked: tracked,
-              sleep: sleep,
-              isRefreshing: isRefreshing,
-              isOffline: isOffline,
-              pendingWrites: pendingWrites,
-              onRetry: onRetry,
+          Flexible(
+            child: Semantics(
+              button: true,
+              label: 'Showing ${fullDate(day)}. Jump to a day',
+              child: InkWell(
+                onTap: onPickDate,
+                borderRadius: BorderRadius.circular(LuqaRadii.control),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: LuqaSpacing.xs,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            relativeDayLabel(day, now),
+                            key: const ValueKey('visible-day-label'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleLarge,
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_drop_down_rounded,
+                          size: 20,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
+          ),
+          _NavArrow(
+            icon: Icons.chevron_right_rounded,
+            tooltip: 'Next day',
+            onPressed: onNextDay,
           ),
         ],
       ),
+      contextualActions: [
+        if (!isToday)
+          _NavArrow(
+            icon: Icons.my_location_rounded,
+            tooltip: 'Back to now',
+            onPressed: onGoToNow,
+          ),
+      ],
+      supporting: _DaySummary(tracked: tracked, sleep: sleep),
+      status: hasSyncStatus
+          ? LuqaSyncStatus(
+              pendingWrites: pendingWrites,
+              isOffline: isOffline,
+              isRefreshing: isRefreshing,
+              onRetry: onRetry,
+              controlKey: const ValueKey('pending-writes-chip'),
+            )
+          : null,
     );
   }
 }
@@ -492,28 +457,15 @@ class _NavArrow extends StatelessWidget {
   Widget build(BuildContext context) => IconButton(
     tooltip: tooltip,
     onPressed: onPressed,
-    visualDensity: VisualDensity.compact,
-    style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
     icon: Icon(icon, size: 22),
   );
 }
 
 class _DaySummary extends StatelessWidget {
-  const _DaySummary({
-    required this.tracked,
-    required this.sleep,
-    required this.isRefreshing,
-    required this.isOffline,
-    required this.pendingWrites,
-    required this.onRetry,
-  });
+  const _DaySummary({required this.tracked, required this.sleep});
 
   final Duration tracked;
   final Duration sleep;
-  final bool isRefreshing;
-  final bool isOffline;
-  final int pendingWrites;
-  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -529,82 +481,30 @@ class _DaySummary extends StatelessWidget {
       fontFeatures: const [FontFeature.tabularFigures()],
     );
 
-    return Row(
-      children: [
-        // One rich line rather than a row of widgets, so a long total or a
-        // large text scale ellipsises instead of overflowing.
-        Flexible(
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: compactDuration(tracked), style: numeric),
-                const TextSpan(text: ' tracked'),
-                if (sleep > Duration.zero) ...[
-                  const TextSpan(text: '  ·  '),
-                  WidgetSpan(
-                    alignment: PlaceholderAlignment.middle,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: Icon(
-                        Icons.bedtime_outlined,
-                        size: 13,
-                        color: muted,
-                      ),
-                    ),
-                  ),
-                  TextSpan(text: compactDuration(sleep), style: numeric),
-                  const TextSpan(text: ' sleep'),
-                ],
-              ],
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: quiet,
-          ),
-        ),
-        // What is waiting to go out matters more than what is coming in: it
-        // is the user's own work, and it is the one thing they might want to
-        // stay on this screen for.
-        if (pendingWrites > 0)
-          Semantics(
-            liveRegion: true,
-            child: IconButton(
-              key: const ValueKey('pending-writes-chip'),
-              tooltip: pendingWrites == 1
-                  ? '1 change waiting to sync. Tap to retry'
-                  : '$pendingWrites changes waiting to sync. Tap to retry',
-              onPressed: onRetry,
-              visualDensity: VisualDensity.compact,
-              constraints: const BoxConstraints.tightFor(width: 40, height: 32),
-              padding: EdgeInsets.zero,
-              icon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.cloud_upload_outlined, size: 15, color: muted),
-                  const SizedBox(width: 3),
-                  Text('$pendingWrites', style: quiet),
-                ],
+    // One rich line rather than a row of widgets, so a long total or a large
+    // text scale ellipsises instead of overflowing.
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: compactDuration(tracked), style: numeric),
+          const TextSpan(text: ' tracked'),
+          if (sleep > Duration.zero) ...[
+            const TextSpan(text: '  ·  '),
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: LuqaSpacing.xs),
+                child: Icon(Icons.bedtime_outlined, size: 13, color: muted),
               ),
             ),
-          )
-        else if (isOffline)
-          IconButton(
-            tooltip: 'Offline. Tap to retry',
-            onPressed: onRetry,
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-            padding: EdgeInsets.zero,
-            icon: Icon(Icons.cloud_off_outlined, size: 15, color: muted),
-          )
-        else if (isRefreshing)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: SizedBox.square(
-              dimension: 12,
-              child: CircularProgressIndicator(strokeWidth: 1.6, color: muted),
-            ),
-          ),
-      ],
+            TextSpan(text: compactDuration(sleep), style: numeric),
+            const TextSpan(text: ' sleep'),
+          ],
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: quiet,
     );
   }
 }

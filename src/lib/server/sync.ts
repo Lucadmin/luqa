@@ -17,6 +17,8 @@ import {
   toSleepDTO,
 } from "@/lib/serializers";
 
+import { personInclude } from "@/lib/server/people";
+
 export * from "@/lib/sync-cursor";
 
 /**
@@ -99,8 +101,15 @@ export async function collectionDelta(
         toCategoryDTO,
       );
     case "people":
+      // The profile children ride inside the person row rather than syncing
+      // on their own, so the delta has to carry them. Their writes bump the
+      // person's `updatedAt` (see `touchPerson`), which is what puts the row
+      // in this page at all.
       return split(
-        await dbWithDeleted.person.findMany(query),
+        await dbWithDeleted.person.findMany({
+          ...query,
+          include: personInclude,
+        }),
         limit,
         toPersonDTO,
       );

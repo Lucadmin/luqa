@@ -128,7 +128,18 @@ class _Stack {
       const [],
     );
     container.read(moneyControllerProvider);
+    await loaded();
     await settle();
+  }
+
+  /// Waits for the first load to actually finish, rather than assuming a fixed
+  /// number of turns is enough for it. Reading a person costs more round trips
+  /// to sqlite than it used to — they carry their notes and places now — and a
+  /// counted drain is a race that eventually gets lost on a busy machine.
+  Future<void> loaded() async {
+    for (var i = 0; i < 200 && state.isLoading; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
   }
 
   Future<void> settle() async {

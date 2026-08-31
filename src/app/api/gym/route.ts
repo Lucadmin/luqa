@@ -6,7 +6,7 @@ import { dateFromKey, todayKey } from "@/lib/server/money";
 import {
   gymOverview,
   namesToResolve,
-  ownedExerciseIds,
+  canonicalExerciseIds,
   resolveExerciseIds,
   sessionInclude,
   writeSessionExercises,
@@ -64,8 +64,8 @@ export async function POST(request: Request) {
   }
 
   const referenced = d.exercises.flatMap((e) => (e.exerciseId ? [e.exerciseId] : []));
-  const owned = await ownedExerciseIds(userId, referenced);
-  if (referenced.some((id) => !owned.has(id))) {
+  const canonicalIds = await canonicalExerciseIds(userId, referenced);
+  if (referenced.some((id) => !canonicalIds.has(id))) {
     return NextResponse.json({ error: "Unknown exercise" }, { status: 400 });
   }
 
@@ -81,7 +81,13 @@ export async function POST(request: Request) {
       },
     });
 
-    await writeSessionExercises(tx, created.id, d.exercises, idByKey);
+    await writeSessionExercises(
+      tx,
+      created.id,
+      d.exercises,
+      idByKey,
+      canonicalIds,
+    );
 
     return tx.gymSession.findUniqueOrThrow({
       where: { id: created.id },

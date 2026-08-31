@@ -15,6 +15,7 @@ Method | HTTP request | Description
 [**getGymOverview**](GymApi.md#getgymoverview) | **GET** /gym | Load gyms, exercises, per-gym references, and recent workouts
 [**getGymSession**](GymApi.md#getgymsession) | **GET** /gym/sessions/{id} | Load one workout
 [**listGymSessions**](GymApi.md#listgymsessions) | **GET** /gym/sessions | List workouts newest first
+[**mergeGymExercise**](GymApi.md#mergegymexercise) | **POST** /gym/exercises/{id}/merge | Merge a duplicate exercise into another exercise
 [**updateGymLocation**](GymApi.md#updategymlocation) | **PATCH** /gym/locations/{id} | Edit, archive, or restore a gym
 [**updateGymSession**](GymApi.md#updategymsession) | **PATCH** /gym/sessions/{id} | Autosave a workout draft
 
@@ -303,6 +304,57 @@ Name | Type | Description  | Notes
 ### HTTP request headers
 
  - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **mergeGymExercise**
+> GymExerciseMergeResponse mergeGymExercise(id, mergeGymExerciseRequest)
+
+Merge a duplicate exercise into another exercise
+
+Moves every logged performance to the target exercise, keeps the target name, and removes the source exercise from the library.
+
+### Example
+```dart
+import 'package:luqa_api/api.dart';
+// TODO Configure HTTP Bearer authorization: mobileBearer
+// Case 1. Use String Token
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken('YOUR_ACCESS_TOKEN');
+// Case 2. Use Function which generate token.
+// String yourTokenGeneratorFunction() { ... }
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken(yourTokenGeneratorFunction);
+
+final api_instance = GymApi();
+final id = id_example; // String | Exercise whose history will be moved and then removed.
+final mergeGymExerciseRequest = MergeGymExerciseRequest(); // MergeGymExerciseRequest |
+
+try {
+    final result = api_instance.mergeGymExercise(id, mergeGymExerciseRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling GymApi->mergeGymExercise: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **id** | **String**| Exercise whose history will be moved and then removed. |
+ **mergeGymExerciseRequest** | [**MergeGymExerciseRequest**](MergeGymExerciseRequest.md)|  |
+
+### Return type
+
+[**GymExerciseMergeResponse**](GymExerciseMergeResponse.md)
+
+### Authorization
+
+[mobileBearer](../README.md#mobileBearer)
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
  - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

@@ -241,6 +241,36 @@ class FakeGymRepository implements GymRepository {
   }
 
   @override
+  Future<GymExercise> mergeExercise({
+    required String sourceExerciseId,
+    required String targetExerciseId,
+  }) async {
+    final source = overview.exerciseById(sourceExerciseId)!;
+    final oldTarget = overview.exerciseById(targetExerciseId)!;
+    final target = GymExercise(
+      id: oldTarget.id,
+      name: oldTarget.name,
+      notes: oldTarget.notes.isEmpty ? source.notes : oldTarget.notes,
+      archived: false,
+      sessionCount: oldTarget.sessionCount + source.sessionCount,
+      lastPerformed:
+          (oldTarget.lastPerformed ?? '').compareTo(
+                source.lastPerformed ?? '',
+              ) >=
+              0
+          ? oldTarget.lastPerformed
+          : source.lastPerformed,
+      locationIds: {...oldTarget.locationIds, ...source.locationIds}.toList(),
+    );
+    overview = applyExerciseMerge(
+      overview,
+      sourceExerciseId: sourceExerciseId,
+      target: target,
+    );
+    return target;
+  }
+
+  @override
   Future<GymSessionPage> loadSessions({String? cursor, int limit = 20}) async =>
       GymSessionPage(sessions: overview.sessions, nextCursor: null);
 

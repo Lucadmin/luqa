@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import 'package:luqa/core/storage/luqa_store.dart';
+import 'package:luqa/features/today/data/timeline_local_store.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luqa/features/auth/application/auth_controller.dart';
@@ -16,14 +21,21 @@ import 'sync_engine_harness.dart';
 /// local-first repository over a real sync engine, with only the network faked.
 class _Stack {
   _Stack({bool offline = false, List<TimeEntry> seed = const []}) {
-    // Seeded before the controller exists, so its first load already sees the
-    // rows and no test has to race that load.
     api.entries.addAll(seed);
     api.offline = offline;
-    final remote = RemoteTodayRepository(client: api, cache: MemoryCache());
+    final remote = RemoteTodayRepository(client: api);
+    store = LuqaStore(
+      factory: databaseFactoryFfi,
+      path: inMemoryDatabasePath,
+    );
+    local = TimelineLocalStore(namespace: 'user-a', store: store);
+    // Seeded the way a completed sync would have left the device, since reads
+    // come from here now rather than from the server.
+    _seeded = local.applyEntries(seed, const []);
     container = ProviderContainer(
       overrides: [
         remoteTodayRepositoryProvider.overrideWithValue(remote),
+        timelineLocalStoreProvider.overrideWithValue(local),
         outboxProvider.overrideWithValue(outbox),
         currentTimeProvider.overrideWithValue(fixedNow),
         authControllerProvider.overrideWith(FixedAuthController.new),
@@ -36,6 +48,9 @@ class _Stack {
 
   final FakeApi api = FakeApi();
   final MemoryOutbox outbox = MemoryOutbox();
+  late final LuqaStore store;
+  late final TimelineLocalStore local;
+  late final Future<void> _seeded;
   late final ProviderContainer container;
 
   TimelineController get controller =>
@@ -43,9 +58,17 @@ class _Stack {
 
   TimelineState get state => container.read(timelineControllerProvider);
 
-  Future<void> settle() => Future<void>.delayed(Duration.zero);
+  Future<void> settle() async {
+    await _seeded;
+    for (var i = 0; i < 8; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
 
-  void dispose() => container.dispose();
+  void dispose() {
+    container.dispose();
+    unawaited(store.close());
+  }
 }
 
 final _writing = TimeEntry(
@@ -57,6 +80,8 @@ final _writing = TimeEntry(
 );
 
 void main() {
+  sqfliteFfiInit();
+
   test(
     'a block drawn with no network is on the timeline immediately',
     () async {

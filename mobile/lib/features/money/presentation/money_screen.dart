@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:luqa/app/top_level_header.dart';
 import 'package:luqa/design_system/discarded_writes_notice.dart';
+import 'package:luqa/design_system/luqa_sync_status.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
 import 'package:luqa/features/money/application/money_controller.dart';
 import 'package:luqa/features/money/domain/money_models.dart';
@@ -61,19 +63,31 @@ class MoneyScreen extends ConsumerWidget {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            SliverToBoxAdapter(
+              child: LuqaTopLevelHeader(
+                primary: Text(
+                  'Money',
+                  style: Theme.of(context).textTheme.headlineLarge,
+                ),
+                status: state.pendingWrites > 0 || state.isRefreshing
+                    ? LuqaSyncStatus(
+                        pendingWrites: state.pendingWrites,
+                        isRefreshing: state.isRefreshing,
+                        onRetry: controller.refresh,
+                        controlKey: const ValueKey('money-pending-writes'),
+                      )
+                    : null,
+              ),
+            ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
                 LuqaSpacing.lg,
-                LuqaSpacing.xl,
+                0,
                 LuqaSpacing.lg,
                 0,
               ),
               sliver: SliverList.list(
                 children: [
-                  _Header(
-                    pendingWrites: state.pendingWrites,
-                    onRetry: controller.refresh,
-                  ),
                   const SizedBox(height: LuqaSpacing.xl),
                   _Headline(overview: overview),
                   if (state.discarded.isNotEmpty) ...[
@@ -131,9 +145,7 @@ class MoneyScreen extends ConsumerWidget {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: LuqaSpacing.lg,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: LuqaSpacing.lg),
                 sliver: SliverList.separated(
                   itemCount: listed.length,
                   separatorBuilder: (context, index) => const Divider(),
@@ -174,67 +186,6 @@ class MoneyScreen extends ConsumerWidget {
                     LuqaSpacing.section + MediaQuery.paddingOf(context).bottom,
               ),
               sliver: const SliverToBoxAdapter(child: SizedBox.shrink()),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({required this.pendingWrites, required this.onRetry});
-
-  final int pendingWrites;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            'Money',
-            style: Theme.of(context).textTheme.headlineLarge,
-          ),
-        ),
-        // What is waiting to go out matters more than what is coming in: it is
-        // the user's own record of who owes what.
-        if (pendingWrites > 0)
-          _PendingChip(count: pendingWrites, onRetry: onRetry),
-      ],
-    );
-  }
-}
-
-class _PendingChip extends StatelessWidget {
-  const _PendingChip({required this.count, required this.onRetry});
-
-  final int count;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    return Semantics(
-      liveRegion: true,
-      child: IconButton(
-        key: const ValueKey('money-pending-writes'),
-        tooltip: count == 1
-            ? '1 change waiting to sync. Tap to retry'
-            : '$count changes waiting to sync. Tap to retry',
-        onPressed: onRetry,
-        visualDensity: VisualDensity.compact,
-        icon: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_upload_outlined, size: 16, color: muted),
-            const SizedBox(width: 3),
-            Text(
-              '$count',
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(color: muted),
             ),
           ],
         ),
@@ -322,11 +273,7 @@ class _Headline extends StatelessWidget {
           const SizedBox(height: LuqaSpacing.lg),
           Row(
             children: [
-              Icon(
-                Icons.card_giftcard_rounded,
-                size: 15,
-                color: palette.pink,
-              ),
+              Icon(Icons.card_giftcard_rounded, size: 15, color: palette.pink),
               const SizedBox(width: LuqaSpacing.sm),
               Expanded(
                 child: Text(
@@ -543,7 +490,11 @@ class _ExpenseFeed extends ConsumerWidget {
     // A month heading appears above the first bill that belongs to it, so the
     // feed reads as a continuous record rather than a series of blocks.
     String? monthAbove(int index) {
-      final label = moneyMonthLabel(context, state.expenses[index].dateKey, now);
+      final label = moneyMonthLabel(
+        context,
+        state.expenses[index].dateKey,
+        now,
+      );
       if (index == 0) return label;
       final previous = moneyMonthLabel(
         context,

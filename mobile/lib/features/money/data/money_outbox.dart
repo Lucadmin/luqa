@@ -3,12 +3,21 @@ import 'package:luqa/features/money/data/money_json.dart';
 import 'package:luqa/features/money/data/money_repository.dart';
 import 'package:luqa/features/money/domain/money_models.dart';
 
-/// The writes the money tab can make while offline.
+/// The writes the money tab and the People tab can make while offline.
 ///
 /// A bill is split at the table, and a table is exactly where a phone has one
 /// bar of signal. Everything the user does is recorded here first and answered
 /// from here immediately; the balances they read are the server's last word
 /// with this queue laid over the top.
+///
+/// **Why people share this queue rather than having their own.** Two things
+/// force it. A bill references a person by an id this device may have invented,
+/// so a person create and an expense create have to replay in the order they
+/// happened — two queues have no order between them, and the expense losing
+/// that race is rejected for naming a person the server has never heard of.
+/// And when the server answers a create with a different id, because it matched
+/// somebody by name, everything still queued behind it has to be repointed;
+/// [rewriteQueue] can only rewrite the queue it is in.
 ///
 /// Bills are sent as an [ExpenseWrite] rather than as resolved shares — the
 /// server recomputes the split from the same rules the editor previewed, so
@@ -31,6 +40,20 @@ sealed class MoneyMutation implements PendingMutation {
     CreatePerson(:final person) => 'adding ${person.name}',
     UpdatePerson(:final name) => 'your edit to ${name ?? 'a person'}',
     DeletePerson() => 'removing a person',
+    MarkPersonSeen(:final personName) => 'seeing $personName',
+    AddPersonNote(:final personName, :final body) =>
+      'the note about $personName — "${_short(body)}"',
+    UpdatePersonNote(:final personName) => 'your edit to a note about '
+        '$personName',
+    RemovePersonNote(:final personName) => 'removing a note about $personName',
+    AddPersonGift(:final personName, :final idea) =>
+      'the gift idea for $personName — "${_short(idea)}"',
+    SetGiftGiven(:final personName) => 'the gift idea for $personName',
+    RemovePersonGift(:final personName) =>
+      'removing a gift idea for $personName',
+    AddPersonPlace(:final personName, :final city) =>
+      '$personName being in $city',
+    RemovePersonPlace(:final personName) => 'removing a city for $personName',
     CreateGroup(:final group) => 'the group ${group.name}',
     UpdateGroup(:final name) => 'your edit to ${name ?? 'a group'}',
     DeleteGroup() => 'deleting a group',
@@ -73,6 +96,81 @@ sealed class MoneyMutation implements PendingMutation {
         clearDefaultPercent: json['clearDefaultPercent']! as bool,
         order: json['order'] as int?,
         archived: json['archived'] as bool?,
+        nickname: json['nickname'] as String?,
+        clearNickname: (json['clearNickname'] as bool?) ?? false,
+        birthday: birthdayFromJson(json['birthday']),
+        clearBirthday: (json['clearBirthday'] as bool?) ?? false,
+        cadenceDays: json['cadenceDays'] as int?,
+        clearCadence: (json['clearCadence'] as bool?) ?? false,
+        queuedAt: queuedAt,
+      ),
+      'markPersonSeen' => MarkPersonSeen(
+        personId: json['personId']! as String,
+        personName: json['personName']! as String,
+        seenAt: DateTime.parse(json['seenAt']! as String).toLocal(),
+        queuedAt: queuedAt,
+      ),
+      'addPersonNote' => AddPersonNote(
+        personId: json['personId']! as String,
+        personName: json['personName']! as String,
+        noteId: json['noteId']! as String,
+        body: json['body']! as String,
+        pinned: json['pinned']! as bool,
+        happenedOn: json['happenedOn'] as String?,
+        queuedAt: queuedAt,
+      ),
+      'updatePersonNote' => UpdatePersonNote(
+        personId: json['personId']! as String,
+        personName: json['personName']! as String,
+        noteId: json['noteId']! as String,
+        body: json['body'] as String?,
+        pinned: json['pinned'] as bool?,
+        queuedAt: queuedAt,
+      ),
+      'removePersonNote' => RemovePersonNote(
+        personId: json['personId']! as String,
+        personName: json['personName']! as String,
+        noteId: json['noteId']! as String,
+        queuedAt: queuedAt,
+      ),
+      'addPersonGift' => AddPersonGift(
+        personId: json['personId']! as String,
+        personName: json['personName']! as String,
+        giftId: json['giftId']! as String,
+        idea: json['idea']! as String,
+        url: json['url'] as String?,
+        queuedAt: queuedAt,
+      ),
+      'setGiftGiven' => SetGiftGiven(
+        personId: json['personId']! as String,
+        personName: json['personName']! as String,
+        giftId: json['giftId']! as String,
+        givenAt: switch (json['givenAt']) {
+          final String at => DateTime.parse(at).toLocal(),
+          _ => null,
+        },
+        queuedAt: queuedAt,
+      ),
+      'removePersonGift' => RemovePersonGift(
+        personId: json['personId']! as String,
+        personName: json['personName']! as String,
+        giftId: json['giftId']! as String,
+        queuedAt: queuedAt,
+      ),
+      'addPersonPlace' => AddPersonPlace(
+        personId: json['personId']! as String,
+        personName: json['personName']! as String,
+        placeId: json['placeId']! as String,
+        label: json['label']! as String,
+        city: json['city']! as String,
+        country: json['country'] as String?,
+        isPrimary: json['isPrimary']! as bool,
+        queuedAt: queuedAt,
+      ),
+      'removePersonPlace' => RemovePersonPlace(
+        personId: json['personId']! as String,
+        personName: json['personName']! as String,
+        placeId: json['placeId']! as String,
         queuedAt: queuedAt,
       ),
       'deletePerson' => DeletePerson(
@@ -221,6 +319,12 @@ final class UpdatePerson extends MoneyMutation {
     this.clearDefaultPercent = false,
     this.order,
     this.archived,
+    this.nickname,
+    this.clearNickname = false,
+    this.birthday,
+    this.clearBirthday = false,
+    this.cadenceDays,
+    this.clearCadence = false,
     required super.queuedAt,
   });
 
@@ -233,6 +337,12 @@ final class UpdatePerson extends MoneyMutation {
   final bool clearDefaultPercent;
   final int? order;
   final bool? archived;
+  final String? nickname;
+  final bool clearNickname;
+  final Birthday? birthday;
+  final bool clearBirthday;
+  final int? cadenceDays;
+  final bool clearCadence;
 
   @override
   String get subjectId => personId;
@@ -251,6 +361,12 @@ final class UpdatePerson extends MoneyMutation {
         (defaultPercent == null && earlier.clearDefaultPercent),
     order: order ?? earlier.order,
     archived: archived ?? earlier.archived,
+    nickname: clearNickname ? null : nickname ?? earlier.nickname,
+    clearNickname: clearNickname || (nickname == null && earlier.clearNickname),
+    birthday: clearBirthday ? null : birthday ?? earlier.birthday,
+    clearBirthday: clearBirthday || (birthday == null && earlier.clearBirthday),
+    cadenceDays: clearCadence ? null : cadenceDays ?? earlier.cadenceDays,
+    clearCadence: clearCadence || (cadenceDays == null && earlier.clearCadence),
     queuedAt: earlier.queuedAt,
   );
 
@@ -263,6 +379,12 @@ final class UpdatePerson extends MoneyMutation {
     clearDefaultPercent: clearDefaultPercent,
     order: order,
     archived: archived,
+    nickname: nickname,
+    clearNickname: clearNickname,
+    birthday: birthday,
+    clearBirthday: clearBirthday,
+    cadenceDays: cadenceDays,
+    clearCadence: clearCadence,
   );
 
   @override
@@ -278,7 +400,294 @@ final class UpdatePerson extends MoneyMutation {
     'clearDefaultPercent': clearDefaultPercent,
     'order': order,
     'archived': archived,
+    'nickname': nickname,
+    'clearNickname': clearNickname,
+    'birthday': birthdayToJson(birthday),
+    'clearBirthday': clearBirthday,
+    'cadenceDays': cadenceDays,
+    'clearCadence': clearCadence,
   };
+}
+
+// --------------------------------------------------------- person profile
+//
+// Every one of these carries `personName` as well as `personId`. It is used
+// for exactly one thing: telling the user which change was lost when a write
+// has to be abandoned. "removing a note about Mira" is actionable; a ULID is
+// not.
+//
+// Each also names the row it creates, so a write retried after a lost response
+// lands once rather than twice.
+
+final class MarkPersonSeen extends MoneyMutation {
+  const MarkPersonSeen({
+    required this.personId,
+    required this.personName,
+    required this.seenAt,
+    required super.queuedAt,
+  });
+
+  final String personId;
+  final String personName;
+  final DateTime seenAt;
+
+  @override
+  String get subjectId => personId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'markPersonSeen',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'personId': personId,
+    'personName': personName,
+    'seenAt': seenAt.toUtc().toIso8601String(),
+  };
+}
+
+final class AddPersonNote extends MoneyMutation {
+  const AddPersonNote({
+    required this.personId,
+    required this.personName,
+    required this.noteId,
+    required this.body,
+    required this.pinned,
+    required this.happenedOn,
+    required super.queuedAt,
+  });
+
+  final String personId;
+  final String personName;
+  final String noteId;
+  final String body;
+  final bool pinned;
+  final String? happenedOn;
+
+  @override
+  String get subjectId => noteId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'addPersonNote',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'personId': personId,
+    'personName': personName,
+    'noteId': noteId,
+    'body': body,
+    'pinned': pinned,
+    'happenedOn': happenedOn,
+  };
+}
+
+final class UpdatePersonNote extends MoneyMutation {
+  const UpdatePersonNote({
+    required this.personId,
+    required this.personName,
+    required this.noteId,
+    this.body,
+    this.pinned,
+    required super.queuedAt,
+  });
+
+  final String personId;
+  final String personName;
+  final String noteId;
+  final String? body;
+  final bool? pinned;
+
+  @override
+  String get subjectId => noteId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'updatePersonNote',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'personId': personId,
+    'personName': personName,
+    'noteId': noteId,
+    'body': body,
+    'pinned': pinned,
+  };
+}
+
+final class RemovePersonNote extends MoneyMutation {
+  const RemovePersonNote({
+    required this.personId,
+    required this.personName,
+    required this.noteId,
+    required super.queuedAt,
+  });
+
+  final String personId;
+  final String personName;
+  final String noteId;
+
+  @override
+  String get subjectId => noteId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'removePersonNote',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'personId': personId,
+    'personName': personName,
+    'noteId': noteId,
+  };
+}
+
+final class AddPersonGift extends MoneyMutation {
+  const AddPersonGift({
+    required this.personId,
+    required this.personName,
+    required this.giftId,
+    required this.idea,
+    required this.url,
+    required super.queuedAt,
+  });
+
+  final String personId;
+  final String personName;
+  final String giftId;
+  final String idea;
+  final String? url;
+
+  @override
+  String get subjectId => giftId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'addPersonGift',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'personId': personId,
+    'personName': personName,
+    'giftId': giftId,
+    'idea': idea,
+    'url': url,
+  };
+}
+
+final class SetGiftGiven extends MoneyMutation {
+  const SetGiftGiven({
+    required this.personId,
+    required this.personName,
+    required this.giftId,
+    required this.givenAt,
+    required super.queuedAt,
+  });
+
+  final String personId;
+  final String personName;
+  final String giftId;
+
+  /// Null puts the idea back on the list, so it is a value rather than an
+  /// absence and always travels.
+  final DateTime? givenAt;
+
+  @override
+  String get subjectId => giftId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'setGiftGiven',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'personId': personId,
+    'personName': personName,
+    'giftId': giftId,
+    'givenAt': givenAt?.toUtc().toIso8601String(),
+  };
+}
+
+final class RemovePersonGift extends MoneyMutation {
+  const RemovePersonGift({
+    required this.personId,
+    required this.personName,
+    required this.giftId,
+    required super.queuedAt,
+  });
+
+  final String personId;
+  final String personName;
+  final String giftId;
+
+  @override
+  String get subjectId => giftId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'removePersonGift',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'personId': personId,
+    'personName': personName,
+    'giftId': giftId,
+  };
+}
+
+final class AddPersonPlace extends MoneyMutation {
+  const AddPersonPlace({
+    required this.personId,
+    required this.personName,
+    required this.placeId,
+    required this.label,
+    required this.city,
+    required this.country,
+    required this.isPrimary,
+    required super.queuedAt,
+  });
+
+  final String personId;
+  final String personName;
+  final String placeId;
+  final String label;
+  final String city;
+  final String? country;
+  final bool isPrimary;
+
+  @override
+  String get subjectId => placeId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'addPersonPlace',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'personId': personId,
+    'personName': personName,
+    'placeId': placeId,
+    'label': label,
+    'city': city,
+    'country': country,
+    'isPrimary': isPrimary,
+  };
+}
+
+final class RemovePersonPlace extends MoneyMutation {
+  const RemovePersonPlace({
+    required this.personId,
+    required this.personName,
+    required this.placeId,
+    required super.queuedAt,
+  });
+
+  final String personId;
+  final String personName;
+  final String placeId;
+
+  @override
+  String get subjectId => placeId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'removePersonPlace',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'personId': personId,
+    'personName': personName,
+    'placeId': placeId,
+  };
+}
+
+/// Enough of a body to recognise which one it was, without turning a notice
+/// into a wall of text.
+String _short(String value) {
+  final trimmed = value.trim();
+  return trimmed.length <= 40 ? trimmed : '${trimmed.substring(0, 39)}…';
 }
 
 final class DeletePerson extends MoneyMutation {

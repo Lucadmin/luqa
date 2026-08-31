@@ -242,6 +242,38 @@ export async function updateExercise(
   return res;
 }
 
+export async function mergeExercise(
+  sourceExerciseId: string,
+  targetExerciseId: string,
+) {
+  const res = await apiSend<{
+    exercise: ExerciseDTO;
+    mergedExerciseId: string;
+    movedEntries: number;
+  }>(`/api/gym/exercises/${sourceExerciseId}/merge`, "POST", {
+    targetExerciseId,
+  });
+  await globalMutate<{ overview: GymOverviewDTO }>(
+    "/api/gym",
+    (current) =>
+      current
+        ? {
+            overview: {
+              ...current.overview,
+              exercises: current.overview.exercises
+                .filter((exercise) => exercise.id !== sourceExerciseId)
+                .map((exercise) =>
+                  exercise.id === targetExerciseId ? res.exercise : exercise,
+                ),
+            },
+          }
+        : current,
+    { revalidate: false },
+  );
+  revalidateGymInBackground();
+  return res;
+}
+
 export async function deleteExercise(id: string) {
   const res = await apiSend<{ deleted: boolean; archived: boolean }>(
     `/api/gym/exercises/${id}`,

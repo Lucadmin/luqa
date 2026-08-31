@@ -442,6 +442,83 @@ class GymApi {
     return null;
   }
 
+  /// Merge a duplicate exercise into another exercise
+  ///
+  /// Moves every logged performance to the target exercise, keeps the target name, and removes the source exercise from the library.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  ///   Exercise whose history will be moved and then removed.
+  ///
+  /// * [MergeGymExerciseRequest] mergeGymExerciseRequest (required):
+  Future<Response> mergeGymExerciseWithHttpInfo(
+    String id,
+    MergeGymExerciseRequest mergeGymExerciseRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/gym/exercises/{id}/merge'.replaceAll('{id}', id);
+
+    // ignore: prefer_final_locals
+    Object? postBody = mergeGymExerciseRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Merge a duplicate exercise into another exercise
+  ///
+  /// Moves every logged performance to the target exercise, keeps the target name, and removes the source exercise from the library.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  ///   Exercise whose history will be moved and then removed.
+  ///
+  /// * [MergeGymExerciseRequest] mergeGymExerciseRequest (required):
+  Future<GymExerciseMergeResponse?> mergeGymExercise(
+    String id,
+    MergeGymExerciseRequest mergeGymExerciseRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await mergeGymExerciseWithHttpInfo(
+      id,
+      mergeGymExerciseRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'GymExerciseMergeResponse',
+      ) as GymExerciseMergeResponse;
+    }
+    return null;
+  }
+
   /// Edit, archive, or restore a gym
   ///
   /// Note: This method returns the HTTP [Response].

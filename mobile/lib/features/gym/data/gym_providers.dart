@@ -2,7 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/auth/application/auth_controller.dart';
 import 'package:luqa/features/gym/application/gym_sync_engine.dart';
-import 'package:luqa/features/gym/data/gym_cache.dart';
+import 'package:luqa/features/gym/data/gym_local_store.dart';
+import 'package:luqa/features/gym/data/gym_sync_service.dart';
 import 'package:luqa/features/gym/data/gym_outbox.dart';
 import 'package:luqa/features/gym/data/gym_repository.dart';
 import 'package:luqa/features/gym/data/local_first_gym_repository.dart';
@@ -19,10 +20,17 @@ final remoteGymRepositoryProvider = Provider<GymRepository>(
   (ref) => RemoteGymRepository(ref.watch(luqaApiProvider)),
 );
 
-final gymCacheProvider = Provider<GymCache>((ref) {
+/// This device's own gym rows. Null while signed out: there is no account to
+/// file them under.
+final gymLocalStoreProvider = Provider<GymLocalStore?>((ref) {
   final userId = ref.watch(_namespaceProvider);
-  if (userId == null) return const NullGymCache();
-  return SqliteGymCache(namespace: userId);
+  return userId == null ? null : GymLocalStore(namespace: userId);
+});
+
+final gymSyncServiceProvider = Provider<GymSyncService?>((ref) {
+  final store = ref.watch(gymLocalStoreProvider);
+  if (store == null) return null;
+  return GymSyncService(client: ref.watch(luqaApiProvider), store: store);
 });
 
 final gymOutboxProvider = Provider<Outbox<GymMutation>>((ref) {
@@ -43,9 +51,15 @@ final gymDiscardLogProvider = Provider<DiscardLog>((ref) {
 
 /// What screens use. Writes land here and return immediately.
 final gymRepositoryProvider = Provider<GymRepository>((ref) {
+  final store = ref.watch(gymLocalStoreProvider);
+  final sync = ref.watch(gymSyncServiceProvider);
+  if (store == null || sync == null) {
+    return ref.watch(remoteGymRepositoryProvider);
+  }
   return LocalFirstGymRepository(
+    store: store,
+    sync: sync,
     remote: ref.watch(remoteGymRepositoryProvider),
-    cache: ref.watch(gymCacheProvider),
     queue: ref.watch(gymSyncEngineProvider.notifier),
   );
 });

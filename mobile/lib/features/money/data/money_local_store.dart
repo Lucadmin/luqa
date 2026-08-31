@@ -285,13 +285,20 @@ class MoneyLocalStore {
 
   /// Writes a row this device just changed. [txn] lets the caller put the row
   /// and the outbox entry in one transaction.
+  /// Writes a person and the whole record hanging off them.
+  ///
+  /// The children are replaced rather than merged, because the server sends a
+  /// person as one row with its notes, gifts, places and channels inside it.
+  /// Merging would need a per-child tombstone to know that a note deleted on
+  /// another device is gone; replacing gets that for free, and "one row is one
+  /// profile" is the property the whole feature is built on.
   Future<void> putPerson(
     Person person, {
     bool pending = true,
     DatabaseExecutor? txn,
   }) async {
     final db = txn ?? await _db;
-    await db.insert('money_person', {
+    await db.insert('person', {
       'namespace': namespace,
       'id': person.id,
       'name': person.name,
@@ -300,9 +307,95 @@ class MoneyLocalStore {
       'default_percent': person.defaultPercent,
       'ord': person.order,
       'archived': person.archived ? 1 : 0,
+      'nickname': person.nickname,
+      'photo_url': person.photoUrl,
+      'birthday_year': person.birthday?.year,
+      'birthday_month': person.birthday?.month,
+      'birthday_day': person.birthday?.day,
+      'cadence_days': person.cadenceDays,
+      'last_seen_at': person.lastSeenAt?.toUtc().millisecondsSinceEpoch,
+      'google_resource_name': person.googleResourceName,
       'pending': pending ? 1 : 0,
       'removed': 0,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _putPersonChildren(db, person);
+  }
+
+  static const personChildTables = [
+    'person_place',
+    'person_channel',
+    'person_note',
+    'person_gift',
+  ];
+
+  Future<void> _putPersonChildren(DatabaseExecutor db, Person person) async {
+    for (final table in personChildTables) {
+      await db.delete(
+        table,
+        where: 'namespace = ? AND person_id = ?',
+        whereArgs: [namespace, person.id],
+      );
+    }
+
+    for (var i = 0; i < person.places.length; i++) {
+      final place = person.places[i];
+      await db.insert('person_place', {
+        'namespace': namespace,
+        'id': place.id,
+        'person_id': person.id,
+        'label': place.label,
+        'city': place.city,
+        'region': place.region,
+        'country': place.country,
+        'address': place.address,
+        'latitude': place.latitude,
+        'longitude': place.longitude,
+        'is_primary': place.isPrimary ? 1 : 0,
+        'source': place.source.name,
+        'ord': i,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+
+    for (var i = 0; i < person.channels.length; i++) {
+      final channel = person.channels[i];
+      await db.insert('person_channel', {
+        'namespace': namespace,
+        'id': channel.id,
+        'person_id': person.id,
+        'kind': channel.kind.name,
+        'label': channel.label,
+        'value': channel.value,
+        'source': 'MANUAL',
+        'ord': i,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+
+    for (var i = 0; i < person.notes.length; i++) {
+      final note = person.notes[i];
+      await db.insert('person_note', {
+        'namespace': namespace,
+        'id': note.id,
+        'person_id': person.id,
+        'body': note.body,
+        'pinned': note.pinned ? 1 : 0,
+        'happened_on': note.happenedOn,
+        'created_at': note.createdAt.toUtc().millisecondsSinceEpoch,
+        'ord': i,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+
+    for (var i = 0; i < person.gifts.length; i++) {
+      final gift = person.gifts[i];
+      await db.insert('person_gift', {
+        'namespace': namespace,
+        'id': gift.id,
+        'person_id': person.id,
+        'idea': gift.idea,
+        'url': gift.url,
+        'given_at': gift.givenAt?.toUtc().millisecondsSinceEpoch,
+        'ord': i,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
   }
 
   Future<void> putGroup(
@@ -432,6 +525,18 @@ class MoneyLocalStore {
         whereArgs: [namespace, id],
       );
     }
+    if (table == 'person') {
+      // Their notes, gifts and places go with them. Nothing reads a child
+      // except through its person, so leaving them would be leaking rows that
+      // nothing can ever show or delete.
+      for (final child in personChildTables) {
+        await db.delete(
+          child,
+          where: 'namespace = ? AND person_id = ?',
+          whereArgs: [namespace, id],
+        );
+      }
+    }
   }
 
   /// The row has landed. Clearing the flag lets the next delta own it again.
@@ -448,6 +553,12 @@ class MoneyLocalStore {
   /// Renames a row the server gave a different id to — a person it matched by
   /// name, say. Everything pointing at the old id follows it.
   Future<void> remapId(String table, String from, String to) async {
+    await _store.recordRemap(
+      namespace: namespace,
+      kind: table,
+      from: from,
+      to: to,
+    );
     final db = await _db;
     await db.transaction((txn) async {
       await txn.update(
@@ -456,11 +567,18 @@ class MoneyLocalStore {
         where: 'namespace = ? AND id = ?',
         whereArgs: [namespace, from],
       );
-      if (table == 'money_person') {
+      if (table == 'person') {
         for (final ref in const [
           ('money_expense_share', 'person_id'),
           ('money_settlement', 'person_id'),
           ('money_group_member', 'person_id'),
+          // Their record follows them too. A note written offline against the
+          // id this device invented has to end up on the person the server
+          // matched, not orphaned against an id nothing points at any more.
+          ('person_place', 'person_id'),
+          ('person_channel', 'person_id'),
+          ('person_note', 'person_id'),
+          ('person_gift', 'person_id'),
         ]) {
           await txn.update(
             ref.$1,
@@ -501,6 +619,12 @@ class MoneyLocalStore {
     });
   }
 
+  /// The id [id] became, if the server renamed it while a screen was still
+  /// holding the one this device invented.
+  Future<String?> resolve(String table, String? id) async => id == null
+      ? null
+      : _store.resolveId(namespace: namespace, kind: table, id: id);
+
   // ------------------------------------------------------------ delta sync
 
   /// True when this device has changed the row and is still waiting on the
@@ -518,12 +642,12 @@ class MoneyLocalStore {
   Future<void> applyPeople(List<Person> rows, List<String> deleted) async {
     final db = await _db;
     await db.transaction((txn) async {
-      final pending = await _pendingIds(txn, 'money_person');
+      final pending = await _pendingIds(txn, 'person');
       for (final person in rows) {
         if (pending.contains(person.id)) continue;
         await putPerson(person, pending: false, txn: txn);
       }
-      await _applyDeletions(txn, 'money_person', deleted, pending);
+      await _applyDeletions(txn, 'person', deleted, pending);
     });
   }
 
@@ -656,25 +780,154 @@ class MoneyLocalStore {
 
   // ------------------------------------------------------------- internals
 
+  /// Every person, with the whole record hanging off them.
+  ///
+  /// The children are read in four flat queries and grouped in memory rather
+  /// than per person: a hundred people would otherwise be four hundred round
+  /// trips to sqlite to render one list.
   Future<List<Person>> _people(DatabaseExecutor db) async {
     final rows = await db.query(
-      'money_person',
+      'person',
       where: 'namespace = ? AND removed = 0',
       whereArgs: [namespace],
       orderBy: 'ord ASC, name ASC',
     );
+    if (rows.isEmpty) return const [];
+
+    // Four queries at once rather than one after another: they do not depend
+    // on each other, and reading a roster should not cost four sequential
+    // round trips to sqlite. Keyed by table rather than positional, so
+    // reordering `personChildTables` cannot quietly swap notes for gifts.
+    final children = {
+      for (final entry in await Future.wait([
+        for (final table in personChildTables)
+          _childrenByPerson(db, table).then((rows) => (table, rows)),
+      ]))
+        entry.$1: entry.$2,
+    };
+    final places = children['person_place']!;
+    final channels = children['person_channel']!;
+    final notes = children['person_note']!;
+    final gifts = children['person_gift']!;
+
     return [
       for (final row in rows)
-        Person(
-          id: row['id']! as String,
-          name: row['name']! as String,
-          colorValue: row['color']! as int,
-          emoji: row['emoji'] as String?,
-          defaultPercent: row['default_percent'] as int?,
-          order: row['ord']! as int,
-          archived: (row['archived']! as int) == 1,
+        _personFromRow(
+          row,
+          places: places[row['id']] ?? const [],
+          channels: channels[row['id']] ?? const [],
+          notes: notes[row['id']] ?? const [],
+          gifts: gifts[row['id']] ?? const [],
         ),
     ];
+  }
+
+  Future<Map<Object?, List<Map<String, Object?>>>> _childrenByPerson(
+    DatabaseExecutor db,
+    String table,
+  ) async {
+    final rows = await db.query(
+      table,
+      where: 'namespace = ?',
+      whereArgs: [namespace],
+      orderBy: 'ord ASC',
+    );
+    final grouped = <Object?, List<Map<String, Object?>>>{};
+    for (final row in rows) {
+      grouped.putIfAbsent(row['person_id'], () => []).add(row);
+    }
+    return grouped;
+  }
+
+  Person _personFromRow(
+    Map<String, Object?> row, {
+    required List<Map<String, Object?>> places,
+    required List<Map<String, Object?>> channels,
+    required List<Map<String, Object?>> notes,
+    required List<Map<String, Object?>> gifts,
+  }) {
+    final month = row['birthday_month'] as int?;
+    final day = row['birthday_day'] as int?;
+    final seen = row['last_seen_at'] as int?;
+
+    return Person(
+      id: row['id']! as String,
+      name: row['name']! as String,
+      colorValue: row['color']! as int,
+      emoji: row['emoji'] as String?,
+      defaultPercent: row['default_percent'] as int?,
+      order: row['ord']! as int,
+      archived: (row['archived']! as int) == 1,
+      nickname: row['nickname'] as String?,
+      photoUrl: row['photo_url'] as String?,
+      // Half a birthday is no birthday: a month with no day is nothing anyone
+      // can count down to, and the server refuses to store one.
+      birthday: month != null && day != null
+          ? Birthday(month: month, day: day, year: row['birthday_year'] as int?)
+          : null,
+      cadenceDays: row['cadence_days'] as int?,
+      lastSeenAt: seen == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(seen, isUtc: true).toLocal(),
+      googleResourceName: row['google_resource_name'] as String?,
+      places: [
+        for (final place in places)
+          PersonPlace(
+            id: place['id']! as String,
+            label: place['label']! as String,
+            city: place['city']! as String,
+            region: place['region'] as String?,
+            country: place['country'] as String?,
+            address: place['address'] as String?,
+            latitude: place['latitude'] as double?,
+            longitude: place['longitude'] as double?,
+            isPrimary: (place['is_primary']! as int) == 1,
+            source: place['source'] == 'GOOGLE'
+                ? PlaceSource.google
+                : PlaceSource.manual,
+          ),
+      ],
+      channels: [
+        for (final channel in channels)
+          PersonChannel(
+            id: channel['id']! as String,
+            kind: switch (channel['kind']) {
+              'email' || 'EMAIL' => ChannelKind.email,
+              'handle' || 'HANDLE' => ChannelKind.handle,
+              _ => ChannelKind.phone,
+            },
+            label: channel['label'] as String?,
+            value: channel['value']! as String,
+          ),
+      ],
+      notes: [
+        for (final note in notes)
+          PersonNote(
+            id: note['id']! as String,
+            body: note['body']! as String,
+            createdAt: DateTime.fromMillisecondsSinceEpoch(
+              note['created_at']! as int,
+              isUtc: true,
+            ).toLocal(),
+            pinned: (note['pinned']! as int) == 1,
+            happenedOn: note['happened_on'] as String?,
+          ),
+      ],
+      gifts: [
+        for (final gift in gifts)
+          GiftIdea(
+            id: gift['id']! as String,
+            idea: gift['idea']! as String,
+            url: gift['url'] as String?,
+            givenAt: gift['given_at'] == null
+                ? null
+                : DateTime.fromMillisecondsSinceEpoch(
+                    gift['given_at']! as int,
+                    isUtc: true,
+                  ).toLocal(),
+          ),
+      ],
+    );
   }
 
   Future<List<PersonGroup>> _groups(DatabaseExecutor db) async {

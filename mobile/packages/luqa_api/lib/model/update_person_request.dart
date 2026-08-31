@@ -19,6 +19,13 @@ class UpdatePersonRequest {
     this.defaultPercent = const Optional.absent(),
     this.order = const Optional.absent(),
     this.archived = const Optional.absent(),
+    this.nickname = const Optional.absent(),
+    this.photoUrl = const Optional.absent(),
+    this.birthdayYear = const Optional.absent(),
+    this.birthdayMonth = const Optional.absent(),
+    this.birthdayDay = const Optional.absent(),
+    this.cadenceDays = const Optional.absent(),
+    this.lastSeenAt = const Optional.absent(),
   });
 
   ///
@@ -72,6 +79,70 @@ class UpdatePersonRequest {
   ///
   final Optional<bool?> archived;
 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<String?> nickname;
+
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<String?> photoUrl;
+
+  /// Minimum value: 1900
+  /// Maximum value: 2200
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<int?> birthdayYear;
+
+  /// Minimum value: 1
+  /// Maximum value: 12
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<int?> birthdayMonth;
+
+  /// Minimum value: 1
+  /// Maximum value: 31
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<int?> birthdayDay;
+
+  /// Minimum value: 1
+  /// Maximum value: 3650
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<int?> cadenceDays;
+
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<DateTime?> lastSeenAt;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -81,7 +152,14 @@ class UpdatePersonRequest {
           other.emoji == emoji &&
           other.defaultPercent == defaultPercent &&
           other.order == order &&
-          other.archived == archived;
+          other.archived == archived &&
+          other.nickname == nickname &&
+          other.photoUrl == photoUrl &&
+          other.birthdayYear == birthdayYear &&
+          other.birthdayMonth == birthdayMonth &&
+          other.birthdayDay == birthdayDay &&
+          other.cadenceDays == cadenceDays &&
+          other.lastSeenAt == lastSeenAt;
 
   @override
   int get hashCode =>
@@ -91,11 +169,18 @@ class UpdatePersonRequest {
       (emoji == null ? 0 : emoji!.hashCode) +
       (defaultPercent == null ? 0 : defaultPercent!.hashCode) +
       (order == null ? 0 : order!.hashCode) +
-      (archived == null ? 0 : archived!.hashCode);
+      (archived == null ? 0 : archived!.hashCode) +
+      (nickname == null ? 0 : nickname!.hashCode) +
+      (photoUrl == null ? 0 : photoUrl!.hashCode) +
+      (birthdayYear == null ? 0 : birthdayYear!.hashCode) +
+      (birthdayMonth == null ? 0 : birthdayMonth!.hashCode) +
+      (birthdayDay == null ? 0 : birthdayDay!.hashCode) +
+      (cadenceDays == null ? 0 : cadenceDays!.hashCode) +
+      (lastSeenAt == null ? 0 : lastSeenAt!.hashCode);
 
   @override
   String toString() =>
-      'UpdatePersonRequest[name=$name, color=$color, emoji=$emoji, defaultPercent=$defaultPercent, order=$order, archived=$archived]';
+      'UpdatePersonRequest[name=$name, color=$color, emoji=$emoji, defaultPercent=$defaultPercent, order=$order, archived=$archived, nickname=$nickname, photoUrl=$photoUrl, birthdayYear=$birthdayYear, birthdayMonth=$birthdayMonth, birthdayDay=$birthdayDay, cadenceDays=$cadenceDays, lastSeenAt=$lastSeenAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -123,6 +208,35 @@ class UpdatePersonRequest {
       final value = this.archived.value;
       json[r'archived'] = value;
     }
+    if (this.nickname.isPresent) {
+      final value = this.nickname.value;
+      json[r'nickname'] = value;
+    }
+    if (this.photoUrl.isPresent) {
+      final value = this.photoUrl.value;
+      json[r'photoUrl'] = value;
+    }
+    if (this.birthdayYear.isPresent) {
+      final value = this.birthdayYear.value;
+      json[r'birthdayYear'] = value;
+    }
+    if (this.birthdayMonth.isPresent) {
+      final value = this.birthdayMonth.value;
+      json[r'birthdayMonth'] = value;
+    }
+    if (this.birthdayDay.isPresent) {
+      final value = this.birthdayDay.value;
+      json[r'birthdayDay'] = value;
+    }
+    if (this.cadenceDays.isPresent) {
+      final value = this.cadenceDays.value;
+      json[r'cadenceDays'] = value;
+    }
+    if (this.lastSeenAt.isPresent) {
+      final value = this.lastSeenAt.value;
+      json[r'lastSeenAt'] =
+          value == null ? null : value.toUtc().toIso8601String();
+    }
     return json;
   }
 
@@ -135,6 +249,13 @@ class UpdatePersonRequest {
     Optional<int?>? defaultPercent,
     Optional<int?>? order,
     Optional<bool?>? archived,
+    Optional<String?>? nickname,
+    Optional<String?>? photoUrl,
+    Optional<int?>? birthdayYear,
+    Optional<int?>? birthdayMonth,
+    Optional<int?>? birthdayDay,
+    Optional<int?>? cadenceDays,
+    Optional<DateTime?>? lastSeenAt,
   }) =>
       UpdatePersonRequest(
         name: name ?? this.name,
@@ -143,6 +264,13 @@ class UpdatePersonRequest {
         defaultPercent: defaultPercent ?? this.defaultPercent,
         order: order ?? this.order,
         archived: archived ?? this.archived,
+        nickname: nickname ?? this.nickname,
+        photoUrl: photoUrl ?? this.photoUrl,
+        birthdayYear: birthdayYear ?? this.birthdayYear,
+        birthdayMonth: birthdayMonth ?? this.birthdayMonth,
+        birthdayDay: birthdayDay ?? this.birthdayDay,
+        cadenceDays: cadenceDays ?? this.cadenceDays,
+        lastSeenAt: lastSeenAt ?? this.lastSeenAt,
       );
 
   /// Returns a new [UpdatePersonRequest] instance and imports its values from
@@ -180,6 +308,35 @@ class UpdatePersonRequest {
             : const Optional.absent(),
         archived: json.containsKey(r'archived')
             ? Optional.present(mapValueOfType<bool>(json, r'archived'))
+            : const Optional.absent(),
+        nickname: json.containsKey(r'nickname')
+            ? Optional.present(mapValueOfType<String>(json, r'nickname'))
+            : const Optional.absent(),
+        photoUrl: json.containsKey(r'photoUrl')
+            ? Optional.present(mapValueOfType<String>(json, r'photoUrl'))
+            : const Optional.absent(),
+        birthdayYear: json.containsKey(r'birthdayYear')
+            ? Optional.present(json[r'birthdayYear'] == null
+                ? null
+                : int.parse('${json[r'birthdayYear']}'))
+            : const Optional.absent(),
+        birthdayMonth: json.containsKey(r'birthdayMonth')
+            ? Optional.present(json[r'birthdayMonth'] == null
+                ? null
+                : int.parse('${json[r'birthdayMonth']}'))
+            : const Optional.absent(),
+        birthdayDay: json.containsKey(r'birthdayDay')
+            ? Optional.present(json[r'birthdayDay'] == null
+                ? null
+                : int.parse('${json[r'birthdayDay']}'))
+            : const Optional.absent(),
+        cadenceDays: json.containsKey(r'cadenceDays')
+            ? Optional.present(json[r'cadenceDays'] == null
+                ? null
+                : int.parse('${json[r'cadenceDays']}'))
+            : const Optional.absent(),
+        lastSeenAt: json.containsKey(r'lastSeenAt')
+            ? Optional.present(mapDateTime(json, r'lastSeenAt', r''))
             : const Optional.absent(),
       );
     }

@@ -103,47 +103,48 @@ class GymOverviewController extends Notifier<GymOverviewState> {
       clearError: true,
     );
 
-    if (allowCache) {
-      // Painting the phone's copy first is what makes opening the gym screen
-      // in a basement feel like opening a local app.
-      try {
-        final cached = await ref
-            .read(localFirstGymRepositoryProvider)
-            ?.cachedOverview();
-        if (!ref.mounted || generation != _generation) return;
-        if (cached != null) {
-          state = state.copyWith(
-            overview: cached,
-            isLoading: false,
-            isRefreshing: true,
-          );
-        }
-      } on Object {
-        // A broken read cache must never block a fresh load.
-      }
-    }
-
+    // The device's own rows. This is the answer, not a placeholder for one.
     try {
       final overview = await _repository.loadOverview();
       if (!ref.mounted || generation != _generation) return;
       state = state.copyWith(
         overview: overview,
         isLoading: false,
-        isRefreshing: false,
         clearError: true,
       );
     } on Object catch (error) {
       if (!ref.mounted || generation != _generation) return;
-      // Something already on screen beats an error page: the repository only
-      // throws once it has no cached copy either.
       state = state.copyWith(
         isLoading: false,
         isRefreshing: false,
-        error: state.overview != null
-            ? null
-            : describeNetworkFailure(error, whileDoing: 'loading gym data'),
-        clearError: state.overview != null,
+        error: describeNetworkFailure(error, whileDoing: 'loading gym data'),
       );
+      return;
+    }
+
+    // Catching up happens behind the screen. Not reaching the server only
+    // means nothing new arrived, which is not something to interrupt a
+    // workout for.
+    final local = ref.read(localFirstGymRepositoryProvider);
+    if (local == null) {
+      if (ref.mounted && generation == _generation) {
+        state = state.copyWith(isRefreshing: false);
+      }
+      return;
+    }
+    try {
+      await local.pull();
+      if (!ref.mounted || generation != _generation) return;
+      final overview = await _repository.loadOverview();
+      if (!ref.mounted || generation != _generation) return;
+      state = state.copyWith(
+        overview: overview,
+        isRefreshing: false,
+        clearError: true,
+      );
+    } on Object {
+      if (!ref.mounted || generation != _generation) return;
+      state = state.copyWith(isRefreshing: false);
     }
   }
 
@@ -261,6 +262,56 @@ class GymOverviewController extends Notifier<GymOverviewState> {
       if (ref.mounted) {
         state = state.copyWith(
           error: describeNetworkFailure(error, whileDoing: 'updating the gym'),
+        );
+      }
+      return false;
+    }
+  }
+
+  /// Exercise merges are intentionally online and ordered after the outbox.
+  /// Otherwise an older queued workout could upload the source id again just
+  /// after the server removed it.
+  Future<bool> mergeExercise({
+    required String sourceExerciseId,
+    required String targetExerciseId,
+  }) async {
+    state = state.copyWith(clearError: true);
+    await ref.read(gymSyncEngineProvider.notifier).sync();
+    if (!ref.mounted) return false;
+    if (ref.read(gymSyncEngineProvider).pending > 0) {
+      state = state.copyWith(
+        error:
+            'Connect first so pending workout changes can sync before merging.',
+      );
+      return false;
+    }
+
+    try {
+      final target = await _repository.mergeExercise(
+        sourceExerciseId: sourceExerciseId,
+        targetExerciseId: targetExerciseId,
+      );
+      if (!ref.mounted) return true;
+      final overview = state.overview;
+      if (overview != null) {
+        state = state.copyWith(
+          overview: applyExerciseMerge(
+            overview,
+            sourceExerciseId: sourceExerciseId,
+            target: target,
+          ),
+          clearError: true,
+        );
+      }
+      await load(refresh: true);
+      return true;
+    } on Object catch (error) {
+      if (ref.mounted) {
+        state = state.copyWith(
+          error: describeNetworkFailure(
+            error,
+            whileDoing: 'merging the exercises',
+          ),
         );
       }
       return false;

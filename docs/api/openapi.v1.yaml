@@ -37,6 +37,13 @@ tags:
       that settle it. Every amount is integer cents so no split ever loses one,
       and every balance is written from the user's point of view — positive
       means this person owes the user.
+  - name: People
+    description: >-
+      The person behind the balance: birthdays, notes, gift ideas, the cities
+      they can be found in, and how often being in touch is worth aiming for.
+      One `Person` serves both this and Money — the same friend on a bill and
+      on a map is one row, not two — and the profile children ride inside it
+      rather than syncing on their own.
 paths:
   /auth/session:
     post:
@@ -441,6 +448,40 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /gym/exercises/{id}/merge:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Exercise whose history will be moved and then removed.
+        schema:
+          type: string
+    post:
+      operationId: mergeGymExercise
+      tags: [Gym]
+      summary: Merge a duplicate exercise into another exercise
+      description: >-
+        Moves every logged performance to the target exercise, keeps the
+        target name, and removes the source exercise from the library.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeGymExerciseRequest"
+      responses:
+        "200":
+          description: Exercises merged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymExerciseMergeResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /gym/exercises/{id}/history:
     parameters:
       - name: id
@@ -672,6 +713,384 @@ paths:
             queued delete replayed from a device cannot fail on its second try.
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /people:
+    get:
+      operationId: listPeopleProfiles
+      tags: [People]
+      summary: Everyone, archived included, each with their whole profile
+      responses:
+        "200":
+          description: People
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createPersonProfile
+      tags: [People]
+      summary: Add someone, identity and profile in one write
+      description: >-
+        One write rather than a create plus a patch, because the editor asks
+        for a name, a birthday and a rhythm on the same sheet — and two queue
+        entries for one action leaves the second one strandable on its own.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePersonRequest"
+      responses:
+        "200":
+          description: >-
+            Someone with this name — or this id — already exists on the
+            account; they are returned rather than duplicated, so the same
+            person added offline on two devices converges on one row. The
+            profile already on that row is left untouched, because a create
+            replayed from a queue must not blank out notes written since.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "201":
+          description: Person created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/IdConflict"
+  /people/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getPersonProfile
+      tags: [People]
+      summary: One person, whole profile
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updatePersonProfile
+      tags: [People]
+      summary: Rename, restyle, or change the profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePersonRequest"
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deletePersonProfile
+      tags: [People]
+      summary: Remove someone, as far as it is safe to
+      description: >-
+        Anyone who has been on a bill is archived rather than deleted: their
+        shares are what produced everyone else's balances, and a name that
+        stops resolving turns old bills into arithmetic nobody can check.
+        `deleted` says which happened, so the client knows whether to expect
+        the row back.
+      responses:
+        "200":
+          description: Removed or archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletePersonResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /people/{id}/seen:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: markPersonSeen
+      tags: [People]
+      summary: Record that they were actually seen
+      description: >-
+        Its own endpoint rather than a PATCH field, because it carries a rule a
+        general update does not: a "saw them on Tuesday" replayed from a
+        queue on Friday must not drag the date back past a sighting already
+        recorded since.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkSeenRequest"
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /people/{id}/notes:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: addPersonNote
+      tags: [People]
+      summary: Write something down about them
+      description: >-
+        Answers with the whole person rather than the note: one row is one
+        profile, so the client replaces what it has instead of splicing a child
+        into it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePersonNoteRequest"
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /people/{id}/notes/{noteId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: noteId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updatePersonNote
+      tags: [People]
+      summary: Edit or pin a note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePersonNoteRequest"
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deletePersonNote
+      tags: [People]
+      summary: Remove a note
+      description: >-
+        Succeeds on a note that is already gone, so a removal replayed from a
+        queue cannot fail on its second attempt.
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /people/{id}/gifts:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: addPersonGift
+      tags: [People]
+      summary: Something to give them
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePersonGiftRequest"
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /people/{id}/gifts/{giftId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: giftId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updatePersonGift
+      tags: [People]
+      summary: Reword an idea, or mark it given
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePersonGiftRequest"
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deletePersonGift
+      tags: [People]
+      summary: Drop a gift idea
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /people/{id}/places:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: addPersonPlace
+      tags: [People]
+      summary: A city they can be found in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePersonPlaceRequest"
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /people/{id}/places/{placeId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: placeId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deletePersonPlace
+      tags: [People]
+      summary: Drop a city
+      description: >-
+        Removing the primary promotes the oldest remaining place, so "where are
+        they" does not go blank while cities are still on file.
+      responses:
+        "200":
+          description: Person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /money/people:
     get:
       operationId: listPeople
@@ -1895,6 +2314,26 @@ components:
       properties:
         history:
           $ref: "#/components/schemas/GymExerciseHistory"
+    MergeGymExerciseRequest:
+      type: object
+      additionalProperties: false
+      required: [targetExerciseId]
+      properties:
+        targetExerciseId:
+          type: string
+          minLength: 1
+    GymExerciseMergeResponse:
+      type: object
+      additionalProperties: false
+      required: [exercise, mergedExerciseId, movedEntries]
+      properties:
+        exercise:
+          $ref: "#/components/schemas/GymExercise"
+        mergedExerciseId:
+          type: string
+        movedEntries:
+          type: integer
+          minimum: 0
     GymLocationResponse:
       type: object
       additionalProperties: false
@@ -2034,7 +2473,38 @@ components:
     Person:
       type: object
       additionalProperties: false
-      required: [id, name, color, emoji, defaultPercent, order, archived]
+      description: >-
+        Someone in the owner's life. There is exactly one of these: the same
+        person appears on a bill, in the People tab, and on a map, so identity
+        is not money's. Everything below `archived` is profile, all of it
+        optional — somebody who has only ever appeared on a restaurant bill is
+        a complete person.
+
+
+        The child collections ride inside the row rather than syncing on their
+        own. One row is one whole profile, which is why any write to a child
+        bumps the person's `updatedAt` and puts the whole row back in the
+        delta feed.
+      required:
+        - id
+        - name
+        - color
+        - emoji
+        - defaultPercent
+        - order
+        - archived
+        - nickname
+        - photoUrl
+        - birthdayYear
+        - birthdayMonth
+        - birthdayDay
+        - cadenceDays
+        - lastSeenAt
+        - googleResourceName
+        - places
+        - channels
+        - notes
+        - gifts
       properties:
         id:
           type: string
@@ -2056,6 +2526,162 @@ components:
           type: integer
         archived:
           type: boolean
+        nickname:
+          type: [string, "null"]
+          description: What the owner actually calls them.
+        photoUrl:
+          type: [string, "null"]
+        birthdayYear:
+          type: [integer, "null"]
+          description: >-
+            Null far more often than not. Most contacts carry a day and a month
+            and no year, and inventing one produces a confidently wrong age, so
+            a missing year is simply missing and no age is offered.
+        birthdayMonth:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 12
+        birthdayDay:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 31
+          description: >-
+            29 February is storable, because it is a real birthday. Which day it
+            falls on in a common year is the client's next-occurrence rule.
+        cadenceDays:
+          type: [integer, "null"]
+          description: >-
+            How often being in touch is worth aiming for. Null for most people,
+            and null means they are never reported as overdue.
+        lastSeenAt:
+          type: [string, "null"]
+          format: date-time
+        googleResourceName:
+          type: [string, "null"]
+          description: >-
+            The People API resource this row is linked to. Null for someone who
+            exists only in Luqa.
+        places:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonPlace"
+        channels:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonChannel"
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonNote"
+        gifts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonGiftIdea"
+    PersonPlace:
+      type: object
+      additionalProperties: false
+      description: >-
+        Somewhere a person can be found. City-level on purpose: "I am in
+        Hamburg on Thursday, who is here" is answered exactly as well by the
+        city as by the street, and only the city centroid is ever geocoded — a
+        record of friends' addresses should not become a map of their front
+        doors.
+      required:
+        - id
+        - label
+        - city
+        - region
+        - country
+        - address
+        - latitude
+        - longitude
+        - isPrimary
+        - source
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+          description: What this place is to them — "Home", "Parents", "Summer".
+        city:
+          type: string
+        region:
+          type: [string, "null"]
+        country:
+          type: [string, "null"]
+        address:
+          type: [string, "null"]
+          description: Kept for reference. Never the thing that gets plotted.
+        latitude:
+          type: [number, "null"]
+          description: >-
+            City centroid, once geocoded. Null until then: a place that lists
+            but does not yet pin.
+        longitude:
+          type: [number, "null"]
+        isPrimary:
+          type: boolean
+        source:
+          type: string
+          enum: [GOOGLE, MANUAL]
+    PersonChannel:
+      type: object
+      additionalProperties: false
+      required: [id, kind, label, value, source]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [PHONE, EMAIL, HANDLE]
+        label:
+          type: [string, "null"]
+        value:
+          type: string
+        source:
+          type: string
+          enum: [GOOGLE, MANUAL]
+    PersonNote:
+      type: object
+      additionalProperties: false
+      description: >-
+        A dated list rather than one text field, because the useful thing is
+        usually what was going on with them last time, and a single blob loses
+        that the moment it is edited.
+      required: [id, body, pinned, happenedOn, createdAt]
+      properties:
+        id:
+          type: string
+        body:
+          type: string
+        pinned:
+          type: boolean
+          description: >-
+            Kept at the top: the allergy, the kids' names, the thing not to
+            bring up.
+        happenedOn:
+          type: [string, "null"]
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        createdAt:
+          type: string
+          format: date-time
+    PersonGiftIdea:
+      type: object
+      additionalProperties: false
+      required: [id, idea, url, givenAt]
+      properties:
+        id:
+          type: string
+        idea:
+          type: string
+        url:
+          type: [string, "null"]
+        givenAt:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            Set once given. The row is kept rather than deleted, because the
+            list's second job is not giving the same thing twice.
     PersonBalance:
       type: object
       additionalProperties: false
@@ -2524,6 +3150,32 @@ components:
           type: [integer, "null"]
           minimum: 0
           maximum: 100
+        nickname:
+          type: [string, "null"]
+          maxLength: 60
+        photoUrl:
+          type: [string, "null"]
+          format: uri
+          maxLength: 500
+        birthdayYear:
+          type: [integer, "null"]
+          minimum: 1900
+          maximum: 2200
+        birthdayMonth:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 12
+        birthdayDay:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 31
+        cadenceDays:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 3650
+        lastSeenAt:
+          type: [string, "null"]
+          format: date-time
     UpdatePersonRequest:
       type: object
       additionalProperties: false
@@ -2548,6 +3200,146 @@ components:
           minimum: 0
         archived:
           type: boolean
+        nickname:
+          type: [string, "null"]
+          maxLength: 60
+        photoUrl:
+          type: [string, "null"]
+          format: uri
+          maxLength: 500
+        birthdayYear:
+          type: [integer, "null"]
+          minimum: 1900
+          maximum: 2200
+        birthdayMonth:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 12
+        birthdayDay:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 31
+        cadenceDays:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 3650
+        lastSeenAt:
+          type: [string, "null"]
+          format: date-time
+    CreatePersonNoteRequest:
+      type: object
+      additionalProperties: false
+      required: [body]
+      properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: >-
+            Preferred identity, so a note written offline and retried after a
+            lost response lands once rather than twice.
+        body:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        pinned:
+          type: boolean
+        happenedOn:
+          type: [string, "null"]
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    UpdatePersonNoteRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        pinned:
+          type: boolean
+        happenedOn:
+          type: [string, "null"]
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    CreatePersonGiftRequest:
+      type: object
+      additionalProperties: false
+      required: [idea]
+      properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+        idea:
+          type: string
+          minLength: 1
+          maxLength: 200
+        url:
+          type: [string, "null"]
+          format: uri
+          maxLength: 500
+    UpdatePersonGiftRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        idea:
+          type: string
+          minLength: 1
+          maxLength: 200
+        url:
+          type: [string, "null"]
+          format: uri
+          maxLength: 500
+        givenAt:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            A date marks it given; null puts it back on the list. Either way
+            the row stays.
+    CreatePersonPlaceRequest:
+      type: object
+      additionalProperties: false
+      required: [label, city]
+      properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+        label:
+          type: string
+          minLength: 1
+          maxLength: 60
+        city:
+          type: string
+          minLength: 1
+          maxLength: 120
+        region:
+          type: [string, "null"]
+          maxLength: 120
+        country:
+          type: [string, "null"]
+          maxLength: 120
+        address:
+          type: [string, "null"]
+          maxLength: 300
+        isPrimary:
+          type: boolean
+          description: >-
+            The first place is primary whether or not this is set: a person
+            with exactly one city and no primary has no answer to "where are
+            they".
+    MarkSeenRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        seenAt:
+          type: [string, "null"]
+          format: date-time
+          description: Defaults to now when omitted.
     CreateGroupRequest:
       type: object
       additionalProperties: false
@@ -2761,7 +3553,7 @@ components:
           type: array
           description: Current state of everything created or changed.
           items:
-            $ref: "#/components/schemas/GymExerciseReference"
+            $ref: "#/components/schemas/SyncExercise"
         deleted:
           type: array
           description: Ids of rows that went away.
@@ -2917,6 +3709,23 @@ components:
           $ref: "#/components/schemas/SettlementDelta"
         gymSessions:
           $ref: "#/components/schemas/GymSessionDelta"
+    SyncExercise:
+      type: object
+      additionalProperties: false
+      description: >-
+        An exercise as the delta feed sends it — the stored row only. The
+        counts and last-performed dates the overview shows are derived from
+        the sessions, so a device computes them rather than being told.
+      required: [id, name, notes, archived]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        notes:
+          type: string
+        archived:
+          type: boolean
     SyncSettings:
       type: object
       description: >-

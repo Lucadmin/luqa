@@ -222,6 +222,12 @@ class ApiClient {
           return CreateGymLocationRequest.fromJson(value);
         case 'CreateGymSessionRequest':
           return CreateGymSessionRequest.fromJson(value);
+        case 'CreatePersonGiftRequest':
+          return CreatePersonGiftRequest.fromJson(value);
+        case 'CreatePersonNoteRequest':
+          return CreatePersonNoteRequest.fromJson(value);
+        case 'CreatePersonPlaceRequest':
+          return CreatePersonPlaceRequest.fromJson(value);
         case 'CreatePersonRequest':
           return CreatePersonRequest.fromJson(value);
         case 'CreateSessionRequest':
@@ -264,6 +270,8 @@ class ApiClient {
           return GymExerciseHistory.fromJson(value);
         case 'GymExerciseHistoryResponse':
           return GymExerciseHistoryResponse.fromJson(value);
+        case 'GymExerciseMergeResponse':
+          return GymExerciseMergeResponse.fromJson(value);
         case 'GymExercisePoint':
           return GymExercisePoint.fromJson(value);
         case 'GymExerciseReference':
@@ -312,6 +320,10 @@ class ApiClient {
           return HealthSyncStateListResponse.fromJson(value);
         case 'LedgerItem':
           return LedgerItem.fromJson(value);
+        case 'MarkSeenRequest':
+          return MarkSeenRequest.fromJson(value);
+        case 'MergeGymExerciseRequest':
+          return MergeGymExerciseRequest.fromJson(value);
         case 'MobileUser':
           return MobileUser.fromJson(value);
         case 'MoneyOverview':
@@ -322,8 +334,12 @@ class ApiClient {
           return Person.fromJson(value);
         case 'PersonBalance':
           return PersonBalance.fromJson(value);
+        case 'PersonChannel':
+          return PersonChannel.fromJson(value);
         case 'PersonDelta':
           return PersonDelta.fromJson(value);
+        case 'PersonGiftIdea':
+          return PersonGiftIdea.fromJson(value);
         case 'PersonGroup':
           return PersonGroup.fromJson(value);
         case 'PersonGroupDelta':
@@ -334,6 +350,10 @@ class ApiClient {
           return PersonLedgerResponse.fromJson(value);
         case 'PersonListResponse':
           return PersonListResponse.fromJson(value);
+        case 'PersonNote':
+          return PersonNote.fromJson(value);
+        case 'PersonPlace':
+          return PersonPlace.fromJson(value);
         case 'PersonResponse':
           return PersonResponse.fromJson(value);
         case 'RefreshSessionRequest':
@@ -370,6 +390,8 @@ class ApiClient {
           return SplitModeTypeTransformer().decode(value);
         case 'SyncCollections':
           return SyncCollections.fromJson(value);
+        case 'SyncExercise':
+          return SyncExercise.fromJson(value);
         case 'SyncResponse':
           return SyncResponse.fromJson(value);
         case 'SyncSettings':
@@ -390,6 +412,10 @@ class ApiClient {
           return UpdateGymLocationRequest.fromJson(value);
         case 'UpdateGymSessionRequest':
           return UpdateGymSessionRequest.fromJson(value);
+        case 'UpdatePersonGiftRequest':
+          return UpdatePersonGiftRequest.fromJson(value);
+        case 'UpdatePersonNoteRequest':
+          return UpdatePersonNoteRequest.fromJson(value);
         case 'UpdatePersonRequest':
           return UpdatePersonRequest.fromJson(value);
         case 'UpdateSettlementRequest':

@@ -10,7 +10,11 @@ import type {
   Habit,
   LifePeriod,
   Person,
+  PersonChannel,
+  PersonGiftIdea,
   PersonGroup,
+  PersonNote,
+  PersonPlace,
   SessionExercise,
   Settlement,
   SleepEntry,
@@ -24,8 +28,12 @@ import type {
   GymSessionDTO,
   HabitDTO,
   LifePeriodDTO,
+  PersonChannelDTO,
   PersonDTO,
+  PersonGiftIdeaDTO,
   PersonGroupDTO,
+  PersonNoteDTO,
+  PersonPlaceDTO,
   SessionExerciseDTO,
   SettlementDTO,
   SleepEntryDTO,
@@ -129,7 +137,20 @@ export function toWeekNoteDTO(n: WeekNote): WeekNoteDTO {
   };
 }
 
-export function toPersonDTO(p: Person): PersonDTO {
+/** The person as every client sees them, children included.
+ *
+ *  `PersonWithProfile` rather than `Person`: the children are part of the row
+ *  as far as the wire is concerned, so a caller that forgets to include them
+ *  fails to compile rather than quietly serving a profile with no notes. A
+ *  balance row that only needs identity passes them as empty. */
+export type PersonWithProfile = Person & {
+  places?: PersonPlace[];
+  channels?: PersonChannel[];
+  notes?: PersonNote[];
+  gifts?: PersonGiftIdea[];
+};
+
+export function toPersonDTO(p: PersonWithProfile): PersonDTO {
   return {
     id: p.id,
     name: p.name,
@@ -138,6 +159,64 @@ export function toPersonDTO(p: Person): PersonDTO {
     defaultPercent: p.defaultPercent,
     order: p.order,
     archived: p.archivedAt !== null,
+
+    nickname: p.nickname,
+    photoUrl: p.photoUrl,
+    birthdayYear: p.birthdayYear,
+    birthdayMonth: p.birthdayMonth,
+    birthdayDay: p.birthdayDay,
+    cadenceDays: p.cadenceDays,
+    lastSeenAt: p.lastSeenAt?.toISOString() ?? null,
+    googleResourceName: p.googleResourceName,
+
+    places: (p.places ?? []).map(toPersonPlaceDTO),
+    channels: (p.channels ?? []).map(toPersonChannelDTO),
+    notes: (p.notes ?? []).map(toPersonNoteDTO),
+    gifts: (p.gifts ?? []).map(toPersonGiftIdeaDTO),
+  };
+}
+
+export function toPersonPlaceDTO(place: PersonPlace): PersonPlaceDTO {
+  return {
+    id: place.id,
+    label: place.label,
+    city: place.city,
+    region: place.region,
+    country: place.country,
+    address: place.address,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    isPrimary: place.isPrimary,
+    source: place.source,
+  };
+}
+
+export function toPersonChannelDTO(channel: PersonChannel): PersonChannelDTO {
+  return {
+    id: channel.id,
+    kind: channel.kind,
+    label: channel.label,
+    value: channel.value,
+    source: channel.source,
+  };
+}
+
+export function toPersonNoteDTO(note: PersonNote): PersonNoteDTO {
+  return {
+    id: note.id,
+    body: note.body,
+    pinned: note.pinned,
+    happenedOn: note.happenedOn,
+    createdAt: note.createdAt.toISOString(),
+  };
+}
+
+export function toPersonGiftIdeaDTO(gift: PersonGiftIdea): PersonGiftIdeaDTO {
+  return {
+    id: gift.id,
+    idea: gift.idea,
+    url: gift.url,
+    givenAt: gift.givenAt?.toISOString() ?? null,
   };
 }
 

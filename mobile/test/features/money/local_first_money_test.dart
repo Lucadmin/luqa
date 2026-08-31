@@ -23,8 +23,13 @@ class _TestQueue implements MutationQueue<MoneyMutation> {
   @override
   List<MoneyMutation> get pending => _queue;
 
+  /// Nothing is ever sent in these tests; the queue is only here so a write
+  /// has somewhere to go.
   @override
-  Future<void> enqueue(MoneyMutation mutation) async {
+  Future<void> sync() async {}
+
+  @override
+  Future<void> enqueue(MoneyMutation mutation, {bool sendNow = true}) async {
     _queue = foldMoney(_queue, mutation);
   }
 }
@@ -368,7 +373,7 @@ void main() {
         ),
       );
 
-      await local.remapId('money_person', mira.id, 'server-mira');
+      await local.remapId('person', mira.id, 'server-mira');
 
       final overview = await repository.loadOverview();
       expect(overview.people.single.id, 'server-mira');

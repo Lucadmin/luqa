@@ -5,6 +5,11 @@ import 'package:luqa/features/money/domain/money_split.dart';
 /// Codecs shared by the write queue and the read cache, so a bill written by
 /// one is readable by the other.
 
+/// A person, whole, for the queue and the cache.
+///
+/// The record travels with them because a queued create carries the person the
+/// user actually made — and on the People tab that can already include a
+/// birthday and a rhythm typed on the same sheet.
 Map<String, Object?> personToJson(Person value) => {
   'id': value.id,
   'name': value.name,
@@ -13,6 +18,55 @@ Map<String, Object?> personToJson(Person value) => {
   'defaultPercent': value.defaultPercent,
   'order': value.order,
   'archived': value.archived,
+  'nickname': value.nickname,
+  'photoUrl': value.photoUrl,
+  'birthday': birthdayToJson(value.birthday),
+  'cadenceDays': value.cadenceDays,
+  'lastSeenAt': value.lastSeenAt?.toUtc().toIso8601String(),
+  'googleResourceName': value.googleResourceName,
+  'places': [
+    for (final place in value.places)
+      {
+        'id': place.id,
+        'label': place.label,
+        'city': place.city,
+        'region': place.region,
+        'country': place.country,
+        'address': place.address,
+        'latitude': place.latitude,
+        'longitude': place.longitude,
+        'isPrimary': place.isPrimary,
+        'source': place.source.name,
+      },
+  ],
+  'channels': [
+    for (final channel in value.channels)
+      {
+        'id': channel.id,
+        'kind': channel.kind.name,
+        'label': channel.label,
+        'value': channel.value,
+      },
+  ],
+  'notes': [
+    for (final note in value.notes)
+      {
+        'id': note.id,
+        'body': note.body,
+        'createdAt': note.createdAt.toUtc().toIso8601String(),
+        'pinned': note.pinned,
+        'happenedOn': note.happenedOn,
+      },
+  ],
+  'gifts': [
+    for (final gift in value.gifts)
+      {
+        'id': gift.id,
+        'idea': gift.idea,
+        'url': gift.url,
+        'givenAt': gift.givenAt?.toUtc().toIso8601String(),
+      },
+  ],
 };
 
 Person personFromJson(Map<String, Object?> value) => Person(
@@ -23,7 +77,90 @@ Person personFromJson(Map<String, Object?> value) => Person(
   defaultPercent: value['defaultPercent'] as int?,
   order: value['order']! as int,
   archived: value['archived']! as bool,
+  nickname: value['nickname'] as String?,
+  photoUrl: value['photoUrl'] as String?,
+  birthday: birthdayFromJson(value['birthday']),
+  cadenceDays: value['cadenceDays'] as int?,
+  lastSeenAt: _dateOrNull(value['lastSeenAt']),
+  googleResourceName: value['googleResourceName'] as String?,
+  places: [
+    for (final raw in _list(value['places']))
+      PersonPlace(
+        id: raw['id']! as String,
+        label: raw['label']! as String,
+        city: raw['city']! as String,
+        region: raw['region'] as String?,
+        country: raw['country'] as String?,
+        address: raw['address'] as String?,
+        latitude: (raw['latitude'] as num?)?.toDouble(),
+        longitude: (raw['longitude'] as num?)?.toDouble(),
+        isPrimary: (raw['isPrimary'] as bool?) ?? false,
+        source: raw['source'] == 'google'
+            ? PlaceSource.google
+            : PlaceSource.manual,
+      ),
+  ],
+  channels: [
+    for (final raw in _list(value['channels']))
+      PersonChannel(
+        id: raw['id']! as String,
+        kind: switch (raw['kind']) {
+          'email' => ChannelKind.email,
+          'handle' => ChannelKind.handle,
+          _ => ChannelKind.phone,
+        },
+        label: raw['label'] as String?,
+        value: raw['value']! as String,
+      ),
+  ],
+  notes: [
+    for (final raw in _list(value['notes']))
+      PersonNote(
+        id: raw['id']! as String,
+        body: raw['body']! as String,
+        createdAt: _dateOrNull(raw['createdAt']) ?? DateTime.now(),
+        pinned: (raw['pinned'] as bool?) ?? false,
+        happenedOn: raw['happenedOn'] as String?,
+      ),
+  ],
+  gifts: [
+    for (final raw in _list(value['gifts']))
+      GiftIdea(
+        id: raw['id']! as String,
+        idea: raw['idea']! as String,
+        url: raw['url'] as String?,
+        givenAt: _dateOrNull(raw['givenAt']),
+      ),
+  ],
 );
+
+/// The birthday as three parts, or nothing. Never a date: a contact with no
+/// birth year must not acquire one by round-tripping through the queue.
+Map<String, Object?>? birthdayToJson(Birthday? value) => value == null
+    ? null
+    : {'month': value.month, 'day': value.day, 'year': value.year};
+
+Birthday? birthdayFromJson(Object? value) => switch (value) {
+  final Map<String, Object?> raw when raw['month'] != null && raw['day'] != null
+      => Birthday(
+          month: raw['month']! as int,
+          day: raw['day']! as int,
+          year: raw['year'] as int?,
+        ),
+  _ => null,
+};
+
+List<Map<String, Object?>> _list(Object? value) => switch (value) {
+  final List<Object?> raw => [
+    for (final item in raw) item! as Map<String, Object?>,
+  ],
+  _ => const [],
+};
+
+DateTime? _dateOrNull(Object? value) => switch (value) {
+  final String raw => DateTime.tryParse(raw)?.toLocal(),
+  _ => null,
+};
 
 Map<String, Object?> groupToJson(PersonGroup value) => {
   'id': value.id,
@@ -162,6 +299,9 @@ Map<String, Object?> personWriteToJson(PersonWrite value) => {
   'colorValue': value.colorValue,
   'emoji': value.emoji,
   'defaultPercent': value.defaultPercent,
+  'nickname': value.nickname,
+  'birthday': birthdayToJson(value.birthday),
+  'cadenceDays': value.cadenceDays,
 };
 
 PersonWrite personWriteFromJson(Map<String, Object?> value) => PersonWrite(
@@ -169,6 +309,9 @@ PersonWrite personWriteFromJson(Map<String, Object?> value) => PersonWrite(
   colorValue: value['colorValue']! as int,
   emoji: value['emoji'] as String?,
   defaultPercent: value['defaultPercent'] as int?,
+  nickname: value['nickname'] as String?,
+  birthday: birthdayFromJson(value['birthday']),
+  cadenceDays: value['cadenceDays'] as int?,
 );
 
 Map<String, Object?> groupWriteToJson(GroupWrite value) => {

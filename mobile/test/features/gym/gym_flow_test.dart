@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:luqa/features/gym/domain/gym_models.dart';
 
 import '../../helpers/fake_gym_repository.dart';
 import '../../helpers/pump_luqa.dart';
@@ -86,5 +87,50 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('weight-0')), findsOneWidget);
     expect(find.text('Add exercise'), findsOneWidget);
+  });
+
+  testWidgets('merges a duplicate exercise into the chosen exercise', (
+    tester,
+  ) async {
+    final gym = FakeGymRepository.sample();
+    gym.overview = gym.overview.copyWith(
+      exercises: [
+        ...gym.overview.exercises,
+        const GymExercise(
+          id: 'lat-puldown',
+          name: 'Lat puldown',
+          notes: 'Seat 4',
+          archived: false,
+          sessionCount: 2,
+          lastPerformed: '2026-08-21',
+          locationIds: ['luqa-gym'],
+        ),
+      ],
+    );
+    await pumpLuqa(tester, gymRepository: gym);
+
+    await tester.tap(find.byIcon(Icons.fitness_center_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Exercises'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('exercise-menu-lat-puldown')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Merge into another…'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('merge-target-lat-pulldown')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Merge exercises?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirm-exercise-merge')));
+    await tester.pumpAndSettle();
+
+    expect(gym.overview.exerciseById('lat-puldown'), isNull);
+    expect(gym.overview.exerciseById('lat-pulldown')!.sessionCount, 7);
+    expect(find.text('Lat puldown'), findsNothing);
   });
 }

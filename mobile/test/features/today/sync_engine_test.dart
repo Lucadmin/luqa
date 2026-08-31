@@ -1,3 +1,9 @@
+import 'dart:async';
+
+import 'package:luqa/core/storage/luqa_store.dart';
+import 'package:luqa/features/today/data/timeline_local_store.dart';
+import 'package:luqa/features/today/data/timeline_sync_service.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luqa/features/today/application/sync_engine.dart';
@@ -12,6 +18,8 @@ import 'package:luqa/core/sync/outbox.dart';
 import 'sync_engine_harness.dart';
 
 void main() {
+  sqfliteFfiInit();
+
   test(
     'a write is recorded and answered without touching the network',
     () async {
@@ -183,22 +191,37 @@ NewTimeEntry _draft(String description, {String? categoryId}) => NewTimeEntry(
 
 class _Harness {
   _Harness({Outbox<TimelineMutation>? outbox}) {
-    final remote = RemoteTodayRepository(client: api, cache: MemoryCache());
+    final remote = RemoteTodayRepository(client: api);
+    store = LuqaStore(
+      factory: databaseFactoryFfi,
+      path: inMemoryDatabasePath,
+    );
+    local = TimelineLocalStore(namespace: 'user-a', store: store);
     container = ProviderContainer(
       overrides: [
         remoteTodayRepositoryProvider.overrideWithValue(remote),
+        timelineLocalStoreProvider.overrideWithValue(local),
         outboxProvider.overrideWithValue(outbox ?? MemoryOutbox()),
         discardLogProvider.overrideWithValue(const NullDiscardLog()),
       ],
     );
     engine = container.read(syncEngineProvider.notifier);
-    repository = LocalFirstTodayRepository(remote: remote, queue: engine);
+    repository = LocalFirstTodayRepository(
+      store: local,
+      sync: TimelineSyncService(client: api, store: local),
+      queue: engine,
+    );
   }
 
   final FakeApi api = FakeApi();
+  late final LuqaStore store;
+  late final TimelineLocalStore local;
   late final ProviderContainer container;
   late final SyncEngine engine;
   late final LocalFirstTodayRepository repository;
 
-  void dispose() => container.dispose();
+  void dispose() {
+    container.dispose();
+    unawaited(store.close());
+  }
 }

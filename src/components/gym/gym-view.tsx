@@ -1,6 +1,6 @@
 "use client";
 
-import { Dumbbell, MapPin, Plus, Search } from "lucide-react";
+import { Dumbbell, GitMerge, MapPin, Plus, Search } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useDeferredValue, useMemo, useState } from "react";
 import { AppPage, AppPageHeader } from "@/components/ui/app-page";
@@ -17,6 +17,9 @@ import type { ExerciseDTO, GymLocationDTO, GymSessionDTO } from "@/lib/types";
 // for their JS on every visit to the gym tab.
 const ExerciseHistorySheet = dynamic(() =>
   import("@/components/gym/exercise-history").then((m) => m.ExerciseHistorySheet),
+);
+const ExerciseMergeSheet = dynamic(() =>
+  import("@/components/gym/exercise-merge-sheet").then((m) => m.ExerciseMergeSheet),
 );
 const LocationsSheet = dynamic(() =>
   import("@/components/gym/locations-sheet").then((m) => m.LocationsSheet),
@@ -49,6 +52,7 @@ export function GymView() {
   const [editing, setEditing] = useState<GymSessionDTO | null>(null);
   const [locationsOpen, setLocationsOpen] = useState(false);
   const [historyId, setHistoryId] = useState<string | null>(null);
+  const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
   const locations = overview?.locations ?? EMPTY_LOCATIONS;
@@ -92,6 +96,9 @@ export function GymView() {
 
   const historyExercise = historyId
     ? exercises.find((e) => e.id === historyId)
+    : null;
+  const mergeSource = mergeSourceId
+    ? exercises.find((exercise) => exercise.id === mergeSourceId) ?? null
     : null;
 
   return (
@@ -204,6 +211,7 @@ export function GymView() {
                   <ExerciseRow
                     exercise={exercise}
                     onOpen={() => setHistoryId(exercise.id)}
+                    onMerge={() => setMergeSourceId(exercise.id)}
                   />
                 </li>
               ))}
@@ -239,6 +247,15 @@ export function GymView() {
           name={historyExercise?.name ?? ""}
           locations={locations}
           onClose={() => setHistoryId(null)}
+        />
+      )}
+
+      {mergeSource && (
+        <ExerciseMergeSheet
+          source={mergeSource}
+          exercises={exercises}
+          onClose={() => setMergeSourceId(null)}
+          onMerged={() => setMergeSourceId(null)}
         />
       )}
     </AppPage>
@@ -323,25 +340,38 @@ function SessionRow({
 function ExerciseRow({
   exercise,
   onOpen,
+  onMerge,
 }: {
   exercise: ExerciseDTO;
   onOpen: () => void;
+  onMerge: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-surface-2"
-    >
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{exercise.name}</p>
-        <p className="truncate text-xs tabular-nums text-faint">
-          {exercise.lastRaw || "—"}
-        </p>
-      </div>
-      <span className="shrink-0 text-xs text-faint">
-        {exercise.lastPerformed ? formatDayLabel(exercise.lastPerformed) : ""}
-      </span>
-    </button>
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center gap-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{exercise.name}</p>
+          <p className="truncate text-xs tabular-nums text-faint">
+            {exercise.lastRaw || "—"}
+          </p>
+        </div>
+        <span className="shrink-0 text-xs text-faint">
+          {exercise.lastPerformed ? formatDayLabel(exercise.lastPerformed) : ""}
+        </span>
+      </button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={onMerge}
+        aria-label={`Merge ${exercise.name}`}
+        title="Merge exercise"
+      >
+        <GitMerge className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }

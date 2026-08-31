@@ -9,12 +9,14 @@ import 'package:luqa/features/auth/domain/auth_user.dart';
 import 'package:luqa/features/health/application/health_sync_controller.dart';
 import 'package:luqa/features/health/data/health_connect_reader.dart';
 import 'package:luqa/features/gym/application/gym_overview_controller.dart';
-import 'package:luqa/features/gym/data/gym_cache.dart';
 import 'package:luqa/features/gym/data/gym_providers.dart';
 import 'package:luqa/features/gym/data/gym_repository.dart';
 import 'package:luqa/features/money/application/money_controller.dart';
 import 'package:luqa/features/money/data/money_providers.dart';
 import 'package:luqa/features/money/data/money_repository.dart';
+import 'package:luqa/features/people/application/people_controller.dart';
+import 'package:luqa/features/people/data/people_providers.dart';
+import 'package:luqa/features/people/data/people_repository.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
 import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/today/data/today_providers.dart';
@@ -23,6 +25,7 @@ import 'package:luqa/features/today/presentation/widgets/timeline_view.dart';
 import 'fake_health.dart';
 import 'fake_gym_repository.dart';
 import 'fake_money_repository.dart';
+import 'fake_people_repository.dart';
 import 'fake_timeline_repository.dart';
 
 final fixedNow = DateTime(2026, 8, 27, 15);
@@ -51,6 +54,7 @@ Future<FakeTimelineRepository> pumpLuqa(
   Size size = const Size(412, 915),
   GymRepository? gymRepository,
   MoneyRepository? moneyRepository,
+  PeopleRepository? peopleRepository,
   String initialLocation = '/',
 }) async {
   final repository = FakeTimelineRepository(today: fixedNow);
@@ -76,7 +80,7 @@ Future<FakeTimelineRepository> pumpLuqa(
         discardLogProvider.overrideWithValue(const NullDiscardLog()),
         gymOutboxProvider.overrideWithValue(const NullOutbox()),
         gymDiscardLogProvider.overrideWithValue(const NullDiscardLog()),
-        gymCacheProvider.overrideWithValue(const NullGymCache()),
+        gymLocalStoreProvider.overrideWithValue(null),
         moneyOutboxProvider.overrideWithValue(const NullOutbox()),
         moneyDiscardLogProvider.overrideWithValue(const NullDiscardLog()),
         moneyLocalStoreProvider.overrideWithValue(null),
@@ -89,6 +93,10 @@ Future<FakeTimelineRepository> pumpLuqa(
           moneyRepository ?? FakeMoneyRepository.sample(),
         ),
         moneyNowProvider.overrideWithValue(fixedNow),
+        peopleRepositoryProvider.overrideWithValue(
+          peopleRepository ?? fakePeopleRepository(now: fixedNow),
+        ),
+        peopleNowProvider.overrideWithValue(fixedNow),
         currentTimeProvider.overrideWithValue(fixedNow),
         todayRepositoryProvider.overrideWithValue(repository),
         authControllerProvider.overrideWith(FixedAuthController.new),

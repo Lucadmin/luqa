@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:luqa/core/id/local_id.dart';
 import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/money/data/money_local_store.dart';
@@ -82,18 +84,20 @@ class LocalFirstMoneyRepository implements MoneyRepository {
 
   // ---------------------------------------------------------------- writes
 
-  /// Queues the mutation, then applies it here.
+  /// Queues the mutation, writes the row, and only then lets the queue drain.
   ///
-  /// That order on purpose. Dying between the two leaves a write that will
-  /// still be sent and a screen that catches up on the next sync — recoverable.
-  /// The other order can lose the write entirely, which is the one outcome an
-  /// outbox exists to prevent.
+  /// Queueing first is on purpose: dying between the two leaves a write that
+  /// will still be sent and a screen that catches up on the next sync, where
+  /// the other order can lose it entirely. Holding the drain until the row is
+  /// written matters just as much — sending immediately would let the server
+  /// rename an id while the write that refers to it is still being made.
   Future<void> _write(
     MoneyMutation mutation,
     Future<void> Function() apply,
   ) async {
-    await queue.enqueue(mutation);
+    await queue.enqueue(mutation, sendNow: false);
     await apply();
+    unawaited(queue.sync());
   }
 
   @override
@@ -239,7 +243,7 @@ class LocalFirstMoneyRepository implements MoneyRepository {
     await queue.ready;
     await _write(
       DeletePerson(personId: id, queuedAt: _now()),
-      () => store.remove('money_person', id),
+      () => store.remove('person', id),
     );
   }
 
@@ -329,7 +333,9 @@ class LocalFirstMoneyRepository implements MoneyRepository {
     await queue.ready;
     final settlement = Settlement(
       id: id ?? _mintId(),
-      personId: write.personId,
+      // The sheet may be holding a person id the server has since replaced
+      // with its own, having matched the name.
+      personId: (await store.resolve('person', write.personId))!,
       amountCents: write.amountCents,
       direction: write.direction,
       dateKey: write.dateKey,

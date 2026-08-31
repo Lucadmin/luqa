@@ -79,7 +79,14 @@ export async function reviveDeletedCategory(userId: string, name: string) {
 export async function reviveExercises(userId: string, names: string[]) {
   if (names.length === 0) return;
   await dbWithDeleted.exercise.updateMany({
-    where: { userId, name: { in: names }, deletedAt: { not: null } },
+    where: {
+      userId,
+      name: { in: names },
+      deletedAt: { not: null },
+      // A merged row is an alias, not an independently deleted exercise. It
+      // stays retired so the old spelling can keep redirecting to its target.
+      mergedIntoId: null,
+    },
     data: { deletedAt: null, archivedAt: null },
   });
 }

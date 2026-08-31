@@ -9,7 +9,7 @@ import {
 import { toGymSessionDTO } from "@/lib/serializers";
 import {
   namesToResolve,
-  ownedExerciseIds,
+  canonicalExerciseIds,
   resolveExerciseIds,
   sessionInclude,
   writeSessionExercises,
@@ -91,12 +91,16 @@ export async function PATCH(
   }
 
   let idByKey = new Map<string, string>();
+  let canonicalIds = new Map<string, string>();
   if (input.exercises) {
     const referenced = input.exercises.flatMap((exercise) =>
       exercise.exerciseId ? [exercise.exerciseId] : [],
     );
-    const owned = await ownedExerciseIds(mobileSession.userId, referenced);
-    if (referenced.some((exerciseId) => !owned.has(exerciseId))) {
+    canonicalIds = await canonicalExerciseIds(
+      mobileSession.userId,
+      referenced,
+    );
+    if (referenced.some((exerciseId) => !canonicalIds.has(exerciseId))) {
       return mobileJson(
         { error: { code: "unknown_exercise", message: "Unknown exercise" } },
         { status: 400 },
@@ -122,7 +126,13 @@ export async function PATCH(
       },
     });
     if (input.exercises) {
-      await writeSessionExercises(tx, id, input.exercises, idByKey);
+      await writeSessionExercises(
+        tx,
+        id,
+        input.exercises,
+        idByKey,
+        canonicalIds,
+      );
     }
     return tx.gymSession.findUniqueOrThrow({
       where: { id },

@@ -9,6 +9,7 @@ import {
   healthMetricType,
   healthSampleImportSchema,
   isoString,
+  personProfileSchema,
   sleepEntryImportSchema,
 } from "@/lib/validations";
 
@@ -73,9 +74,13 @@ export type HealthSyncInput = z.infer<typeof healthSyncSchema>;
 // the row has to have an identity before the server has seen it, and a create
 // retried after a lost response has to be recognised as the same row.
 
-export const createMobilePersonSchema = createPersonSchema.extend({
-  id: clientId.optional(),
-});
+/// A phone creates a whole person in one write: the editor asks for a name, a
+/// birthday and a rhythm on the same sheet, and splitting that into a create
+/// plus a patch would put two entries in the queue for one action — and leave
+/// the second one strandable on its own.
+export const createMobilePersonSchema = createPersonSchema
+  .extend({ id: clientId.optional() })
+  .merge(personProfileSchema);
 
 export const createMobileGroupSchema = createGroupSchema.extend({
   id: clientId.optional(),

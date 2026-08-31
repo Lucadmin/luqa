@@ -70,6 +70,7 @@ Class | Method | HTTP request | Description
 *GymApi* | [**getGymOverview**](doc//GymApi.md#getgymoverview) | **GET** /gym | Load gyms, exercises, per-gym references, and recent workouts
 *GymApi* | [**getGymSession**](doc//GymApi.md#getgymsession) | **GET** /gym/sessions/{id} | Load one workout
 *GymApi* | [**listGymSessions**](doc//GymApi.md#listgymsessions) | **GET** /gym/sessions | List workouts newest first
+*GymApi* | [**mergeGymExercise**](doc//GymApi.md#mergegymexercise) | **POST** /gym/exercises/{id}/merge | Merge a duplicate exercise into another exercise
 *GymApi* | [**updateGymLocation**](doc//GymApi.md#updategymlocation) | **PATCH** /gym/locations/{id} | Edit, archive, or restore a gym
 *GymApi* | [**updateGymSession**](doc//GymApi.md#updategymsession) | **PATCH** /gym/sessions/{id} | Autosave a workout draft
 *HealthApi* | [**getHealthSyncState**](doc//HealthApi.md#gethealthsyncstate) | **GET** /health/sync | Read what the server last accepted, per source and metric
@@ -92,6 +93,20 @@ Class | Method | HTTP request | Description
 *MoneyApi* | [**updateGroup**](doc//MoneyApi.md#updategroup) | **PATCH** /money/groups/{id} | Rename, restyle, change membership, archive, or restore a group
 *MoneyApi* | [**updatePerson**](doc//MoneyApi.md#updateperson) | **PATCH** /money/people/{id} | Rename, restyle, reorder, archive, or restore someone
 *MoneyApi* | [**updateSettlement**](doc//MoneyApi.md#updatesettlement) | **PATCH** /money/settlements/{id} | Correct a payback
+*PeopleApi* | [**addPersonGift**](doc//PeopleApi.md#addpersongift) | **POST** /people/{id}/gifts | Something to give them
+*PeopleApi* | [**addPersonNote**](doc//PeopleApi.md#addpersonnote) | **POST** /people/{id}/notes | Write something down about them
+*PeopleApi* | [**addPersonPlace**](doc//PeopleApi.md#addpersonplace) | **POST** /people/{id}/places | A city they can be found in
+*PeopleApi* | [**createPersonProfile**](doc//PeopleApi.md#createpersonprofile) | **POST** /people | Add someone, identity and profile in one write
+*PeopleApi* | [**deletePersonGift**](doc//PeopleApi.md#deletepersongift) | **DELETE** /people/{id}/gifts/{giftId} | Drop a gift idea
+*PeopleApi* | [**deletePersonNote**](doc//PeopleApi.md#deletepersonnote) | **DELETE** /people/{id}/notes/{noteId} | Remove a note
+*PeopleApi* | [**deletePersonPlace**](doc//PeopleApi.md#deletepersonplace) | **DELETE** /people/{id}/places/{placeId} | Drop a city
+*PeopleApi* | [**deletePersonProfile**](doc//PeopleApi.md#deletepersonprofile) | **DELETE** /people/{id} | Remove someone, as far as it is safe to
+*PeopleApi* | [**getPersonProfile**](doc//PeopleApi.md#getpersonprofile) | **GET** /people/{id} | One person, whole profile
+*PeopleApi* | [**listPeopleProfiles**](doc//PeopleApi.md#listpeopleprofiles) | **GET** /people | Everyone, archived included, each with their whole profile
+*PeopleApi* | [**markPersonSeen**](doc//PeopleApi.md#markpersonseen) | **POST** /people/{id}/seen | Record that they were actually seen
+*PeopleApi* | [**updatePersonGift**](doc//PeopleApi.md#updatepersongift) | **PATCH** /people/{id}/gifts/{giftId} | Reword an idea, or mark it given
+*PeopleApi* | [**updatePersonNote**](doc//PeopleApi.md#updatepersonnote) | **PATCH** /people/{id}/notes/{noteId} | Edit or pin a note
+*PeopleApi* | [**updatePersonProfile**](doc//PeopleApi.md#updatepersonprofile) | **PATCH** /people/{id} | Rename, restyle, or change the profile
 *SleepApi* | [**listSleepEntries**](doc//SleepApi.md#listsleepentries) | **GET** /sleep-entries | List sleep sessions that ended inside a half-open UTC window
 *SyncApi* | [**syncChanges**](doc//SyncApi.md#syncchanges) | **GET** /sync | Everything that changed since the cursors the caller holds
 *TimeEntriesApi* | [**createTimeEntry**](doc//TimeEntriesApi.md#createtimeentry) | **POST** /time-entries | Create a completed block or running timer
@@ -111,6 +126,9 @@ Class | Method | HTTP request | Description
  - [CreateGroupRequest](doc//CreateGroupRequest.md)
  - [CreateGymLocationRequest](doc//CreateGymLocationRequest.md)
  - [CreateGymSessionRequest](doc//CreateGymSessionRequest.md)
+ - [CreatePersonGiftRequest](doc//CreatePersonGiftRequest.md)
+ - [CreatePersonNoteRequest](doc//CreatePersonNoteRequest.md)
+ - [CreatePersonPlaceRequest](doc//CreatePersonPlaceRequest.md)
  - [CreatePersonRequest](doc//CreatePersonRequest.md)
  - [CreateSessionRequest](doc//CreateSessionRequest.md)
  - [CreateSettlementRequest](doc//CreateSettlementRequest.md)
@@ -132,6 +150,7 @@ Class | Method | HTTP request | Description
  - [GymExerciseDelta](doc//GymExerciseDelta.md)
  - [GymExerciseHistory](doc//GymExerciseHistory.md)
  - [GymExerciseHistoryResponse](doc//GymExerciseHistoryResponse.md)
+ - [GymExerciseMergeResponse](doc//GymExerciseMergeResponse.md)
  - [GymExercisePoint](doc//GymExercisePoint.md)
  - [GymExerciseReference](doc//GymExerciseReference.md)
  - [GymLocation](doc//GymLocation.md)
@@ -156,17 +175,23 @@ Class | Method | HTTP request | Description
  - [HealthSyncState](doc//HealthSyncState.md)
  - [HealthSyncStateListResponse](doc//HealthSyncStateListResponse.md)
  - [LedgerItem](doc//LedgerItem.md)
+ - [MarkSeenRequest](doc//MarkSeenRequest.md)
+ - [MergeGymExerciseRequest](doc//MergeGymExerciseRequest.md)
  - [MobileUser](doc//MobileUser.md)
  - [MoneyOverview](doc//MoneyOverview.md)
  - [MoneyOverviewResponse](doc//MoneyOverviewResponse.md)
  - [Person](doc//Person.md)
  - [PersonBalance](doc//PersonBalance.md)
+ - [PersonChannel](doc//PersonChannel.md)
  - [PersonDelta](doc//PersonDelta.md)
+ - [PersonGiftIdea](doc//PersonGiftIdea.md)
  - [PersonGroup](doc//PersonGroup.md)
  - [PersonGroupDelta](doc//PersonGroupDelta.md)
  - [PersonLedger](doc//PersonLedger.md)
  - [PersonLedgerResponse](doc//PersonLedgerResponse.md)
  - [PersonListResponse](doc//PersonListResponse.md)
+ - [PersonNote](doc//PersonNote.md)
+ - [PersonPlace](doc//PersonPlace.md)
  - [PersonResponse](doc//PersonResponse.md)
  - [RefreshSessionRequest](doc//RefreshSessionRequest.md)
  - [SessionCredentials](doc//SessionCredentials.md)
@@ -185,6 +210,7 @@ Class | Method | HTTP request | Description
  - [SleepSyncWindow](doc//SleepSyncWindow.md)
  - [SplitMode](doc//SplitMode.md)
  - [SyncCollections](doc//SyncCollections.md)
+ - [SyncExercise](doc//SyncExercise.md)
  - [SyncResponse](doc//SyncResponse.md)
  - [SyncSettings](doc//SyncSettings.md)
  - [TimeEntry](doc//TimeEntry.md)
@@ -195,6 +221,8 @@ Class | Method | HTTP request | Description
  - [UpdateGroupRequest](doc//UpdateGroupRequest.md)
  - [UpdateGymLocationRequest](doc//UpdateGymLocationRequest.md)
  - [UpdateGymSessionRequest](doc//UpdateGymSessionRequest.md)
+ - [UpdatePersonGiftRequest](doc//UpdatePersonGiftRequest.md)
+ - [UpdatePersonNoteRequest](doc//UpdatePersonNoteRequest.md)
  - [UpdatePersonRequest](doc//UpdatePersonRequest.md)
  - [UpdateSettlementRequest](doc//UpdateSettlementRequest.md)
  - [UpdateTimeEntryRequest](doc//UpdateTimeEntryRequest.md)

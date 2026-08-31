@@ -91,7 +91,7 @@ class RemoteMoneyRepository implements MoneyRepository {
           api.CreatePersonRequest(
             id: _optional(id),
             name: write.name,
-            color: api.Optional.present(_hexColor(write.colorValue)),
+            color: api.Optional.present(hexColor(write.colorValue)),
             emoji: api.Optional.present(write.emoji),
             defaultPercent: api.Optional.present(write.defaultPercent),
           ),
@@ -116,7 +116,7 @@ class RemoteMoneyRepository implements MoneyRepository {
         name: _optional(name),
         color: colorValue == null
             ? const api.Optional.absent()
-            : api.Optional.present(_hexColor(colorValue)),
+            : api.Optional.present(hexColor(colorValue)),
         // Clearing is a value the server has to see, so it cannot ride on the
         // same "absent" that means "leave it alone".
         emoji: clearEmoji
@@ -143,7 +143,7 @@ class RemoteMoneyRepository implements MoneyRepository {
       api.CreateGroupRequest(
         id: _optional(id),
         name: write.name,
-        color: api.Optional.present(_hexColor(write.colorValue)),
+        color: api.Optional.present(hexColor(write.colorValue)),
         emoji: api.Optional.present(write.emoji),
         memberIds: api.Optional.present(write.memberIds),
       ),
@@ -166,7 +166,7 @@ class RemoteMoneyRepository implements MoneyRepository {
         name: _optional(name),
         color: colorValue == null
             ? const api.Optional.absent()
-            : api.Optional.present(_hexColor(colorValue)),
+            : api.Optional.present(hexColor(colorValue)),
         emoji: clearEmoji
             ? const api.Optional.present(null)
             : _optional(emoji),
@@ -249,6 +249,11 @@ MoneyOverview _overviewFromApi(api.MoneyOverview overview) => MoneyOverview(
   coveredCents: overview.coveredCents,
 );
 
+/// The person as the wire sends them, record and all.
+///
+/// One row is one whole profile, so this is the only place a person is
+/// assembled from the server — the delta feed and every write response go
+/// through it, and none of them can produce a half-populated person.
 Person personFromApi(api.Person person) => Person(
   id: person.id,
   name: person.name,
@@ -257,6 +262,70 @@ Person personFromApi(api.Person person) => Person(
   defaultPercent: person.defaultPercent,
   order: person.order,
   archived: person.archived,
+  nickname: person.nickname,
+  photoUrl: person.photoUrl,
+  // Half a birthday is no birthday. The server refuses to store one, but a
+  // client that trusted a lone month would still put somebody in the birthday
+  // list with nothing to count down to.
+  birthday: person.birthdayMonth != null && person.birthdayDay != null
+      ? Birthday(
+          month: person.birthdayMonth!,
+          day: person.birthdayDay!,
+          year: person.birthdayYear,
+        )
+      : null,
+  cadenceDays: person.cadenceDays,
+  lastSeenAt: person.lastSeenAt?.toLocal(),
+  googleResourceName: person.googleResourceName,
+  places: [
+    for (final place in person.places)
+      PersonPlace(
+        id: place.id,
+        label: place.label,
+        city: place.city,
+        region: place.region,
+        country: place.country,
+        address: place.address,
+        latitude: place.latitude?.toDouble(),
+        longitude: place.longitude?.toDouble(),
+        isPrimary: place.isPrimary,
+        source: place.source_ == api.PersonPlaceSource_Enum.GOOGLE
+            ? PlaceSource.google
+            : PlaceSource.manual,
+      ),
+  ],
+  channels: [
+    for (final channel in person.channels)
+      PersonChannel(
+        id: channel.id,
+        kind: switch (channel.kind) {
+          api.PersonChannelKindEnum.EMAIL => ChannelKind.email,
+          api.PersonChannelKindEnum.HANDLE => ChannelKind.handle,
+          _ => ChannelKind.phone,
+        },
+        label: channel.label,
+        value: channel.value,
+      ),
+  ],
+  notes: [
+    for (final note in person.notes)
+      PersonNote(
+        id: note.id,
+        body: note.body,
+        createdAt: note.createdAt.toLocal(),
+        pinned: note.pinned,
+        happenedOn: note.happenedOn,
+      ),
+  ],
+  gifts: [
+    for (final gift in person.gifts)
+      GiftIdea(
+        id: gift.id,
+        idea: gift.idea,
+        url: gift.url,
+        givenAt: gift.givenAt?.toLocal(),
+      ),
+  ],
 );
 
 PersonGroup groupFromApi(api.PersonGroup group) => PersonGroup(
@@ -328,7 +397,7 @@ PersonLedger _ledgerFromApi(api.PersonLedger ledger) => PersonLedger(
 );
 
 /// The palette is shared with the browser, which stores colors as hex.
-String _hexColor(int value) =>
+String hexColor(int value) =>
     '#${(value & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
 
 int parseHexColor(String value) {

@@ -53,9 +53,9 @@ inside nested generic cards.
 ## Header and date navigation
 
 - `Today` uses the headline role. The full localized date sits below it.
-- The trailing action cluster contains separate Settings and Profile targets.
-  Settings opens app preferences and integrations; Profile opens the account
-  and user identity surface. Both remain available when the header collapses.
+- The trailing action cluster contains one account avatar. It opens Settings,
+  which combines user identity, account actions, preferences, and integrations.
+  The entry point remains available when the header collapses.
 - Tapping the date opens the platform date picker.
 - Horizontal day navigation is available through a deliberate swipe on the
   date/timeline surface and through accessibility actions. System Back remains
@@ -156,7 +156,7 @@ monochrome and readable. On expanded widths this becomes a navigation rail.
 Habits remain first-class, but their daily actions live on Today and their full
 management route opens from the habit strip instead of consuming a sixth tab.
 People receives the top-level destination requested for relationships, groups,
-and person-led context. Settings and Profile are distinct header actions.
+and person-led context. One account avatar opens the combined Settings surface.
 
 ## Theme behavior
 

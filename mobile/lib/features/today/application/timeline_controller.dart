@@ -259,62 +259,61 @@ class TimelineController extends Notifier<TimelineState> {
     bool allowCache = false,
   }) async {
     final generation = ++_loadGeneration;
-    var painted = false;
 
-    if (allowCache) {
-      try {
-        final categories = await _repository.loadCachedCategories();
-        final window = await _repository.loadCachedWindow(from, to);
-        if (!ref.mounted || generation != _loadGeneration) return;
-        if (window != null) {
-          painted = true;
-          state = state.copyWith(
-            windowFrom: from,
-            windowTo: to,
-            entries: window.entries,
-            sleep: window.sleep,
-            categories: categories ?? state.categories,
-            isLoading: false,
-            isRefreshing: true,
-          );
-        }
-      } on Object {
-        // A broken read cache must never block a fresh server load.
-      }
-    }
-
+    // The device's own rows. This is the answer, not a placeholder for one.
     try {
-      final results = await Future.wait<Object>([
-        _repository.loadCategories(),
-        _repository.loadWindow(from, to),
-      ]);
+      final categories = await _repository.loadCategories();
+      final window = await _repository.loadWindow(from, to);
       if (!ref.mounted || generation != _loadGeneration) return;
-      final window = results[1] as TimelineWindow;
       state = state.copyWith(
         windowFrom: from,
         windowTo: to,
         entries: window.entries,
         sleep: window.sleep,
-        categories: results[0] as List<Category>,
+        categories: categories,
         isLoading: false,
-        isRefreshing: false,
         isOffline: false,
         clearError: true,
       );
     } on Object catch (error) {
       if (!ref.mounted || generation != _loadGeneration) return;
-      // Cached days are better than an error page, so a failed refresh over
-      // something already on screen only demotes the status to offline.
-      final hasSomethingToShow = painted || state.entries.isNotEmpty;
       state = state.copyWith(
         isLoading: false,
         isRefreshing: false,
-        isOffline: hasSomethingToShow,
-        error: hasSomethingToShow
-            ? null
-            : describeNetworkFailure(error, whileDoing: 'loading the timeline'),
-        clearError: hasSomethingToShow,
+        error: describeNetworkFailure(error, whileDoing: 'loading the timeline'),
       );
+      return;
+    }
+
+    // Catching up happens behind the screen, which is already correct. Not
+    // reaching the server is a status, not an error: it only means nothing
+    // new arrived.
+    final local = ref.read(localFirstTodayRepositoryProvider);
+    if (local == null) {
+      if (ref.mounted && generation == _loadGeneration) {
+        state = state.copyWith(isRefreshing: false);
+      }
+      return;
+    }
+    try {
+      await local.pull();
+      if (!ref.mounted || generation != _loadGeneration) return;
+      final categories = await _repository.loadCategories();
+      final window = await _repository.loadWindow(from, to);
+      if (!ref.mounted || generation != _loadGeneration) return;
+      state = state.copyWith(
+        windowFrom: from,
+        windowTo: to,
+        entries: window.entries,
+        sleep: window.sleep,
+        categories: categories,
+        isRefreshing: false,
+        isOffline: false,
+        clearError: true,
+      );
+    } on Object {
+      if (!ref.mounted || generation != _loadGeneration) return;
+      state = state.copyWith(isRefreshing: false, isOffline: true);
     }
   }
 

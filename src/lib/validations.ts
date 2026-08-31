@@ -344,9 +344,76 @@ export const createPersonSchema = z.object({
   defaultPercent: z.number().int().min(0).max(100).nullish(),
 });
 
-export const updatePersonSchema = createPersonSchema.partial().extend({
-  order: z.number().int().min(0).optional(),
-  archived: z.boolean().optional(),
+/// The profile half of a person, shared by create and update.
+///
+/// Birthday parts are validated as parts. A month of 13 or a day of 32 is
+/// rejected here rather than turning into a date nobody can explain; whether a
+/// given day exists in a given month is not checked, because 29 February has
+/// to be storable and the next-occurrence rule already decides what it means.
+export const personProfileSchema = z.object({
+  nickname: z.string().trim().max(60).nullish(),
+  photoUrl: z.string().url().max(500).nullish(),
+  birthdayYear: z.number().int().min(1900).max(2200).nullish(),
+  birthdayMonth: z.number().int().min(1).max(12).nullish(),
+  birthdayDay: z.number().int().min(1).max(31).nullish(),
+  // Bounded so a typo cannot create a rhythm nobody will ever be overdue on,
+  // or one that reports somebody overdue every day.
+  cadenceDays: z.number().int().min(1).max(3650).nullish(),
+  lastSeenAt: z.string().datetime().nullish(),
+});
+
+export const updatePersonSchema = createPersonSchema
+  .partial()
+  .extend({
+    order: z.number().int().min(0).optional(),
+    archived: z.boolean().optional(),
+  })
+  .merge(personProfileSchema);
+
+export const personNoteSchema = z.object({
+  id: z.string().optional(),
+  body: z.string().trim().min(1).max(4000),
+  pinned: z.boolean().optional().default(false),
+  happenedOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish(),
+});
+
+export const updatePersonNoteSchema = z.object({
+  body: z.string().trim().min(1).max(4000).optional(),
+  pinned: z.boolean().optional(),
+  happenedOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish(),
+});
+
+export const personGiftSchema = z.object({
+  id: z.string().optional(),
+  idea: z.string().trim().min(1).max(200),
+  url: z.string().url().max(500).nullish(),
+});
+
+export const updatePersonGiftSchema = z.object({
+  idea: z.string().trim().min(1).max(200).optional(),
+  url: z.string().url().max(500).nullish(),
+  // Null puts it back on the list; a date marks it given.
+  givenAt: z.string().datetime().nullish(),
+});
+
+export const personPlaceSchema = z.object({
+  id: z.string().optional(),
+  label: z.string().trim().min(1).max(60),
+  city: z.string().trim().min(1).max(120),
+  region: z.string().trim().max(120).nullish(),
+  country: z.string().trim().max(120).nullish(),
+  address: z.string().trim().max(300).nullish(),
+  isPrimary: z.boolean().optional().default(false),
+});
+
+export const markSeenSchema = z.object({
+  seenAt: z.string().datetime().optional(),
 });
 
 export const createGroupSchema = z.object({
@@ -404,6 +471,9 @@ export const reorderPeopleSchema = z.object({
 
 export type CreatePersonInput = z.infer<typeof createPersonSchema>;
 export type UpdatePersonInput = z.infer<typeof updatePersonSchema>;
+export type PersonNoteInput = z.infer<typeof personNoteSchema>;
+export type PersonGiftInput = z.infer<typeof personGiftSchema>;
+export type PersonPlaceInput = z.infer<typeof personPlaceSchema>;
 export type CreateGroupInput = z.infer<typeof createGroupSchema>;
 export type UpdateGroupInput = z.infer<typeof updateGroupSchema>;
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
@@ -479,11 +549,16 @@ export const updateExerciseSchema = z.object({
   archived: z.boolean().optional(),
 });
 
+export const mergeExerciseSchema = z.object({
+  targetExerciseId: z.string().trim().min(1),
+});
+
 export type CreateGymLocationInput = z.infer<typeof createGymLocationSchema>;
 export type UpdateGymLocationInput = z.infer<typeof updateGymLocationSchema>;
 export type CreateGymSessionInput = z.infer<typeof createGymSessionSchema>;
 export type UpdateGymSessionInput = z.infer<typeof updateGymSessionSchema>;
 export type UpdateExerciseInput = z.infer<typeof updateExerciseSchema>;
+export type MergeExerciseInput = z.infer<typeof mergeExerciseSchema>;
 
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;

@@ -3,34 +3,16 @@ import 'package:luqa/core/network/luqa_api_client.dart';
 import 'package:luqa/features/auth/data/secure_credential_store.dart';
 import 'package:luqa/features/today/data/remote_today_repository.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
-import 'package:luqa/features/today/domain/category.dart';
 import 'package:luqa/features/today/domain/sleep_entry.dart';
-import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa_api/api.dart' as api;
-import 'package:luqa/core/storage/luqa_store.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   final from = DateTime(2026, 8, 17);
   final to = DateTime(2026, 9, 7);
 
-  sqfliteFfiInit();
-
-  /// A database per test, held only in memory, so the persistent caches can be
-  /// exercised for real without a device or a file to clean up.
-  LuqaStore freshStore() {
-    final store = LuqaStore(
-      factory: databaseFactoryFfi,
-      path: inMemoryDatabasePath,
-    );
-    addTearDown(store.close);
-    return store;
-  }
-
-  test('loadWindow maps entries and sleep, then caches the window', () async {
-    final cache = MemoryTimelineCache();
+  test('loadWindow maps entries and sleep', () async {
     final api = FakeLuqaApi();
-    final repository = RemoteTodayRepository(client: api, cache: cache);
+    final repository = RemoteTodayRepository(client: api);
 
     final window = await repository.loadWindow(from, to);
 
@@ -43,17 +25,13 @@ void main() {
     expect(window.sleep.single.stages, hasLength(2));
     expect(window.sleep.single.stages.first.kind, SleepStageKind.light);
     expect(window.sleep.single.stages.last.kind, SleepStageKind.deep);
-    expect(cache.window?.entries, hasLength(1));
   });
 
   test(
     'loadWindow reaches a day further back so blocks arrive whole',
     () async {
       final api = FakeLuqaApi();
-      final repository = RemoteTodayRepository(
-        client: api,
-        cache: MemoryTimelineCache(),
-      );
+      final repository = RemoteTodayRepository(client: api);
 
       await repository.loadWindow(from, to);
 
@@ -63,26 +41,18 @@ void main() {
     },
   );
 
-  test('loadCategories drops archived categories and caches them', () async {
-    final cache = MemoryTimelineCache();
-    final repository = RemoteTodayRepository(
-      client: FakeLuqaApi(),
-      cache: cache,
-    );
+  test('loadCategories drops archived categories', () async {
+    final repository = RemoteTodayRepository(client: FakeLuqaApi());
 
     final categories = await repository.loadCategories();
 
     expect(categories.map((value) => value.name), ['Thesis']);
     expect(categories.single.colorValue, 0xFF6543E8);
-    expect(cache.categories, hasLength(1));
   });
 
   test('a patch only sends the fields it actually changes', () async {
     final api = FakeLuqaApi();
-    final repository = RemoteTodayRepository(
-      client: api,
-      cache: MemoryTimelineCache(),
-    );
+    final repository = RemoteTodayRepository(client: api);
 
     await repository.updateEntryById(
       'entry-1',
@@ -98,10 +68,7 @@ void main() {
 
   test('clearing a category sends an explicit null', () async {
     final api = FakeLuqaApi();
-    final repository = RemoteTodayRepository(
-      client: api,
-      cache: MemoryTimelineCache(),
-    );
+    final repository = RemoteTodayRepository(client: api);
 
     await repository.updateEntryById(
       'entry-1',
@@ -113,68 +80,8 @@ void main() {
     expect(patch.categoryId.value, isNull);
   });
 
-  test('the persistent read cache is isolated by user', () async {
-    // One database, two users: the isolation has to come from the namespace
-    // rather than from them happening to be kept apart.
-    final store = freshStore();
-    final firstUser = SqliteTimelineCache(namespace: 'user-a', store: store);
-    final secondUser = SqliteTimelineCache(namespace: 'user-b', store: store);
-    final window = TimelineWindow(
-      from: from,
-      to: to,
-      entries: [
-        TimeEntry(
-          id: 'entry-1',
-          description: 'Private timeline',
-          categoryId: null,
-          start: DateTime(2026, 8, 27, 9),
-          end: DateTime(2026, 8, 27, 10),
-        ),
-      ],
-      sleep: const [],
-    );
-
-    await firstUser.writeWindow(window);
-
-    expect((await firstUser.readWindow(from, to))?.entries, hasLength(1));
-    expect(await secondUser.readWindow(from, to), isNull);
-  });
-
-  test('a cached window for another range is not reused', () async {
-    final cache = SqliteTimelineCache(namespace: 'user-a', store: freshStore());
-    await cache.writeWindow(
-      TimelineWindow(from: from, to: to, entries: const [], sleep: const []),
-    );
-
-    expect(await cache.readWindow(from, to), isNotNull);
-    expect(
-      await cache.readWindow(from, to.add(const Duration(days: 7))),
-      isNull,
-    );
-  });
 }
 
-class MemoryTimelineCache implements TimelineCache {
-  TimelineWindow? window;
-  List<Category>? categories;
-
-  @override
-  Future<List<Category>?> readCategories() async => categories;
-
-  @override
-  Future<void> writeCategories(List<Category> value) async {
-    categories = value;
-  }
-
-  @override
-  Future<TimelineWindow?> readWindow(DateTime from, DateTime to) async =>
-      window;
-
-  @override
-  Future<void> writeWindow(TimelineWindow value) async {
-    window = value;
-  }
-}
 
 class FakeLuqaApi implements LuqaApi {
   DateTime? entriesFrom;

@@ -9,7 +9,7 @@ import {
 import { toGymSessionDTO } from "@/lib/serializers";
 import {
   namesToResolve,
-  ownedExerciseIds,
+  canonicalExerciseIds,
   resolveExerciseIds,
   sessionInclude,
   writeSessionExercises,
@@ -105,8 +105,11 @@ export async function POST(request: Request) {
   const referenced = input.exercises.flatMap((exercise) =>
     exercise.exerciseId ? [exercise.exerciseId] : [],
   );
-  const owned = await ownedExerciseIds(mobileSession.userId, referenced);
-  if (referenced.some((id) => !owned.has(id))) {
+  const canonicalIds = await canonicalExerciseIds(
+    mobileSession.userId,
+    referenced,
+  );
+  if (referenced.some((id) => !canonicalIds.has(id))) {
     return mobileJson(
       { error: { code: "unknown_exercise", message: "Unknown exercise" } },
       { status: 400 },
@@ -127,7 +130,13 @@ export async function POST(request: Request) {
         notes: input.notes,
       },
     });
-    await writeSessionExercises(tx, created.id, input.exercises, idByKey);
+    await writeSessionExercises(
+      tx,
+      created.id,
+      input.exercises,
+      idByKey,
+      canonicalIds,
+    );
     return tx.gymSession.findUniqueOrThrow({
       where: { id: created.id },
       include: sessionInclude,

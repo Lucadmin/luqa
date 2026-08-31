@@ -1,4 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:luqa/features/people/domain/person.dart';
+
+/// Identity is the People feature's, not money's: the same friend appears on
+/// a bill, on a timeline entry, and on a map. Re-exported here so every money
+/// caller keeps importing `Person` from the models it already imports.
+export 'package:luqa/features/people/domain/person.dart'
+    show Birthday, ChannelKind, GiftIdea, Person, PersonChannel, PersonNote,
+        PersonPlace, PlaceSource;
 
 /// Shared expenses, as the phone sees them.
 ///
@@ -46,54 +54,6 @@ enum SettlementDirection {
       value == 'FROM_ME' ? SettlementDirection.fromMe : SettlementDirection.toMe;
 }
 
-/// Someone the user shares expenses with.
-@immutable
-class Person {
-  const Person({
-    required this.id,
-    required this.name,
-    required this.colorValue,
-    required this.emoji,
-    required this.defaultPercent,
-    required this.order,
-    required this.archived,
-  });
-
-  final String id;
-  final String name;
-  final int colorValue;
-
-  /// An optional glyph on the avatar, e.g. "🧡".
-  final String? emoji;
-
-  /// The cut of a bill this person usually carries, in whole percent. Null
-  /// means share equally with everyone else on it — right for most people.
-  final int? defaultPercent;
-
-  final int order;
-  final bool archived;
-
-  Person copyWith({
-    String? name,
-    int? colorValue,
-    String? emoji,
-    bool clearEmoji = false,
-    int? defaultPercent,
-    bool clearDefaultPercent = false,
-    int? order,
-    bool? archived,
-  }) => Person(
-    id: id,
-    name: name ?? this.name,
-    colorValue: colorValue ?? this.colorValue,
-    emoji: clearEmoji ? null : emoji ?? this.emoji,
-    defaultPercent: clearDefaultPercent
-        ? null
-        : defaultPercent ?? this.defaultPercent,
-    order: order ?? this.order,
-    archived: archived ?? this.archived,
-  );
-}
 
 /// A person plus the numbers the overview shows next to their name.
 @immutable

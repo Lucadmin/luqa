@@ -470,16 +470,179 @@ model Person {
   /// be told the thing is gone. Filtered out of every ordinary read.
   deletedAt DateTime?
 
+  // --- Profile ---------------------------------------------------------
+  //
+  // Everything below is optional. Somebody who has only ever appeared on a
+  // restaurant bill is a complete Person; the record accumulates if and when
+  // it is worth writing down.
+
+  nickname String? // what they are actually called, when it differs
+  photoUrl String?
+
+  // Stored as parts rather than a DateTime. Most contacts carry a day and a
+  // month and no year, and forcing a year in means inventing one — which then
+  // shows up as a confidently wrong age. Missing is simply missing.
+  birthdayYear  Int?
+  birthdayMonth Int?
+  birthdayDay   Int?
+
+  // How often being in touch is worth aiming for. Null for most people, and
+  // null means they never appear in an overdue list.
+  cadenceDays Int?
+
+  // The last time they were actually seen.
+  lastSeenAt DateTime?
+
+  // The People API resource this row is linked to, e.g. "people/c1234". Null
+  // for someone who exists only in Luqa. Written by the contacts sync, which
+  // is additive: Luqa never deletes a Google contact or drops a field it did
+  // not add.
+  googleResourceName String?
+  googleEtag         String?
+  googleSyncedAt     DateTime?
+
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   memberships  GroupMember[]
   shares       ExpenseShare[]
   paidExpenses Expense[]      @relation("ExpensePayer")
   settlements  Settlement[]
+  places       PersonPlace[]
+  channels     PersonChannel[]
+  notes        PersonNote[]
+  gifts        PersonGiftIdea[]
 
   @@unique([userId, name])
+  @@unique([userId, googleResourceName])
   @@index([userId])
   @@index([userId, updatedAt])
   @@map("people")
+}
+
+// Where a place came from, so a contacts sync knows what it may overwrite.
+enum PlaceSource {
+  GOOGLE
+  MANUAL
+}
+
+enum ChannelKind {
+  PHONE
+  EMAIL
+  HANDLE
+}
+
+// The child rows below are deliberately NOT their own sync collections. They
+// ride inside PersonDTO the way group members ride inside PersonGroupDTO and
+// shares ride inside ExpenseDTO: one row is one whole profile, which buys no
+// new cursors and no new tombstone handling for four small tables.
+//
+// That costs one invariant, and it is the one rule that will silently break
+// the feature if it is missed: every write to a child row must bump the parent
+// Person's `updatedAt` in the same transaction. The delta feed orders by
+// `updatedAt`, so a note added without touching the parent is a note no phone
+// ever hears about. `touchPerson` in src/lib/server/people.ts is the only
+// sanctioned way to write these, and it has its own test.
+
+// Somewhere a person can be found.
+//
+// City-level on purpose. "I am in Hamburg on Thursday, who is here" is
+// answered exactly as well by the city as by the street, while keeping a
+// record of friends' addresses from becoming a map of friends' front doors:
+// only the city centroid is ever geocoded and stored.
+model PersonPlace {
+  id       String @id @default(cuid())
+  personId String
+
+  label   String // "Home", "Parents", "Summer"
+  city    String
+  region  String?
+  country String?
+
+  // The address as the contact book had it, kept for reference. Never the
+  // thing that gets plotted.
+  address String?
+
+  // The city centroid, once geocoded. Null until then: a place that lists but
+  // does not yet pin.
+  latitude  Float?
+  longitude Float?
+
+  isPrimary Boolean     @default(false)
+  source    PlaceSource @default(MANUAL)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@map("person_places")
+}
+
+// A way to reach someone.
+model PersonChannel {
+  id       String @id @default(cuid())
+  personId String
+
+  kind  ChannelKind
+  label String? // "Mobile", "Work", "Signal"
+  value String
+
+  source PlaceSource @default(MANUAL)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@map("person_channels")
+}
+
+// Something worth remembering about a person.
+//
+// A dated list rather than one text field, because the useful thing is usually
+// "what was going on with them last time", and a single blob loses that the
+// moment it is edited.
+model PersonNote {
+  id       String @id @default(cuid())
+  personId String
+
+  body String
+
+  // Kept at the top: the allergy, the kids' names, the thing not to bring up.
+  pinned Boolean @default(false)
+
+  // "YYYY-MM-DD" when the note is about a moment rather than a standing fact.
+  happenedOn String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@map("person_notes")
+}
+
+// Something to give them, and whether it has been given.
+model PersonGiftIdea {
+  id       String @id @default(cuid())
+  personId String
+
+  idea String
+  url  String?
+
+  // Set once it has actually been given. Kept rather than deleted, because the
+  // list's second job is not giving the same thing twice.
+  givenAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@map("person_gift_ideas")
 }
 
 // A named set of people — the friend group, the flat, a trip. Picking one on an
@@ -680,24 +843,28 @@ model GymLocation {
 // A movement, identified by whatever the user calls it. The list grows as they
 // log; the picker offers it back so spelling stays consistent over the years.
 model Exercise {
-  id         String    @id @default(cuid())
-  userId     String
-  name       String
-  notes      String    @default("") // standing cues, e.g. "Sitz 4, Griff eng"
-  archivedAt DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  userId       String
+  name         String
+  notes        String    @default("") // standing cues, e.g. "Sitz 4, Griff eng"
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  mergedIntoId String?
 
   /// Set instead of removing the row, so a phone that syncs later can
   /// be told the thing is gone. Filtered out of every ordinary read.
   deletedAt DateTime?
 
-  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  entries SessionExercise[]
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries       SessionExercise[]
+  mergedInto    Exercise?         @relation("ExerciseMergeRedirect", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedSources Exercise[]        @relation("ExerciseMergeRedirect")
 
   @@unique([userId, name])
   @@index([userId])
   @@index([userId, updatedAt])
+  @@index([mergedIntoId])
   @@map("exercises")
 }
 
