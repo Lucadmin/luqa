@@ -57,6 +57,9 @@ class FakeApi implements LuqaApi {
   final List<api.TimeEntry> created = [];
   final List<String> deleted = [];
 
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+
   void _check() {
     if (offline) {
       throw api.ApiException.withInner(

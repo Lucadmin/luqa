@@ -16,10 +16,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.fitness_center_outlined));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Fast, one-handed session logging is the next domain slice.'),
-      findsOneWidget,
-    );
+    expect(find.text('Continue workout'), findsOneWidget);
   });
 
   testWidgets('uses a navigation rail on expanded windows', (tester) async {

@@ -406,10 +406,27 @@ export interface ExerciseDTO {
   lastLocationId: string | null;
 }
 
+/**
+ * The most recent time an exercise was performed at one gym. Unlike
+ * `ExerciseDTO.lastRaw`, this never crosses machine stacks between locations.
+ */
+export interface GymExerciseReferenceDTO {
+  exerciseId: string;
+  sessionId: string;
+  /** "YYYY-MM-DD". */
+  date: string;
+  locationId: string | null;
+  raw: string;
+  notes: string;
+  sets: GymSetDTO[];
+}
+
 /** Everything the gym screen needs in one payload. */
 export interface GymOverviewDTO {
   locations: GymLocationDTO[];
   exercises: ExerciseDTO[];
+  /** One latest performance per exercise and gym. */
+  recentReferences: GymExerciseReferenceDTO[];
   /** Newest first. */
   sessions: GymSessionDTO[];
   totalSessions: number;

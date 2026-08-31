@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { toGymLocationDTO, toGymSessionDTO } from "@/lib/serializers";
+import { toGymSessionDTO } from "@/lib/serializers";
 import { dateFromKey, todayKey } from "@/lib/server/money";
 import {
-  exerciseUsage,
+  gymOverview,
   namesToResolve,
   ownedExerciseIds,
   resolveExerciseIds,
   sessionInclude,
-  toExerciseDTO,
   writeSessionExercises,
 } from "@/lib/server/gym";
-import type { GymOverviewDTO } from "@/lib/types";
 import { createGymSessionSchema } from "@/lib/validations";
 
 const DEFAULT_LIMIT = 30;
@@ -30,28 +28,7 @@ export async function GET(request: Request) {
     Math.max(1, Number(url.searchParams.get("limit")) || DEFAULT_LIMIT),
   );
 
-  const [locations, exercises, sessions, totalSessions, usage] = await Promise.all([
-    db.gymLocation.findMany({
-      where: { userId },
-      orderBy: [{ order: "asc" }, { code: "asc" }],
-    }),
-    db.exercise.findMany({ where: { userId }, orderBy: { name: "asc" } }),
-    db.gymSession.findMany({
-      where: { userId },
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-      take: limit,
-      include: sessionInclude,
-    }),
-    db.gymSession.count({ where: { userId } }),
-    exerciseUsage(userId),
-  ]);
-
-  const overview: GymOverviewDTO = {
-    locations: locations.map(toGymLocationDTO),
-    exercises: exercises.map((e) => toExerciseDTO(e, usage)),
-    sessions: sessions.map(toGymSessionDTO),
-    totalSessions,
-  };
+  const overview = await gymOverview(userId, limit);
 
   return NextResponse.json({ overview });
 }

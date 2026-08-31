@@ -9,7 +9,15 @@ import {
   totalReps,
   totalVolume,
 } from "@/lib/gym";
-import type { ExerciseDTO, ExercisePointDTO, GymSetDTO } from "@/lib/types";
+import { toGymLocationDTO, toGymSessionDTO } from "@/lib/serializers";
+import type {
+  ExerciseDTO,
+  ExerciseHistoryDTO,
+  ExercisePointDTO,
+  GymExerciseReferenceDTO,
+  GymOverviewDTO,
+  GymSetDTO,
+} from "@/lib/types";
 import { toDateKey } from "@/lib/life";
 
 /** Everything a session DTO needs, in one include. */
@@ -230,6 +238,91 @@ export function toExerciseDTO(
 }
 
 /**
+ * One true latest performance per exercise and location. The overview uses
+ * this for selected-gym search ordering and placeholders; it deliberately
+ * does not reuse the global `lastRaw` convenience field.
+ */
+export async function recentExerciseReferences(
+  userId: string,
+): Promise<GymExerciseReferenceDTO[]> {
+  const rows = await db.sessionExercise.findMany({
+    where: { session: { userId } },
+    select: {
+      exerciseId: true,
+      raw: true,
+      notes: true,
+      sets: {
+        orderBy: { order: "asc" },
+        select: { weight: true, reps: true, note: true },
+      },
+      session: {
+        select: {
+          id: true,
+          date: true,
+          locationId: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+  rows.sort((left, right) => {
+    const byDate = right.session.date.getTime() - left.session.date.getTime();
+    if (byDate !== 0) return byDate;
+    return right.session.createdAt.getTime() - left.session.createdAt.getTime();
+  });
+
+  const seen = new Set<string>();
+  const references: GymExerciseReferenceDTO[] = [];
+  for (const row of rows) {
+    const key = `${row.exerciseId}:${row.session.locationId ?? "none"}`;
+    if (!seen.add(key)) continue;
+    references.push({
+      exerciseId: row.exerciseId,
+      sessionId: row.session.id,
+      date: toDateKey(row.session.date),
+      locationId: row.session.locationId,
+      raw: row.raw,
+      notes: row.notes,
+      sets: row.sets,
+    });
+  }
+  return references;
+}
+
+/** Shared browser/native overview query. */
+export async function gymOverview(
+  userId: string,
+  limit: number,
+): Promise<GymOverviewDTO> {
+  const [locations, exercises, sessions, totalSessions, usage, references] =
+    await Promise.all([
+      db.gymLocation.findMany({
+        where: { userId },
+        orderBy: [{ order: "asc" }, { code: "asc" }],
+      }),
+      db.exercise.findMany({ where: { userId }, orderBy: { name: "asc" } }),
+      db.gymSession.findMany({
+        where: { userId },
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+        take: limit,
+        include: sessionInclude,
+      }),
+      db.gymSession.count({ where: { userId } }),
+      exerciseUsage(userId),
+      recentExerciseReferences(userId),
+    ]);
+
+  return {
+    locations: locations.map(toGymLocationDTO),
+    exercises: exercises.map((exercise) => toExerciseDTO(exercise, usage)),
+    recentReferences: references,
+    sessions: sessions.map(toGymSessionDTO),
+    totalSessions,
+  };
+}
+
+/**
  * Every time an exercise was done, oldest first, with the derived numbers the
  * history sheet plots. `isPr` marks the sessions that beat everything before
  * them, which is the only badge worth showing on a graph.
@@ -275,6 +368,73 @@ export function buildPoints(
   }
 
   return points;
+}
+
+/**
+ * Location-scoped exercise history. `beforeSessionId` makes "last time" mean
+ * the workout before the one being edited, including for historical sessions.
+ */
+export async function exerciseHistory(
+  userId: string,
+  exerciseId: string,
+  options: { locationId?: string | null; beforeSessionId?: string | null } = {},
+): Promise<ExerciseHistoryDTO | null> {
+  const exercise = await db.exercise.findFirst({
+    where: { id: exerciseId, userId },
+  });
+  if (!exercise) return null;
+
+  const before = options.beforeSessionId
+    ? await db.gymSession.findFirst({
+        where: { id: options.beforeSessionId, userId },
+        select: { date: true, createdAt: true },
+      })
+    : null;
+
+  const rows = await db.sessionExercise.findMany({
+    where: {
+      exerciseId,
+      session: {
+        userId,
+        ...(options.locationId ? { locationId: options.locationId } : {}),
+        ...(before
+          ? {
+              OR: [
+                { date: { lt: before.date } },
+                { date: before.date, createdAt: { lt: before.createdAt } },
+              ],
+            }
+          : {}),
+      },
+    },
+    orderBy: { session: { date: "desc" } },
+    take: 400,
+    select: {
+      id: true,
+      raw: true,
+      notes: true,
+      sets: {
+        select: { weight: true, reps: true, note: true, order: true },
+      },
+      session: { select: { id: true, date: true, locationId: true } },
+    },
+  });
+
+  const points = buildPoints(rows);
+  const usage = await exerciseUsage(userId);
+  const oneRepMaxes = points
+    .map((point) => point.best1RM)
+    .filter((value): value is number => value !== null);
+  const weights = points
+    .map((point) => point.topWeight)
+    .filter((value): value is number => value !== null);
+
+  return {
+    exercise: toExerciseDTO(exercise, usage),
+    points,
+    bestEver: oneRepMaxes.length > 0 ? Math.max(...oneRepMaxes) : null,
+    heaviest: weights.length > 0 ? Math.max(...weights) : null,
+  };
 }
 
 export { estimate1RM };

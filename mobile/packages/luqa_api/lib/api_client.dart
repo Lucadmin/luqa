@@ -212,6 +212,10 @@ class ApiClient {
           return CategoryResponse.fromJson(value);
         case 'CreateCategoryRequest':
           return CreateCategoryRequest.fromJson(value);
+        case 'CreateGymLocationRequest':
+          return CreateGymLocationRequest.fromJson(value);
+        case 'CreateGymSessionRequest':
+          return CreateGymSessionRequest.fromJson(value);
         case 'CreateSessionRequest':
           return CreateSessionRequest.fromJson(value);
         case 'CreateTimeEntryRequest':
@@ -224,6 +228,38 @@ class ApiClient {
           return ErrorDetail.fromJson(value);
         case 'ErrorResponse':
           return ErrorResponse.fromJson(value);
+        case 'GymExercise':
+          return GymExercise.fromJson(value);
+        case 'GymExerciseHistory':
+          return GymExerciseHistory.fromJson(value);
+        case 'GymExerciseHistoryResponse':
+          return GymExerciseHistoryResponse.fromJson(value);
+        case 'GymExercisePoint':
+          return GymExercisePoint.fromJson(value);
+        case 'GymExerciseReference':
+          return GymExerciseReference.fromJson(value);
+        case 'GymLocation':
+          return GymLocation.fromJson(value);
+        case 'GymLocationResponse':
+          return GymLocationResponse.fromJson(value);
+        case 'GymOverview':
+          return GymOverview.fromJson(value);
+        case 'GymOverviewResponse':
+          return GymOverviewResponse.fromJson(value);
+        case 'GymSession':
+          return GymSession.fromJson(value);
+        case 'GymSessionExercise':
+          return GymSessionExercise.fromJson(value);
+        case 'GymSessionExerciseInput':
+          return GymSessionExerciseInput.fromJson(value);
+        case 'GymSessionListResponse':
+          return GymSessionListResponse.fromJson(value);
+        case 'GymSessionResponse':
+          return GymSessionResponse.fromJson(value);
+        case 'GymSet':
+          return GymSet.fromJson(value);
+        case 'GymSetInput':
+          return GymSetInput.fromJson(value);
         case 'HealthMetricType':
           return HealthMetricTypeTypeTransformer().decode(value);
         case 'HealthSampleImport':
@@ -266,6 +302,10 @@ class ApiClient {
           return TimeEntryListResponse.fromJson(value);
         case 'TimeEntryResponse':
           return TimeEntryResponse.fromJson(value);
+        case 'UpdateGymLocationRequest':
+          return UpdateGymLocationRequest.fromJson(value);
+        case 'UpdateGymSessionRequest':
+          return UpdateGymSessionRequest.fromJson(value);
         case 'UpdateTimeEntryRequest':
           return UpdateTimeEntryRequest.fromJson(value);
         default:

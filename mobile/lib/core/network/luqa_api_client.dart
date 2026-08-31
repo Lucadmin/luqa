@@ -45,6 +45,37 @@ abstract interface class LuqaApi {
   Future<api.HealthSyncResponse> pushHealthSync(api.HealthSyncRequest request);
 
   Future<List<api.HealthSyncState>> healthSyncStates();
+
+  Future<api.GymOverview> getGymOverview({int limit = 30});
+
+  Future<api.GymSession> createGymSession(api.CreateGymSessionRequest request);
+
+  Future<api.GymSession> getGymSession(String id);
+
+  Future<api.GymSession> updateGymSession(
+    String id,
+    api.UpdateGymSessionRequest request,
+  );
+
+  Future<api.GymSessionListResponse> listGymSessions({
+    String? cursor,
+    int limit = 20,
+  });
+
+  Future<api.GymExerciseHistory> getGymExerciseHistory(
+    String exerciseId, {
+    String? locationId,
+    String? beforeSessionId,
+  });
+
+  Future<api.GymLocation> createGymLocation(
+    api.CreateGymLocationRequest request,
+  );
+
+  Future<api.GymLocation> updateGymLocation(
+    String id,
+    api.UpdateGymLocationRequest request,
+  );
 }
 
 class LuqaApiClient implements LuqaApi {
@@ -283,6 +314,101 @@ class LuqaApiClient implements LuqaApi {
         ).getHealthSyncState().timeout(_requestTimeout);
         return response?.states ?? const [];
       });
+
+  @override
+  Future<api.GymOverview> getGymOverview({int limit = 30}) =>
+      _authorized((client) async {
+        final response = await api.GymApi(
+          client,
+        ).getGymOverview(limit: limit).timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response.overview;
+      });
+
+  @override
+  Future<api.GymSession> createGymSession(
+    api.CreateGymSessionRequest request,
+  ) => _authorized((client) async {
+    final response = await api.GymApi(
+      client,
+    ).createGymSession(request).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.session;
+  });
+
+  @override
+  Future<api.GymSession> getGymSession(String id) =>
+      _authorized((client) async {
+        final response = await api.GymApi(
+          client,
+        ).getGymSession(id).timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response.session;
+      });
+
+  @override
+  Future<api.GymSession> updateGymSession(
+    String id,
+    api.UpdateGymSessionRequest request,
+  ) => _authorized((client) async {
+    final response = await api.GymApi(
+      client,
+    ).updateGymSession(id, request).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.session;
+  });
+
+  @override
+  Future<api.GymSessionListResponse> listGymSessions({
+    String? cursor,
+    int limit = 20,
+  }) => _authorized((client) async {
+    final response = await api.GymApi(
+      client,
+    ).listGymSessions(cursor: cursor, limit: limit).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response;
+  });
+
+  @override
+  Future<api.GymExerciseHistory> getGymExerciseHistory(
+    String exerciseId, {
+    String? locationId,
+    String? beforeSessionId,
+  }) => _authorized((client) async {
+    final response = await api.GymApi(client)
+        .getGymExerciseHistory(
+          exerciseId,
+          locationId: locationId,
+          beforeSessionId: beforeSessionId,
+        )
+        .timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.history;
+  });
+
+  @override
+  Future<api.GymLocation> createGymLocation(
+    api.CreateGymLocationRequest request,
+  ) => _authorized((client) async {
+    final response = await api.GymApi(
+      client,
+    ).createGymLocation(request).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.location;
+  });
+
+  @override
+  Future<api.GymLocation> updateGymLocation(
+    String id,
+    api.UpdateGymLocationRequest request,
+  ) => _authorized((client) async {
+    final response = await api.GymApi(
+      client,
+    ).updateGymLocation(id, request).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.location;
+  });
 
   Future<T> _authorized<T>(
     Future<T> Function(api.ApiClient client) request,

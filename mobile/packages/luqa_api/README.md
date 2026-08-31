@@ -64,6 +64,14 @@ Class | Method | HTTP request | Description
 *AuthenticationApi* | [**revokeMobileSession**](doc//AuthenticationApi.md#revokemobilesession) | **DELETE** /auth/session | Revoke the current device session
 *CategoriesApi* | [**createCategory**](doc//CategoriesApi.md#createcategory) | **POST** /categories | Create or resolve a category by name
 *CategoriesApi* | [**listCategories**](doc//CategoriesApi.md#listcategories) | **GET** /categories | List the current user's categories
+*GymApi* | [**createGymLocation**](doc//GymApi.md#creategymlocation) | **POST** /gym/locations | Add a gym
+*GymApi* | [**createGymSession**](doc//GymApi.md#creategymsession) | **POST** /gym/sessions | Start an autosaved workout
+*GymApi* | [**getGymExerciseHistory**](doc//GymApi.md#getgymexercisehistory) | **GET** /gym/exercises/{id}/history | Load one exercise's progress history
+*GymApi* | [**getGymOverview**](doc//GymApi.md#getgymoverview) | **GET** /gym | Load gyms, exercises, per-gym references, and recent workouts
+*GymApi* | [**getGymSession**](doc//GymApi.md#getgymsession) | **GET** /gym/sessions/{id} | Load one workout
+*GymApi* | [**listGymSessions**](doc//GymApi.md#listgymsessions) | **GET** /gym/sessions | List workouts newest first
+*GymApi* | [**updateGymLocation**](doc//GymApi.md#updategymlocation) | **PATCH** /gym/locations/{id} | Edit, archive, or restore a gym
+*GymApi* | [**updateGymSession**](doc//GymApi.md#updategymsession) | **PATCH** /gym/sessions/{id} | Autosave a workout draft
 *HealthApi* | [**getHealthSyncState**](doc//HealthApi.md#gethealthsyncstate) | **GET** /health/sync | Read what the server last accepted, per source and metric
 *HealthApi* | [**pushHealthSync**](doc//HealthApi.md#pushhealthsync) | **POST** /health/sync | Push sleep sessions and samples read from the device
 *SleepApi* | [**listSleepEntries**](doc//SleepApi.md#listsleepentries) | **GET** /sleep-entries | List sleep sessions that ended inside a half-open UTC window
@@ -79,12 +87,30 @@ Class | Method | HTTP request | Description
  - [CategoryListResponse](doc//CategoryListResponse.md)
  - [CategoryResponse](doc//CategoryResponse.md)
  - [CreateCategoryRequest](doc//CreateCategoryRequest.md)
+ - [CreateGymLocationRequest](doc//CreateGymLocationRequest.md)
+ - [CreateGymSessionRequest](doc//CreateGymSessionRequest.md)
  - [CreateSessionRequest](doc//CreateSessionRequest.md)
  - [CreateTimeEntryRequest](doc//CreateTimeEntryRequest.md)
  - [DeviceHealthSource](doc//DeviceHealthSource.md)
  - [EntrySource](doc//EntrySource.md)
  - [ErrorDetail](doc//ErrorDetail.md)
  - [ErrorResponse](doc//ErrorResponse.md)
+ - [GymExercise](doc//GymExercise.md)
+ - [GymExerciseHistory](doc//GymExerciseHistory.md)
+ - [GymExerciseHistoryResponse](doc//GymExerciseHistoryResponse.md)
+ - [GymExercisePoint](doc//GymExercisePoint.md)
+ - [GymExerciseReference](doc//GymExerciseReference.md)
+ - [GymLocation](doc//GymLocation.md)
+ - [GymLocationResponse](doc//GymLocationResponse.md)
+ - [GymOverview](doc//GymOverview.md)
+ - [GymOverviewResponse](doc//GymOverviewResponse.md)
+ - [GymSession](doc//GymSession.md)
+ - [GymSessionExercise](doc//GymSessionExercise.md)
+ - [GymSessionExerciseInput](doc//GymSessionExerciseInput.md)
+ - [GymSessionListResponse](doc//GymSessionListResponse.md)
+ - [GymSessionResponse](doc//GymSessionResponse.md)
+ - [GymSet](doc//GymSet.md)
+ - [GymSetInput](doc//GymSetInput.md)
  - [HealthMetricType](doc//HealthMetricType.md)
  - [HealthSampleImport](doc//HealthSampleImport.md)
  - [HealthSampleRef](doc//HealthSampleRef.md)
@@ -106,6 +132,8 @@ Class | Method | HTTP request | Description
  - [TimeEntry](doc//TimeEntry.md)
  - [TimeEntryListResponse](doc//TimeEntryListResponse.md)
  - [TimeEntryResponse](doc//TimeEntryResponse.md)
+ - [UpdateGymLocationRequest](doc//UpdateGymLocationRequest.md)
+ - [UpdateGymSessionRequest](doc//UpdateGymSessionRequest.md)
  - [UpdateTimeEntryRequest](doc//UpdateTimeEntryRequest.md)
 
 

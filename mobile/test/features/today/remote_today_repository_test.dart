@@ -172,6 +172,9 @@ class FakeLuqaApi implements LuqaApi {
   DateTime? entriesFrom;
   api.UpdateTimeEntryRequest? lastPatch;
 
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+
   // Health sync is exercised in test/features/health; this fake only needs to
   // satisfy the interface for the timeline repository.
   @override

@@ -8,12 +8,16 @@ import 'package:luqa/features/auth/application/auth_controller.dart';
 import 'package:luqa/features/auth/domain/auth_user.dart';
 import 'package:luqa/features/health/application/health_sync_controller.dart';
 import 'package:luqa/features/health/data/health_connect_reader.dart';
+import 'package:luqa/features/gym/application/gym_overview_controller.dart';
+import 'package:luqa/features/gym/data/gym_providers.dart';
+import 'package:luqa/features/gym/data/gym_repository.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
 import 'package:luqa/features/today/data/outbox.dart';
 import 'package:luqa/features/today/data/today_providers.dart';
 import 'package:luqa/features/today/presentation/widgets/timeline_view.dart';
 
 import 'fake_health.dart';
+import 'fake_gym_repository.dart';
 import 'fake_timeline_repository.dart';
 
 final fixedNow = DateTime(2026, 8, 27, 15);
@@ -40,6 +44,7 @@ Future<FakeTimelineRepository> pumpLuqa(
   WidgetTester tester, {
   ThemeMode themeMode = ThemeMode.light,
   Size size = const Size(412, 915),
+  GymRepository? gymRepository,
 }) async {
   final repository = FakeTimelineRepository(today: fixedNow);
   tester.view.devicePixelRatio = 1;
@@ -62,6 +67,10 @@ Future<FakeTimelineRepository> pumpLuqa(
         // HealthAutoSync, and the real store wants a platform channel.
         outboxProvider.overrideWithValue(const NullOutbox()),
         luqaApiProvider.overrideWithValue(FakeHealthApi()),
+        gymRepositoryProvider.overrideWithValue(
+          gymRepository ?? FakeGymRepository.sample(),
+        ),
+        gymNowProvider.overrideWithValue(fixedNow),
         currentTimeProvider.overrideWithValue(fixedNow),
         todayRepositoryProvider.overrideWithValue(repository),
         authControllerProvider.overrideWith(FixedAuthController.new),

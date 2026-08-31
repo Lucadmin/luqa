@@ -1,0 +1,72 @@
+import 'package:luqa/features/gym/domain/gym_models.dart';
+
+class GymSetWrite {
+  const GymSetWrite({required this.weight, required this.reps, this.note});
+
+  final double? weight;
+  final int? reps;
+  final String? note;
+}
+
+class GymExerciseWrite {
+  const GymExerciseWrite({
+    required this.exerciseId,
+    required this.name,
+    required this.sets,
+    required this.notes,
+  });
+
+  final String? exerciseId;
+  final String name;
+  final List<GymSetWrite> sets;
+  final String notes;
+}
+
+class GymSessionWrite {
+  const GymSessionWrite({
+    required this.dateKey,
+    required this.locationId,
+    required this.notes,
+    required this.exercises,
+  });
+
+  final String dateKey;
+  final String? locationId;
+  final String notes;
+  final List<GymExerciseWrite> exercises;
+}
+
+abstract interface class GymRepository {
+  Future<GymOverview> loadOverview({int limit = 30});
+
+  Future<GymSession> createSession({
+    required String dateKey,
+    required String? locationId,
+  });
+
+  Future<GymSession> loadSession(String id);
+
+  Future<GymSession> saveSession(String id, GymSessionWrite write);
+
+  Future<GymSessionPage> loadSessions({String? cursor, int limit = 20});
+
+  Future<GymExerciseHistory> loadExerciseHistory(
+    String exerciseId, {
+    String? locationId,
+    String? beforeSessionId,
+  });
+
+  Future<GymLocation> createLocation({
+    required String name,
+    required String code,
+    required int colorValue,
+  });
+
+  Future<GymLocation> updateLocation({
+    required String id,
+    String? name,
+    String? code,
+    int? colorValue,
+    bool? archived,
+  });
+}

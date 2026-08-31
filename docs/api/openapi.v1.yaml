@@ -24,6 +24,8 @@ tags:
       On-device health ingestion. The client reads the platform store (Android
       Health Connect, iOS HealthKit later) and pushes normalized records; the
       server never pulls from a provider.
+  - name: Gym
+    description: Location-aware workout logging, exercise history, and gyms.
 paths:
   /auth/session:
     post:
@@ -298,6 +300,213 @@ paths:
           $ref: "#/components/responses/InvalidInput"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /gym:
+    get:
+      operationId: getGymOverview
+      tags: [Gym]
+      summary: Load gyms, exercises, per-gym references, and recent workouts
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: Gym overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymOverviewResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /gym/sessions:
+    get:
+      operationId: listGymSessions
+      tags: [Gym]
+      summary: List workouts newest first
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Workout page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymSessionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createGymSession
+      tags: [Gym]
+      summary: Start an autosaved workout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGymSessionRequest"
+      responses:
+        "201":
+          description: Workout created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymSessionResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /gym/sessions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getGymSession
+      tags: [Gym]
+      summary: Load one workout
+      responses:
+        "200":
+          description: Workout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymSessionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateGymSession
+      tags: [Gym]
+      summary: Autosave a workout draft
+      description: >-
+        Omitted fields stay unchanged. Sending exercises replaces the ordered
+        exercise list; empty sets are ignored server-side.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGymSessionRequest"
+      responses:
+        "200":
+          description: Saved workout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymSessionResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /gym/exercises/{id}/history:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getGymExerciseHistory
+      tags: [Gym]
+      summary: Load one exercise's progress history
+      parameters:
+        - name: locationId
+          in: query
+          required: false
+          description: Keep machine stacks from different gyms separate.
+          schema:
+            type: string
+        - name: beforeSessionId
+          in: query
+          required: false
+          description: Return only performances before this workout.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Exercise history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymExerciseHistoryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /gym/locations:
+    post:
+      operationId: createGymLocation
+      tags: [Gym]
+      summary: Add a gym
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGymLocationRequest"
+      responses:
+        "201":
+          description: Gym created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymLocationResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /gym/locations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updateGymLocation
+      tags: [Gym]
+      summary: Edit, archive, or restore a gym
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGymLocationRequest"
+      responses:
+        "200":
+          description: Gym updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymLocationResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   securitySchemes:
     mobileBearer:
@@ -897,6 +1106,356 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/HealthSyncState"
+    GymLocation:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, color, order, archived]
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        order:
+          type: integer
+        archived:
+          type: boolean
+    GymSet:
+      type: object
+      additionalProperties: false
+      required: [weight, reps, note]
+      properties:
+        weight:
+          type: [number, "null"]
+        reps:
+          type: [integer, "null"]
+        note:
+          type: [string, "null"]
+    GymSessionExercise:
+      type: object
+      additionalProperties: false
+      required: [id, exerciseId, name, order, raw, notes, sets]
+      properties:
+        id:
+          type: string
+        exerciseId:
+          type: string
+        name:
+          type: string
+        order:
+          type: integer
+        raw:
+          type: string
+        notes:
+          type: string
+        sets:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymSet"
+    GymSession:
+      type: object
+      additionalProperties: false
+      required: [id, date, locationId, notes, exercises, createdAt]
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        locationId:
+          type: [string, "null"]
+        notes:
+          type: string
+        exercises:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymSessionExercise"
+        createdAt:
+          type: string
+          format: date-time
+    GymExercise:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - notes
+        - archived
+        - sessionCount
+        - lastPerformed
+        - locationIds
+        - lastRaw
+        - lastLocationId
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        notes:
+          type: string
+        archived:
+          type: boolean
+        sessionCount:
+          type: integer
+        lastPerformed:
+          type: [string, "null"]
+        locationIds:
+          type: array
+          items:
+            type: string
+        lastRaw:
+          type: [string, "null"]
+        lastLocationId:
+          type: [string, "null"]
+    GymExerciseReference:
+      type: object
+      additionalProperties: false
+      required: [exerciseId, sessionId, date, locationId, raw, notes, sets]
+      properties:
+        exerciseId:
+          type: string
+        sessionId:
+          type: string
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        locationId:
+          type: [string, "null"]
+        raw:
+          type: string
+        notes:
+          type: string
+        sets:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymSet"
+    GymOverview:
+      type: object
+      additionalProperties: false
+      required: [locations, exercises, recentReferences, sessions, totalSessions]
+      properties:
+        locations:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymLocation"
+        exercises:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymExercise"
+        recentReferences:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymExerciseReference"
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymSession"
+        totalSessions:
+          type: integer
+    GymExercisePoint:
+      type: object
+      additionalProperties: false
+      required:
+        - sessionId
+        - date
+        - locationId
+        - raw
+        - notes
+        - sets
+        - topWeight
+        - best1RM
+        - totalReps
+        - volume
+        - isPr
+      properties:
+        sessionId:
+          type: string
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        locationId:
+          type: [string, "null"]
+        raw:
+          type: string
+        notes:
+          type: string
+        sets:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymSet"
+        topWeight:
+          type: [number, "null"]
+        best1RM:
+          type: [number, "null"]
+        totalReps:
+          type: integer
+        volume:
+          type: number
+        isPr:
+          type: boolean
+    GymExerciseHistory:
+      type: object
+      additionalProperties: false
+      required: [exercise, points, bestEver, heaviest]
+      properties:
+        exercise:
+          $ref: "#/components/schemas/GymExercise"
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymExercisePoint"
+        bestEver:
+          type: [number, "null"]
+        heaviest:
+          type: [number, "null"]
+    GymOverviewResponse:
+      type: object
+      additionalProperties: false
+      required: [overview]
+      properties:
+        overview:
+          $ref: "#/components/schemas/GymOverview"
+    GymSessionResponse:
+      type: object
+      additionalProperties: false
+      required: [session]
+      properties:
+        session:
+          $ref: "#/components/schemas/GymSession"
+    GymSessionListResponse:
+      type: object
+      additionalProperties: false
+      required: [sessions, nextCursor]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/GymSession"
+        nextCursor:
+          type: [string, "null"]
+    GymExerciseHistoryResponse:
+      type: object
+      additionalProperties: false
+      required: [history]
+      properties:
+        history:
+          $ref: "#/components/schemas/GymExerciseHistory"
+    GymLocationResponse:
+      type: object
+      additionalProperties: false
+      required: [location]
+      properties:
+        location:
+          $ref: "#/components/schemas/GymLocation"
+    GymSetInput:
+      type: object
+      additionalProperties: false
+      properties:
+        weight:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 2000
+        reps:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 1000
+        note:
+          type: [string, "null"]
+          maxLength: 10
+    GymSessionExerciseInput:
+      type: object
+      additionalProperties: false
+      properties:
+        exerciseId:
+          type: string
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        sets:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/GymSetInput"
+        notes:
+          type: string
+          maxLength: 2000
+    CreateGymSessionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        locationId:
+          type: [string, "null"]
+        notes:
+          type: string
+          maxLength: 4000
+        exercises:
+          type: array
+          maxItems: 60
+          items:
+            $ref: "#/components/schemas/GymSessionExerciseInput"
+    UpdateGymSessionRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        locationId:
+          type: [string, "null"]
+        notes:
+          type: string
+          maxLength: 4000
+        exercises:
+          type: array
+          maxItems: 60
+          items:
+            $ref: "#/components/schemas/GymSessionExerciseInput"
+    CreateGymLocationRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 12
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+    UpdateGymLocationRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 12
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        order:
+          type: integer
+          minimum: 0
+        archived:
+          type: boolean
     ErrorDetail:
       type: object
       additionalProperties: true
