@@ -3,6 +3,7 @@ import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { toGymLocationDTO } from "@/lib/serializers";
 import { createGymLocationSchema } from "@/lib/validations";
+import { reviveDeletedGymLocation } from "@/lib/server/tombstones";
 
 // GET /api/gym/locations
 export async function GET() {
@@ -37,6 +38,9 @@ export async function POST(request: Request) {
     );
   }
   const d = parsed.data;
+
+  const revived = await reviveDeletedGymLocation(userId, d.code);
+  if (revived) return NextResponse.json({ location: revived }, { status: 201 });
 
   const existing = await db.gymLocation.findFirst({
     where: { userId, code: d.code },

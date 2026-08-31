@@ -32,7 +32,7 @@ class RemoteMoneyRepository implements MoneyRepository {
       limit: limit,
     );
     return ExpensePage(
-      expenses: response.expenses.map(_expenseFromApi).toList(growable: false),
+      expenses: response.expenses.map(expenseFromApi).toList(growable: false),
       nextCursor: response.nextCursor,
     );
   }
@@ -41,7 +41,7 @@ class RemoteMoneyRepository implements MoneyRepository {
   Future<Expense> createExpense({
     String? id,
     required ExpenseWrite write,
-  }) async => _expenseFromApi(
+  }) async => expenseFromApi(
     await client.createExpense(
       api.CreateExpenseRequest(
         id: _optional(id),
@@ -60,7 +60,7 @@ class RemoteMoneyRepository implements MoneyRepository {
 
   @override
   Future<Expense> updateExpense(String id, ExpenseWrite write) async =>
-      _expenseFromApi(
+      expenseFromApi(
         await client.updateExpense(
           id,
           api.UpdateExpenseRequest(
@@ -86,7 +86,7 @@ class RemoteMoneyRepository implements MoneyRepository {
 
   @override
   Future<Person> createPerson({String? id, required PersonWrite write}) async =>
-      _personFromApi(
+      personFromApi(
         await client.createPerson(
           api.CreatePersonRequest(
             id: _optional(id),
@@ -109,7 +109,7 @@ class RemoteMoneyRepository implements MoneyRepository {
     bool clearDefaultPercent = false,
     int? order,
     bool? archived,
-  }) async => _personFromApi(
+  }) async => personFromApi(
     await client.updatePerson(
       id,
       api.UpdatePersonRequest(
@@ -138,7 +138,7 @@ class RemoteMoneyRepository implements MoneyRepository {
   Future<PersonGroup> createGroup({
     String? id,
     required GroupWrite write,
-  }) async => _groupFromApi(
+  }) async => groupFromApi(
     await client.createGroup(
       api.CreateGroupRequest(
         id: _optional(id),
@@ -159,7 +159,7 @@ class RemoteMoneyRepository implements MoneyRepository {
     bool clearEmoji = false,
     List<String>? memberIds,
     bool? archived,
-  }) async => _groupFromApi(
+  }) async => groupFromApi(
     await client.updateGroup(
       id,
       api.UpdateGroupRequest(
@@ -183,7 +183,7 @@ class RemoteMoneyRepository implements MoneyRepository {
   Future<Settlement> createSettlement({
     String? id,
     required SettlementWrite write,
-  }) async => _settlementFromApi(
+  }) async => settlementFromApi(
     await client.createSettlement(
       api.CreateSettlementRequest(
         id: _optional(id),
@@ -243,13 +243,13 @@ MoneyOverview _overviewFromApi(api.MoneyOverview overview) => MoneyOverview(
         lastActivity: balance.lastActivity,
       ),
   ],
-  groups: overview.groups.map(_groupFromApi).toList(growable: false),
+  groups: overview.groups.map(groupFromApi).toList(growable: false),
   owedToYouCents: overview.owedToYouCents,
   youOweCents: overview.youOweCents,
   coveredCents: overview.coveredCents,
 );
 
-Person _personFromApi(api.Person person) => Person(
+Person personFromApi(api.Person person) => Person(
   id: person.id,
   name: person.name,
   colorValue: parseHexColor(person.color),
@@ -259,7 +259,7 @@ Person _personFromApi(api.Person person) => Person(
   archived: person.archived,
 );
 
-PersonGroup _groupFromApi(api.PersonGroup group) => PersonGroup(
+PersonGroup groupFromApi(api.PersonGroup group) => PersonGroup(
   id: group.id,
   name: group.name,
   colorValue: parseHexColor(group.color),
@@ -269,7 +269,7 @@ PersonGroup _groupFromApi(api.PersonGroup group) => PersonGroup(
   memberIds: group.memberIds.toList(growable: false),
 );
 
-Expense _expenseFromApi(api.Expense expense) => Expense(
+Expense expenseFromApi(api.Expense expense) => Expense(
   id: expense.id,
   description: expense.description,
   amountCents: expense.amountCents,
@@ -291,7 +291,7 @@ Expense _expenseFromApi(api.Expense expense) => Expense(
   createdAt: expense.createdAt.toLocal(),
 );
 
-Settlement _settlementFromApi(api.Settlement settlement) => Settlement(
+Settlement settlementFromApi(api.Settlement settlement) => Settlement(
   id: settlement.id,
   personId: settlement.personId,
   amountCents: settlement.amountCents,
@@ -302,7 +302,7 @@ Settlement _settlementFromApi(api.Settlement settlement) => Settlement(
 );
 
 PersonLedger _ledgerFromApi(api.PersonLedger ledger) => PersonLedger(
-  person: _personFromApi(ledger.person),
+  person: personFromApi(ledger.person),
   currency: ledger.currency,
   balanceCents: ledger.balanceCents,
   coveredCents: ledger.coveredCents,
@@ -321,7 +321,7 @@ PersonLedger _ledgerFromApi(api.PersonLedger ledger) => PersonLedger(
         direction: item.direction == null
             ? null
             : SettlementDirection.fromWire(item.direction!.toJson()),
-        expense: item.expense == null ? null : _expenseFromApi(item.expense!),
+        expense: item.expense == null ? null : expenseFromApi(item.expense!),
         createdAt: item.createdAt.toLocal(),
       ),
   ],

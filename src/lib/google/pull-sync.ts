@@ -12,6 +12,7 @@ import {
 } from "@/lib/google/oauth";
 import { needsRenewal, registerWatchChannel } from "@/lib/google/watch";
 import { db } from "@/lib/db";
+import { reviveDeletedCategory } from "@/lib/server/tombstones";
 
 const SNAP_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
 
@@ -34,6 +35,9 @@ async function upsertCategory(userId: string, name: string): Promise<string> {
     select: { id: true },
   });
   if (existing) return existing.id;
+
+  const revived = await reviveDeletedCategory(userId, name);
+  if (revived) return revived.id;
 
   const count = await db.category.count({ where: { userId } });
   const PALETTE = [

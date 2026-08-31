@@ -58,6 +58,9 @@ export async function DELETE(
   const settlement = await db.settlement.findFirst({ where: { id, userId } });
   if (!settlement) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await db.settlement.delete({ where: { id } });
+  await db.settlement.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
   return new NextResponse(null, { status: 204 });
 }

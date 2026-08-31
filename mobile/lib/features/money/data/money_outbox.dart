@@ -426,8 +426,7 @@ String _amount(int cents) => cents % 100 == 0
     : '${cents ~/ 100}.${(cents % 100).toString().padLeft(2, '0')}';
 
 /// The money tab's durable queue.
-class SharedPreferencesMoneyOutbox
-    extends SharedPreferencesOutbox<MoneyMutation> {
-  SharedPreferencesMoneyOutbox({required super.namespace, super.preferences})
+class SqliteMoneyOutbox extends SqliteOutbox<MoneyMutation> {
+  SqliteMoneyOutbox({required super.namespace, super.store})
     : super(key: 'money', decode: MoneyMutation.fromJson);
 }

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luqa/features/money/data/money_outbox.dart';
-import 'package:luqa/features/money/data/money_overlay.dart';
+import 'package:luqa/features/money/data/money_fold.dart';
 import 'package:luqa/features/money/data/money_repository.dart';
 import 'package:luqa/features/money/domain/money_models.dart';
 import 'package:luqa/features/money/domain/money_split.dart';
@@ -17,35 +17,7 @@ Person _person(String id, {String? name, bool archived = false}) => Person(
   archived: archived,
 );
 
-MoneyOverview _overview({
-  List<PersonBalance> people = const [],
-  List<PersonGroup> groups = const [],
-}) {
-  final owed = people.fold<int>(
-    0,
-    (sum, p) => sum + (p.balanceCents > 0 ? p.balanceCents : 0),
-  );
-  final owe = people.fold<int>(
-    0,
-    (sum, p) => sum + (p.balanceCents < 0 ? -p.balanceCents : 0),
-  );
-  return MoneyOverview(
-    currency: 'EUR',
-    people: people,
-    groups: groups,
-    owedToYouCents: owed,
-    youOweCents: owe,
-    coveredCents: people.fold<int>(0, (sum, p) => sum + p.coveredCents),
-  );
-}
 
-PersonBalance _balance(String id, {int cents = 0, int covered = 0}) =>
-    PersonBalance(
-      person: _person(id),
-      balanceCents: cents,
-      coveredCents: covered,
-      lastActivity: null,
-    );
 
 ExpenseWrite _write({
   int amountCents = 3000,
@@ -175,174 +147,6 @@ void main() {
     });
   });
 
-  group('overlaying the queue on the server\'s answer', () {
-    test('a bill entered offline moves the balances immediately', () {
-      final overlaid = overlayMoney(
-        _overview(people: [_balance('mira')]),
-        [_create('bill')],
-      );
-      // 30.00 split two ways: Mira carries 15.00 and owes it.
-      expect(overlaid.people.single.balanceCents, 1500);
-      expect(overlaid.owedToYouCents, 1500);
-      expect(overlaid.netCents, 1500);
-    });
-
-    test('a bill someone else paid puts the user in debt for their own slice', () {
-      final overlaid = overlayMoney(
-        _overview(people: [_balance('mira')]),
-        [
-          _create(
-            'bill',
-            write: _write(
-              amountCents: 4000,
-              paidByPersonId: 'mira',
-              participants: const [SplitParticipant(personId: 'mira')],
-            ),
-          ),
-        ],
-      );
-      expect(overlaid.people.single.balanceCents, -2000);
-      expect(overlaid.youOweCents, 2000);
-      expect(overlaid.owedToYouCents, 0);
-    });
-
-    test('a gifted slice is recorded but never becomes a debt', () {
-      final overlaid = overlayMoney(
-        _overview(people: [_balance('sara')]),
-        [
-          _create(
-            'bill',
-            write: _write(
-              amountCents: 2000,
-              participants: const [
-                SplitParticipant(personId: 'sara', gifted: true),
-              ],
-            ),
-          ),
-        ],
-      );
-      expect(overlaid.people.single.balanceCents, 0);
-      expect(overlaid.people.single.coveredCents, 1000);
-      expect(overlaid.coveredCents, 1000);
-    });
-
-    test('editing a bill takes the old effect back out before adding the new', () {
-      final original = _create('bill', write: _write(amountCents: 3000));
-      final overlaid = overlayMoney(_overview(people: [_balance('mira')]), [
-        UpdateExpense(
-          expenseId: 'bill',
-          write: _write(amountCents: 9000),
-          previous: original.expense,
-          queuedAt: _at,
-        ),
-      ]);
-      // The server's copy already held the 15.00 from the original, so only
-      // the difference should show — but the server copy here is zero, so the
-      // reversal leaves the new share minus the old one.
-      expect(overlaid.people.single.balanceCents, 4500 - 1500);
-    });
-
-    test('deleting a bill takes its effect back out', () {
-      final existing = _create('bill').expense;
-      final overlaid = overlayMoney(
-        _overview(people: [_balance('mira', cents: 1500)]),
-        [DeleteExpense(previous: existing, queuedAt: _at)],
-      );
-      expect(overlaid.people.single.balanceCents, 0);
-      expect(overlaid.owedToYouCents, 0);
-    });
-
-    test('a payback moves the balance back toward zero', () {
-      final overlaid = overlayMoney(
-        _overview(people: [_balance('mira', cents: 3000)]),
-        [
-          CreateSettlement(
-            settlement: Settlement(
-              id: 'paid',
-              personId: 'mira',
-              amountCents: 3000,
-              direction: SettlementDirection.toMe,
-              dateKey: '2026-08-27',
-              notes: '',
-              createdAt: _at,
-            ),
-            queuedAt: _at,
-          ),
-        ],
-      );
-      expect(overlaid.people.single.balanceCents, 0);
-      expect(overlaid.isSettled, isTrue);
-    });
-
-    test('someone added offline is in the list before the server hears of them', () {
-      final overlaid = overlayMoney(_overview(), [
-        CreatePerson(person: _person('new', name: 'Ines'), queuedAt: _at),
-      ]);
-      expect(overlaid.people.single.person.name, 'Ines');
-    });
-
-    test('removing someone who carries a balance archives them instead', () {
-      final overlaid = overlayMoney(
-        _overview(people: [_balance('mira', cents: 1200)]),
-        [DeletePerson(personId: 'mira', queuedAt: _at)],
-      );
-      expect(overlaid.people.single.person.archived, isTrue);
-      // The number does not vanish and reappear on the next refresh.
-      expect(overlaid.owedToYouCents, 1200);
-    });
-
-    test('removing someone with nothing attached takes them off the list', () {
-      final overlaid = overlayMoney(
-        _overview(people: [_balance('mira')]),
-        [DeletePerson(personId: 'mira', queuedAt: _at)],
-      );
-      expect(overlaid.people, isEmpty);
-    });
-
-    test('the biggest outstanding balance still sorts first', () {
-      final overlaid = overlayMoney(
-        _overview(
-          people: [_balance('small', cents: 100), _balance('big', cents: 9000)],
-        ),
-        [_create('bill')],
-      );
-      expect(overlaid.people.first.id, 'big');
-    });
-  });
-
-  group('overlaying the bill feed', () {
-    test('a bill entered offline is at the top of the feed', () {
-      final feed = overlayExpenses(
-        [
-          Expense(
-            id: 'old',
-            description: 'Old',
-            amountCents: 1000,
-            dateKey: '2026-08-01',
-            paidByPersonId: null,
-            groupId: null,
-            splitMode: SplitMode.equal,
-            myShareCents: 1000,
-            notes: '',
-            shares: const [],
-            createdAt: DateTime(2026, 8, 1),
-          ),
-        ],
-        [_create('bill')],
-      );
-      expect(feed.first.id, 'bill');
-      expect(feed, hasLength(2));
-    });
-
-    test('a filtered feed only shows bills that person is on', () {
-      final feed = overlayExpenses(
-        const [],
-        [_create('bill')],
-        personId: 'jonas',
-      );
-      expect(feed, isEmpty);
-    });
-  });
 
   group('remapping ids the server renamed', () {
     test('a queued bill follows the person to their real id', () {

@@ -78,13 +78,20 @@ export const DELETE = moneyRoute<[Params]>(
     if (!person) return mobileJson({ deleted: true });
 
     const [shares, paid, settlements] = await Promise.all([
-      db.expenseShare.count({ where: { personId: id } }),
+      db.expenseShare.count({
+        where: { personId: id, expense: { deletedAt: null } },
+      }),
       db.expense.count({ where: { paidByPersonId: id } }),
       db.settlement.count({ where: { personId: id } }),
     ]);
 
     if (shares + paid + settlements === 0) {
-      await db.person.delete({ where: { id } });
+      await db.$transaction([
+        // Pure join rows with no history worth keeping, and the one reference
+        // a deleted person can still leave dangling.
+        db.groupMember.deleteMany({ where: { personId: id } }),
+        db.person.update({ where: { id }, data: { deletedAt: new Date() } }),
+      ]);
       return mobileJson({ deleted: true });
     }
 

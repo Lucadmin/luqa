@@ -22,14 +22,14 @@ final remoteGymRepositoryProvider = Provider<GymRepository>(
 final gymCacheProvider = Provider<GymCache>((ref) {
   final userId = ref.watch(_namespaceProvider);
   if (userId == null) return const NullGymCache();
-  return SharedPreferencesGymCache(namespace: userId);
+  return SqliteGymCache(namespace: userId);
 });
 
 final gymOutboxProvider = Provider<Outbox<GymMutation>>((ref) {
   final userId = ref.watch(_namespaceProvider);
   // Queueing a write with nobody to send it as would strand it for ever.
   if (userId == null) return const NullOutbox();
-  return SharedPreferencesGymOutbox(namespace: userId);
+  return SqliteGymOutbox(namespace: userId);
 });
 
 /// Where an abandoned write is recorded so the user can still be told about
@@ -38,7 +38,7 @@ final gymOutboxProvider = Provider<Outbox<GymMutation>>((ref) {
 final gymDiscardLogProvider = Provider<DiscardLog>((ref) {
   final userId = ref.watch(_namespaceProvider);
   if (userId == null) return const NullDiscardLog();
-  return SharedPreferencesDiscardLog(key: 'gym', namespace: userId);
+  return SqliteDiscardLog(key: 'gym', namespace: userId);
 });
 
 /// What screens use. Writes land here and return immediately.

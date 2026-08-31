@@ -118,7 +118,10 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  await db.gymSession.delete({ where: { id } });
+  await db.gymSession.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
 
   return NextResponse.json({ deleted: true });
 }

@@ -26,6 +26,11 @@ tags:
       server never pulls from a provider.
   - name: Gym
     description: Location-aware workout logging, exercise history, and gyms.
+  - name: Sync
+    description: >-
+      Incremental replication. One cursor per collection, so a device that has
+      been offline fetches only what changed rather than everything it already
+      has.
   - name: Money
     description: >-
       Shared expenses: who owes whom, the bills behind it, and the paybacks
@@ -963,6 +968,96 @@ paths:
           description: Gone, or already gone.
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /sync:
+    get:
+      operationId: syncChanges
+      tags: [Sync]
+      summary: Everything that changed since the cursors the caller holds
+      description: >-
+        The delta feed. A device keeps one cursor per collection and asks for
+        what changed since; omitting a cursor asks for that collection from the
+        beginning, which is what a fresh install does.
+
+
+        Cursors are opaque and per collection, passed as `cursor.<name>`. A
+        collection that reaches `limit` answers `hasMore: true` and is asked
+        again with the cursor it returned. A cursor that cannot be read is
+        treated as absent — the collection resyncs from the start, which is
+        slow but always correct.
+
+
+        Rows and deletions are reported separately: `rows` carries the current
+        state of anything created or changed, `deleted` carries the ids of rows
+        that went away so a device can drop its copies.
+      parameters:
+        - name: collections
+          in: query
+          required: false
+          description: >-
+            Comma-separated subset to sync. Defaults to all of them. Unknown
+            names are ignored.
+          schema:
+            type: string
+            example: people,expenses
+        - name: limit
+          in: query
+          required: false
+          description: Maximum rows per collection per request.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+        - name: cursor.categories
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor.people
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor.groups
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor.gymLocations
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor.exercises
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor.timeEntries
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor.sleepEntries
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor.expenses
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor.settlements
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor.gymSessions
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Changes per collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     mobileBearer:
@@ -2565,5 +2660,280 @@ components:
       properties:
         error:
           $ref: "#/components/schemas/ErrorDetail"
+    CategoryDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/Category"
+        deleted:
+          type: array
+          description: Ids of rows that went away.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    PersonDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/Person"
+        deleted:
+          type: array
+          description: Ids of rows that went away.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    PersonGroupDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/PersonGroup"
+        deleted:
+          type: array
+          description: Ids of rows that went away.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    GymLocationDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/GymLocation"
+        deleted:
+          type: array
+          description: Ids of rows that went away.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    GymExerciseDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/GymExerciseReference"
+        deleted:
+          type: array
+          description: Ids of rows that went away.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    TimeEntryDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/TimeEntry"
+        deleted:
+          type: array
+          description: Ids of rows that went away.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    SleepEntryDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/SleepEntry"
+        deleted:
+          type: array
+          description: Ids of rows that went away.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    ExpenseDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/Expense"
+        deleted:
+          type: array
+          description: Ids of rows that went away.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    SettlementDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/Settlement"
+        deleted:
+          type: array
+          description: Ids of rows that went away.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    GymSessionDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/GymSession"
+        deleted:
+          type: array
+          description: Ids of rows that went away.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    SyncCollections:
+      type: object
+      description: >-
+        Every collection the caller asked for. A collection that was not asked
+        for is absent rather than empty, so a narrowed sync cannot be mistaken
+        for one that found nothing.
+      properties:
+        categories:
+          $ref: "#/components/schemas/CategoryDelta"
+        people:
+          $ref: "#/components/schemas/PersonDelta"
+        groups:
+          $ref: "#/components/schemas/PersonGroupDelta"
+        gymLocations:
+          $ref: "#/components/schemas/GymLocationDelta"
+        exercises:
+          $ref: "#/components/schemas/GymExerciseDelta"
+        timeEntries:
+          $ref: "#/components/schemas/TimeEntryDelta"
+        sleepEntries:
+          $ref: "#/components/schemas/SleepEntryDelta"
+        expenses:
+          $ref: "#/components/schemas/ExpenseDelta"
+        settlements:
+          $ref: "#/components/schemas/SettlementDelta"
+        gymSessions:
+          $ref: "#/components/schemas/GymSessionDelta"
+    SyncSettings:
+      type: object
+      description: >-
+        Account-level values no collection carries, but a screen rendered
+        entirely from the device still needs.
+      required: [currency]
+      properties:
+        currency:
+          type: string
+          description: ISO 4217 code the amounts are in.
+    SyncResponse:
+      type: object
+      required: [settings, collections]
+      properties:
+        settings:
+          $ref: "#/components/schemas/SyncSettings"
+        collections:
+          $ref: "#/components/schemas/SyncCollections"
 security:
   - mobileBearer: []

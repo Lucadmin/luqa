@@ -76,13 +76,18 @@ export async function DELETE(
   if (!person) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const [shares, paid, settlements] = await Promise.all([
-    db.expenseShare.count({ where: { personId: id } }),
+    db.expenseShare.count({
+        where: { personId: id, expense: { deletedAt: null } },
+      }),
     db.expense.count({ where: { paidByPersonId: id } }),
     db.settlement.count({ where: { personId: id } }),
   ]);
 
   if (shares + paid + settlements === 0) {
-    await db.person.delete({ where: { id } });
+    await db.$transaction([
+      db.groupMember.deleteMany({ where: { personId: id } }),
+      db.person.update({ where: { id }, data: { deletedAt: new Date() } }),
+    ]);
     return NextResponse.json({ deleted: true });
   }
 

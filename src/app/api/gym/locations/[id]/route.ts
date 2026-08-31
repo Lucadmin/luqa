@@ -77,6 +77,9 @@ export async function DELETE(
     return NextResponse.json({ deleted: false, archived: true });
   }
 
-  await db.gymLocation.delete({ where: { id } });
+  await db.gymLocation.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
   return NextResponse.json({ deleted: true, archived: false });
 }

@@ -117,6 +117,13 @@ abstract interface class LuqaApi {
   );
 
   Future<void> deleteSettlement(String id);
+
+  /// Everything that changed since the cursors this device holds.
+  Future<api.SyncResponse> syncChanges({
+    String? collections,
+    int? limit,
+    Map<String, String> cursors = const {},
+  });
 }
 
 class LuqaApiClient implements LuqaApi {
@@ -135,6 +142,10 @@ class LuqaApiClient implements LuqaApi {
   }
 
   static const _requestTimeout = Duration(seconds: 15);
+
+  /// Health pushes and sync pages both carry far more than an ordinary
+  /// request — and a first sync walks the whole history — so they get longer
+  /// before they are called dead.
   static const _syncTimeout = Duration(seconds: 60);
   static const _refreshLeeway = Duration(seconds: 30);
 
@@ -449,6 +460,34 @@ class LuqaApiClient implements LuqaApi {
     ).updateGymLocation(id, request).timeout(_requestTimeout);
     if (response == null) throw api.ApiException(500, 'Empty response');
     return response.location;
+  });
+
+  @override
+  Future<api.SyncResponse> syncChanges({
+    String? collections,
+    int? limit,
+    Map<String, String> cursors = const {},
+  }) => _authorized((client) async {
+    final response = await api.SyncApi(client)
+        .syncChanges(
+          collections: collections,
+          limit: limit,
+          cursorPeriodCategories: cursors['categories'],
+          cursorPeriodPeople: cursors['people'],
+          cursorPeriodGroups: cursors['groups'],
+          cursorPeriodGymLocations: cursors['gymLocations'],
+          cursorPeriodExercises: cursors['exercises'],
+          cursorPeriodTimeEntries: cursors['timeEntries'],
+          cursorPeriodSleepEntries: cursors['sleepEntries'],
+          cursorPeriodExpenses: cursors['expenses'],
+          cursorPeriodSettlements: cursors['settlements'],
+          cursorPeriodGymSessions: cursors['gymSessions'],
+        )
+        // A first sync pages through history, so it is given more room than an
+        // ordinary request before it is called dead.
+        .timeout(_syncTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response;
   });
 
   @override

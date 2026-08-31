@@ -1,18 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:luqa/core/network/luqa_api_client.dart';
+import 'package:luqa/core/storage/luqa_store.dart';
 import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/money/data/local_first_money_repository.dart';
-import 'package:luqa/features/money/data/money_cache.dart';
+import 'package:luqa/features/money/data/money_fold.dart';
+import 'package:luqa/features/money/data/money_local_store.dart';
 import 'package:luqa/features/money/data/money_outbox.dart';
-import 'package:luqa/features/money/data/money_overlay.dart';
 import 'package:luqa/features/money/data/money_repository.dart';
+import 'package:luqa/features/money/data/money_sync_service.dart';
 import 'package:luqa/features/money/domain/money_models.dart';
 import 'package:luqa/features/money/domain/money_split.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import '../../helpers/fake_money_repository.dart';
-
-/// A queue that folds and keeps, without the engine's timers or network.
+/// Stands in for the sync engine's queue: folds like the real one, keeps what
+/// it is given, and never sends anything.
 class _TestQueue implements MutationQueue<MoneyMutation> {
-  final List<MoneyMutation> _queue = [];
+  List<MoneyMutation> _queue = const [];
 
   @override
   Future<void> get ready async {}
@@ -22,235 +25,355 @@ class _TestQueue implements MutationQueue<MoneyMutation> {
 
   @override
   Future<void> enqueue(MoneyMutation mutation) async {
-    final folded = foldMoney(_queue, mutation);
-    _queue
-      ..clear()
-      ..addAll(folded);
+    _queue = foldMoney(_queue, mutation);
   }
 }
 
-class _MemoryCache implements MoneyCache {
-  MoneyOverview? overview;
-  List<Expense>? expenses;
-
+/// A network that is never reached. Every read in these tests is answered from
+/// the device, which is the whole claim being tested.
+class _UnreachableApi implements LuqaApi {
   @override
-  Future<MoneyOverview?> readOverview() async => overview;
-
-  @override
-  Future<void> writeOverview(MoneyOverview value) async => overview = value;
-
-  @override
-  Future<List<Expense>?> readExpenses() async => expenses;
-
-  @override
-  Future<void> writeExpenses(List<Expense> value) async => expenses = value;
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
 
-({
-  LocalFirstMoneyRepository repository,
-  FakeMoneyRepository remote,
-  _MemoryCache cache,
-  _TestQueue queue,
-})
-_build() {
-  final remote = FakeMoneyRepository.sample();
-  final cache = _MemoryCache();
-  final queue = _TestQueue();
-  var minted = 0;
-  return (
-    repository: LocalFirstMoneyRepository(
-      remote: remote,
-      cache: cache,
-      queue: queue,
-      mintId: () => 'local-${++minted}',
-      now: () => DateTime(2026, 8, 27, 12),
-    ),
-    remote: remote,
-    cache: cache,
-    queue: queue,
-  );
-}
+final _now = DateTime(2026, 8, 27, 12);
 
-ExpenseWrite _dinner({int amountCents = 3000}) => ExpenseWrite(
-  description: 'Dinner',
+ExpenseWrite _bill({
+  required int amountCents,
+  String description = 'Dinner',
+  String? paidByPersonId,
+  List<SplitParticipant> participants = const [],
+  bool includeMe = true,
+  SplitMode splitMode = SplitMode.equal,
+}) => ExpenseWrite(
+  description: description,
   amountCents: amountCents,
   dateKey: '2026-08-27',
-  paidByPersonId: null,
+  paidByPersonId: paidByPersonId,
   groupId: null,
-  splitMode: SplitMode.equal,
-  includeMe: true,
-  participants: const [SplitParticipant(personId: 'mira')],
+  splitMode: splitMode,
+  includeMe: includeMe,
+  participants: participants,
   notes: '',
 );
 
 void main() {
-  test('a bill is answered from the device, not the network', () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    remote.failure = StateError('no signal');
+  sqfliteFfiInit();
 
-    final expense = await repository.createExpense(write: _dinner());
+  late LuqaStore store;
+  late MoneyLocalStore local;
+  late _TestQueue queue;
+  late LocalFirstMoneyRepository repository;
 
-    expect(expense.id, 'local-1');
-    expect(expense.myShareCents, 1500);
-    expect(expense.shares.single.amountCents, 1500);
-    expect(queue.pending, hasLength(1));
-    // Nothing was attempted over the wire; the queue owns the sending.
-    expect(remote.savedExpenses, isEmpty);
-  });
-
-  test('the overview reads through to the cache when the network is gone',
-      () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    await repository.loadOverview();
-    expect(cache.overview, isNotNull);
-
-    remote.failure = StateError('no signal');
-    final offline = await repository.loadOverview();
-    expect(offline.people, hasLength(3));
-    expect(offline.owedToYouCents, 4800);
-  });
-
-  test('a bill entered offline is in the balances on the next read', () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    await repository.loadOverview();
-
-    remote.failure = StateError('no signal');
-    await repository.createExpense(write: _dinner());
-
-    final overview = await repository.loadOverview();
-    final mira = overview.people.firstWhere((p) => p.id == 'mira');
-    // 30.00 owed 15.00, on top of the 30.00 the server already knew about.
-    expect(mira.balanceCents, 4500);
-    expect(overview.owedToYouCents, 6300);
-  });
-
-  test('a fresh install with only queued work still has a screen to paint',
-      () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    expect(await repository.queuedOverview(), isNull);
-
-    await repository.createPerson(
-      write: const PersonWrite(
-        name: 'Ines',
-        colorValue: 0xFF2563EB,
-        emoji: null,
-        defaultPercent: null,
-      ),
+  setUp(() {
+    store = LuqaStore(factory: databaseFactoryFfi, path: inMemoryDatabasePath);
+    addTearDown(store.close);
+    local = MoneyLocalStore(namespace: 'user-a', store: store);
+    queue = _TestQueue();
+    repository = LocalFirstMoneyRepository(
+      store: local,
+      sync: MoneySyncService(client: _UnreachableApi(), store: local),
+      queue: queue,
+      now: () => _now,
     );
-
-    final queued = await repository.queuedOverview();
-    expect(queued, isNotNull);
-    expect(queued!.people.single.person.name, 'Ines');
   });
 
-  test('re-deriving after a write never drops the people the server knows',
-      () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    await repository.loadOverview();
-    // The disk is unreadable from here on — a rare failure, but one that must
-    // not blank a screen that is already correct.
-    cache.overview = null;
+  /// Someone to split bills with, already on the device.
+  Future<Person> givenPerson(String name) => repository.createPerson(
+    write: PersonWrite(
+      name: name,
+      colorValue: 0xFF112233,
+      emoji: null,
+      defaultPercent: null,
+    ),
+  );
 
-    await repository.createExpense(write: _dinner());
+  group('writing', () {
+    test('a bill split with no network is on the screen and in the queue',
+        () async {
+      final mira = await givenPerson('Mira');
 
-    // Nothing to re-derive from is answered with nothing, so the caller keeps
-    // what it already has rather than adopting an overview built from a queue.
-    expect(await repository.cachedOverview(), isNull);
+      final saved = await repository.createExpense(
+        write: _bill(
+          amountCents: 3000,
+          participants: [SplitParticipant(personId: mira.id)],
+        ),
+      );
+
+      final page = await repository.loadExpenses();
+      expect(page.expenses.single.id, saved.id);
+      expect(page.expenses.single.description, 'Dinner');
+      // Queued as well as stored: the server still has to hear about it.
+      expect(queue.pending.whereType<CreateExpense>(), hasLength(1));
+    });
+
+    test('the balance moves the moment the bill is entered', () async {
+      final mira = await givenPerson('Mira');
+
+      await repository.createExpense(
+        write: _bill(
+          amountCents: 3000,
+          participants: [SplitParticipant(personId: mira.id)],
+        ),
+      );
+
+      final overview = await repository.loadOverview();
+      // Split two ways: half the bill is hers, and the user fronted it.
+      expect(overview.balanceOf(mira.id)!.balanceCents, 1500);
+      expect(overview.owedToYouCents, 1500);
+      expect(overview.youOweCents, 0);
+    });
+
+    test('editing a bill down does not leave the old amount behind', () async {
+      // The failure the overlay needed a `previous` snapshot to avoid. Summing
+      // the rows cannot get this wrong: there is only ever one row.
+      final mira = await givenPerson('Mira');
+      final saved = await repository.createExpense(
+        write: _bill(
+          amountCents: 5000,
+          participants: [SplitParticipant(personId: mira.id)],
+        ),
+      );
+      expect((await repository.loadOverview()).owedToYouCents, 2500);
+
+      await repository.updateExpense(
+        saved.id,
+        _bill(
+          amountCents: 3000,
+          participants: [SplitParticipant(personId: mira.id)],
+        ),
+      );
+
+      expect((await repository.loadOverview()).owedToYouCents, 1500);
+      expect((await repository.loadExpenses()).expenses, hasLength(1));
+    });
+
+    test('a deleted bill stops counting immediately', () async {
+      final mira = await givenPerson('Mira');
+      final saved = await repository.createExpense(
+        write: _bill(
+          amountCents: 4000,
+          participants: [SplitParticipant(personId: mira.id)],
+        ),
+      );
+
+      await repository.deleteExpense(saved.id);
+
+      expect((await repository.loadOverview()).owedToYouCents, 0);
+      expect((await repository.loadExpenses()).expenses, isEmpty);
+    });
+
+    test('adding someone the device already knows is the same person',
+        () async {
+      final first = await givenPerson('Mira');
+      final again = await givenPerson('mira');
+
+      expect(again.id, first.id);
+      expect((await repository.loadOverview()).people, hasLength(1));
+    });
   });
 
-  test('adding somebody the device already knows returns them, not a twin',
-      () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    await repository.loadOverview();
+  group('the balance rules', () {
+    test('when someone else paid, only the user own slice is owed', () async {
+      final mira = await givenPerson('Mira');
 
-    final person = await repository.createPerson(
-      write: const PersonWrite(
-        name: 'mira',
-        colorValue: 0xFF2563EB,
-        emoji: null,
-        defaultPercent: null,
-      ),
-    );
+      await repository.createExpense(
+        write: _bill(
+          amountCents: 3000,
+          paidByPersonId: mira.id,
+          participants: [SplitParticipant(personId: mira.id)],
+        ),
+      );
 
-    expect(person.id, 'mira');
-    expect(queue.pending, isEmpty);
+      final overview = await repository.loadOverview();
+      // She fronted it, so the user owes their half rather than being owed.
+      expect(overview.balanceOf(mira.id)!.balanceCents, -1500);
+      expect(overview.youOweCents, 1500);
+      expect(overview.owedToYouCents, 0);
+    });
+
+    test('a treat is recorded but never becomes a debt', () async {
+      final mira = await givenPerson('Mira');
+
+      await repository.createExpense(
+        write: _bill(
+          amountCents: 3000,
+          participants: [SplitParticipant(personId: mira.id, gifted: true)],
+        ),
+      );
+
+      final overview = await repository.loadOverview();
+      expect(overview.balanceOf(mira.id)!.balanceCents, 0);
+      expect(overview.balanceOf(mira.id)!.coveredCents, 1500);
+      expect(overview.coveredCents, 1500);
+      expect(overview.owedToYouCents, 0);
+    });
+
+    test('a payback moves the balance back toward zero', () async {
+      final mira = await givenPerson('Mira');
+      await repository.createExpense(
+        write: _bill(
+          amountCents: 4000,
+          participants: [SplitParticipant(personId: mira.id)],
+        ),
+      );
+
+      await repository.createSettlement(
+        write: SettlementWrite(
+          personId: mira.id,
+          amountCents: 2000,
+          direction: SettlementDirection.toMe,
+          dateKey: '2026-08-28',
+          notes: '',
+        ),
+      );
+
+      expect((await repository.loadOverview()).balanceOf(mira.id)!.balanceCents, 0);
+    });
+
+    test('two people on one bill each carry their own slice', () async {
+      final mira = await givenPerson('Mira');
+      final tom = await givenPerson('Tom');
+
+      await repository.createExpense(
+        write: _bill(
+          amountCents: 3000,
+          participants: [
+            SplitParticipant(personId: mira.id),
+            SplitParticipant(personId: tom.id),
+          ],
+        ),
+      );
+
+      final overview = await repository.loadOverview();
+      expect(overview.balanceOf(mira.id)!.balanceCents, 1000);
+      expect(overview.balanceOf(tom.id)!.balanceCents, 1000);
+      expect(overview.owedToYouCents, 2000);
+    });
   });
 
-  test('editing an unsent bill leaves exactly one request to send', () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    final created = await repository.createExpense(write: _dinner());
-    await repository.updateExpense(
-      created.id,
-      _dinner(amountCents: 9000),
-    );
+  group('the ledger', () {
+    test('shows the bills and paybacks that made the balance', () async {
+      final mira = await givenPerson('Mira');
+      await repository.createExpense(
+        write: _bill(
+          amountCents: 4000,
+          participants: [SplitParticipant(personId: mira.id)],
+        ),
+      );
+      await repository.createSettlement(
+        write: SettlementWrite(
+          personId: mira.id,
+          amountCents: 500,
+          direction: SettlementDirection.toMe,
+          dateKey: '2026-08-28',
+          notes: '',
+        ),
+      );
 
-    expect(queue.pending, hasLength(1));
-    final pending = queue.pending.single as CreateExpense;
-    expect(pending.write.amountCents, 9000);
-    expect(pending.expense.myShareCents, 4500);
+      final ledger = await repository.loadLedger(mira.id);
+      expect(ledger.items, hasLength(2));
+      // Newest first: the payback came the day after the bill.
+      expect(ledger.items.first.isSettlement, isTrue);
+      expect(ledger.balanceCents, 1500);
+    });
   });
 
-  test('deleting a bill that never synced empties the queue', () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    final created = await repository.createExpense(write: _dinner());
-    await repository.deleteExpense(created.id);
+  group('what the delta feed is allowed to touch', () {
+    test('a synced row is replaced by the server copy', () async {
+      await local.applyPeople([
+        const Person(
+          id: 'p1',
+          name: 'Mira',
+          colorValue: 0xFF000000,
+          emoji: null,
+          defaultPercent: null,
+          order: 0,
+          archived: false,
+        ),
+      ], const []);
 
-    expect(queue.pending, isEmpty);
-    expect(remote.deletedExpenses, isEmpty);
+      await local.applyPeople([
+        const Person(
+          id: 'p1',
+          name: 'Mira Renamed',
+          colorValue: 0xFF000000,
+          emoji: null,
+          defaultPercent: null,
+          order: 0,
+          archived: false,
+        ),
+      ], const []);
+
+      expect((await local.people()).single.name, 'Mira Renamed');
+    });
+
+    test('a row this device has changed is left alone', () async {
+      // The local copy is the newer one until the queue drains; a delta that
+      // overwrote it would undo something the user just did.
+      final mira = await givenPerson('Mira');
+      await repository.updatePerson(id: mira.id, name: 'Mira Locally');
+
+      await local.applyPeople([
+        Person(
+          id: mira.id,
+          name: 'Mira From Server',
+          colorValue: 0xFF000000,
+          emoji: null,
+          defaultPercent: null,
+          order: 0,
+          archived: false,
+        ),
+      ], const []);
+
+      expect((await local.people()).single.name, 'Mira Locally');
+    });
+
+    test('a deletion the server reports removes the row here', () async {
+      await local.applyPeople([
+        const Person(
+          id: 'p1',
+          name: 'Mira',
+          colorValue: 0xFF000000,
+          emoji: null,
+          defaultPercent: null,
+          order: 0,
+          archived: false,
+        ),
+      ], const []);
+
+      await local.applyPeople(const [], const ['p1']);
+
+      expect(await local.people(), isEmpty);
+    });
+
+    test('a deletion cannot undo a local change that has not been sent',
+        () async {
+      final mira = await givenPerson('Mira');
+      await repository.updatePerson(id: mira.id, name: 'Still Here');
+
+      await local.applyPeople(const [], [mira.id]);
+
+      expect((await local.people()).single.name, 'Still Here');
+    });
   });
 
-  test('deleting a bill the server holds queues the delete', () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    final page = await repository.loadExpenses();
-    expect(page.expenses, isNotEmpty);
+  group('an id the server chose instead', () {
+    test('everything pointing at the invented one follows it', () async {
+      final mira = await givenPerson('Mira');
+      await repository.createExpense(
+        write: _bill(
+          amountCents: 3000,
+          participants: [SplitParticipant(personId: mira.id)],
+        ),
+      );
 
-    await repository.deleteExpense('dinner');
+      await local.remapId('money_person', mira.id, 'server-mira');
 
-    expect(queue.pending.single, isA<DeleteExpense>());
-    // The balance it produced comes back out straight away.
-    final overview = await repository.loadOverview();
-    final mira = overview.people.firstWhere((p) => p.id == 'mira');
-    expect(mira.balanceCents, 0);
-  });
-
-  test('a payback clears the balance before it is sent', () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    await repository.loadOverview();
-    remote.failure = StateError('no signal');
-
-    await repository.createSettlement(
-      write: const SettlementWrite(
-        personId: 'mira',
-        amountCents: 3000,
-        direction: SettlementDirection.toMe,
-        dateKey: '2026-08-27',
-        notes: '',
-      ),
-    );
-
-    final overview = await repository.loadOverview();
-    expect(overview.balanceOf('mira')!.balanceCents, 0);
-  });
-
-  test('the bill feed keeps its cursor and does not overlay deeper pages',
-      () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    await repository.createExpense(write: _dinner());
-
-    final first = await repository.loadExpenses();
-    expect(first.expenses.first.id, 'local-1');
-
-    final deeper = await repository.loadExpenses(cursor: 'page-2');
-    expect(deeper.expenses.any((e) => e.id == 'local-1'), isFalse);
-  });
-
-  test('a person ledger carries unsent work', () async {
-    final (:repository, :remote, :cache, :queue) = _build();
-    await repository.createExpense(write: _dinner());
-
-    final ledger = await repository.loadLedger('mira');
-    expect(ledger.items.first.id, 'local-1');
-    // 30.00 on the server plus 15.00 not yet sent.
-    expect(ledger.balanceCents, 4500);
+      final overview = await repository.loadOverview();
+      expect(overview.people.single.id, 'server-mira');
+      // The bill followed her, so the balance is still hers.
+      expect(overview.balanceOf('server-mira')!.balanceCents, 1500);
+    });
   });
 }

@@ -19,7 +19,7 @@ final remoteTodayRepositoryProvider = Provider<RemoteTodayRepository>((ref) {
   final userId = ref.watch(_namespaceProvider);
   return RemoteTodayRepository(
     client: ref.watch(luqaApiProvider),
-    cache: SharedPreferencesTimelineCache(namespace: userId ?? 'signed-out'),
+    cache: SqliteTimelineCache(namespace: userId ?? 'signed-out'),
   );
 });
 
@@ -27,7 +27,7 @@ final outboxProvider = Provider<Outbox<TimelineMutation>>((ref) {
   final userId = ref.watch(_namespaceProvider);
   // Queueing a write with nobody to send it as would strand it for ever.
   if (userId == null) return const NullOutbox();
-  return SharedPreferencesOutbox(
+  return SqliteOutbox(
     key: 'timeline',
     namespace: userId,
     decode: TimelineMutation.fromJson,
@@ -40,7 +40,7 @@ final outboxProvider = Provider<Outbox<TimelineMutation>>((ref) {
 final discardLogProvider = Provider<DiscardLog>((ref) {
   final userId = ref.watch(_namespaceProvider);
   if (userId == null) return const NullDiscardLog();
-  return SharedPreferencesDiscardLog(key: 'timeline', namespace: userId);
+  return SqliteDiscardLog(key: 'timeline', namespace: userId);
 });
 
 /// What screens use. Writes land here and return immediately.

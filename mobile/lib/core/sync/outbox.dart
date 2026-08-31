@@ -1,7 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:luqa/core/storage/legacy_preferences.dart';
+import 'package:luqa/core/storage/luqa_store.dart';
 
 /// A write that has already happened on this device and still has to reach the
 /// server.
@@ -85,31 +86,90 @@ abstract interface class DiscardLog {
   Future<void> write(List<DiscardedWrite> entries);
 }
 
-class SharedPreferencesDiscardLog implements DiscardLog {
-  SharedPreferencesDiscardLog({
+/// Durable home for a queue.
+abstract interface class Outbox<T extends PendingMutation> {
+  Future<List<T>> read();
+
+  Future<void> write(List<T> queue);
+}
+
+/// The rows of one durable list, which is all either store here actually
+/// needs from the database.
+///
+/// Rows rather than one blob is the whole gain: a record that will not parse
+/// is skipped on its own, where an unreadable JSON array took the entire
+/// queue with it, and a rewrite is a transaction rather than a file that can
+/// be caught half-written.
+class _RecordList {
+  _RecordList({
+    required this.namespace,
+    required this.collection,
+    LuqaStore? store,
+  }) : _store = store ?? LuqaStore.shared;
+
+  final String namespace;
+  final String collection;
+  final LuqaStore _store;
+
+  /// Anything an earlier build left in shared preferences, moved across before
+  /// the first read can conclude the queue is empty.
+  late final Future<void> _migrated = LegacyPreferences.migrate(
+    _store,
+    namespace,
+  );
+
+  Future<List<Map<String, Object?>>> read() async {
+    await _migrated;
+    final rows = await _store.readRecords(
+      namespace: namespace,
+      collection: collection,
+    );
+    final items = <Map<String, Object?>>[];
+    for (final row in rows) {
+      try {
+        items.add(jsonDecode(row)! as Map<String, Object?>);
+      } on Object {
+        // One unreadable row is one lost write, not a lost queue.
+        continue;
+      }
+    }
+    return items;
+  }
+
+  Future<void> write(List<Map<String, Object?>> items) async {
+    await _migrated;
+    await _store.replaceRecords(
+      namespace: namespace,
+      collection: collection,
+      values: [for (final item in items) jsonEncode(item)],
+    );
+  }
+}
+
+class SqliteDiscardLog implements DiscardLog {
+  SqliteDiscardLog({
     required String key,
     required String namespace,
-    SharedPreferencesAsync? preferences,
-  }) : _store = _JsonListStore(
-         key:
-             'luqa.discarded.$key.v1.'
-             '${base64Url.encode(utf8.encode(namespace))}',
-         preferences: preferences,
+    LuqaStore? store,
+  }) : _records = _RecordList(
+         namespace: namespace,
+         collection: 'discarded.$key',
+         store: store,
        );
 
   /// Enough to explain what went missing; a log nobody is reading is not worth
   /// growing without bound.
   static const _limit = 20;
 
-  final _JsonListStore _store;
+  final _RecordList _records;
 
   @override
   Future<List<DiscardedWrite>> read() async => [
-    for (final item in await _store.read()) ?DiscardedWrite.fromJson(item),
+    for (final item in await _records.read()) ?DiscardedWrite.fromJson(item),
   ];
 
   @override
-  Future<void> write(List<DiscardedWrite> entries) => _store.write([
+  Future<void> write(List<DiscardedWrite> entries) => _records.write([
     for (final entry in entries.take(_limit)) entry.toJson(),
   ]);
 }
@@ -125,80 +185,31 @@ class NullDiscardLog implements DiscardLog {
   Future<void> write(List<DiscardedWrite> entries) async {}
 }
 
-/// Durable home for a queue.
-abstract interface class Outbox<T extends PendingMutation> {
-  Future<List<T>> read();
-
-  Future<void> write(List<T> queue);
-}
-
-/// A namespaced list of JSON objects on disk, which is all either durable
-/// store here actually needs.
-class _JsonListStore {
-  _JsonListStore({required String key, SharedPreferencesAsync? preferences})
-    // ignore: prefer_initializing_formals
-    : _key = key,
-      _injected = preferences;
-
-  final String _key;
-  final SharedPreferencesAsync? _injected;
-
-  // Deferred: building the store is not the same as needing the platform
-  // channel, and a provider that merely exists must not require one.
-  late final SharedPreferencesAsync _preferences =
-      _injected ?? SharedPreferencesAsync();
-
-  Future<List<Map<String, Object?>>> read() async {
-    final encoded = await _preferences.getString(_key);
-    if (encoded == null) return const [];
-    try {
-      return [
-        for (final item in jsonDecode(encoded) as List<Object?>)
-          item! as Map<String, Object?>,
-      ];
-    } on Object {
-      // Unreadable: dropping it loses records, but keeping it would block
-      // every future write behind something nothing can parse.
-      await _preferences.remove(_key);
-      return const [];
-    }
-  }
-
-  Future<void> write(List<Map<String, Object?>> items) async {
-    if (items.isEmpty) {
-      await _preferences.remove(_key);
-      return;
-    }
-    await _preferences.setString(_key, jsonEncode(items));
-  }
-}
-
-class SharedPreferencesOutbox<T extends PendingMutation> implements Outbox<T> {
-  SharedPreferencesOutbox({
+class SqliteOutbox<T extends PendingMutation> implements Outbox<T> {
+  SqliteOutbox({
     required String key,
     required String namespace,
     required T? Function(Map<String, Object?> json) decode,
-    SharedPreferencesAsync? preferences,
+    LuqaStore? store,
     // ignore: prefer_initializing_formals
   }) : _decode = decode,
-       _store = _JsonListStore(
-         key:
-             'luqa.outbox.$key.v1.'
-             '${base64Url.encode(utf8.encode(namespace))}',
-         preferences: preferences,
+       _records = _RecordList(
+         namespace: namespace,
+         collection: 'outbox.$key',
+         store: store,
        );
 
   final T? Function(Map<String, Object?> json) _decode;
-  final _JsonListStore _store;
+  final _RecordList _records;
 
   @override
   Future<List<T>> read() async => [
-    for (final item in await _store.read()) ?_decode(item),
+    for (final item in await _records.read()) ?_decode(item),
   ];
 
   @override
   Future<void> write(List<T> queue) =>
-      _store.write([for (final pending in queue) pending.toJson()]);
+      _records.write([for (final pending in queue) pending.toJson()]);
 }
 
 /// An outbox that keeps nothing. Signed-out and test contexts use it so a

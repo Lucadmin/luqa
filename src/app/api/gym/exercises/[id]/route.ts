@@ -49,7 +49,7 @@ export async function PATCH(
           where: { exerciseId: id },
           data: { exerciseId: clash.id },
         }),
-        db.exercise.delete({ where: { id } }),
+        db.exercise.update({ where: { id }, data: { deletedAt: new Date() } }),
       ]);
 
       const usage = await exerciseUsage(userId);
@@ -96,6 +96,6 @@ export async function DELETE(
     return NextResponse.json({ deleted: false, archived: true });
   }
 
-  await db.exercise.delete({ where: { id } });
+  await db.exercise.update({ where: { id }, data: { deletedAt: new Date() } });
   return NextResponse.json({ deleted: true, archived: false });
 }

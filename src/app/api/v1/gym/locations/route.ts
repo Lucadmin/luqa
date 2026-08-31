@@ -9,6 +9,7 @@ import {
 import { toGymLocationDTO } from "@/lib/serializers";
 import { authenticateMobileRequest } from "@/lib/server/mobile-auth";
 import { createGymLocationSchema } from "@/lib/validations";
+import { reviveDeletedGymLocation } from "@/lib/server/tombstones";
 
 export async function POST(request: Request) {
   let mobileSession;
@@ -40,6 +41,15 @@ export async function POST(request: Request) {
   });
   if (existing) {
     return mobileJson({ location: toGymLocationDTO(existing) }, { status: 200 });
+  }
+
+  const revived = await reviveDeletedGymLocation(
+    mobileSession.userId,
+    input.code,
+    id,
+  );
+  if (revived) {
+    return mobileJson({ location: toGymLocationDTO(revived) }, { status: 200 });
   }
 
   const maxOrder = await db.gymLocation.aggregate({

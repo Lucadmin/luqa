@@ -3,6 +3,7 @@ import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { toPersonDTO } from "@/lib/serializers";
 import { createPersonSchema } from "@/lib/validations";
+import { reviveDeletedPerson } from "@/lib/server/tombstones";
 
 // GET /api/money/people — everyone, archived included, in display order.
 export async function GET() {
@@ -37,6 +38,9 @@ export async function POST(request: Request) {
     );
   }
   const d = parsed.data;
+
+  const revived = await reviveDeletedPerson(userId, d.name);
+  if (revived) return NextResponse.json({ person: revived }, { status: 201 });
 
   const taken = await db.person.findFirst({
     where: { userId, name: d.name },

@@ -7,12 +7,25 @@ import 'package:luqa/features/today/domain/category.dart';
 import 'package:luqa/features/today/domain/sleep_entry.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa_api/api.dart' as api;
-import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
-import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
+import 'package:luqa/core/storage/luqa_store.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   final from = DateTime(2026, 8, 17);
   final to = DateTime(2026, 9, 7);
+
+  sqfliteFfiInit();
+
+  /// A database per test, held only in memory, so the persistent caches can be
+  /// exercised for real without a device or a file to clean up.
+  LuqaStore freshStore() {
+    final store = LuqaStore(
+      factory: databaseFactoryFfi,
+      path: inMemoryDatabasePath,
+    );
+    addTearDown(store.close);
+    return store;
+  }
 
   test('loadWindow maps entries and sleep, then caches the window', () async {
     final cache = MemoryTimelineCache();
@@ -101,12 +114,11 @@ void main() {
   });
 
   test('the persistent read cache is isolated by user', () async {
-    SharedPreferencesAsyncPlatform.instance =
-        InMemorySharedPreferencesAsync.empty();
-    addTearDown(() => SharedPreferencesAsyncPlatform.instance = null);
-
-    final firstUser = SharedPreferencesTimelineCache(namespace: 'user-a');
-    final secondUser = SharedPreferencesTimelineCache(namespace: 'user-b');
+    // One database, two users: the isolation has to come from the namespace
+    // rather than from them happening to be kept apart.
+    final store = freshStore();
+    final firstUser = SqliteTimelineCache(namespace: 'user-a', store: store);
+    final secondUser = SqliteTimelineCache(namespace: 'user-b', store: store);
     final window = TimelineWindow(
       from: from,
       to: to,
@@ -129,11 +141,7 @@ void main() {
   });
 
   test('a cached window for another range is not reused', () async {
-    SharedPreferencesAsyncPlatform.instance =
-        InMemorySharedPreferencesAsync.empty();
-    addTearDown(() => SharedPreferencesAsyncPlatform.instance = null);
-
-    final cache = SharedPreferencesTimelineCache(namespace: 'user-a');
+    final cache = SqliteTimelineCache(namespace: 'user-a', store: freshStore());
     await cache.writeWindow(
       TimelineWindow(from: from, to: to, entries: const [], sleep: const []),
     );

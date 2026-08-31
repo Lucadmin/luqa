@@ -13,7 +13,6 @@ import 'package:luqa/features/gym/data/gym_cache.dart';
 import 'package:luqa/features/gym/data/gym_providers.dart';
 import 'package:luqa/features/gym/data/gym_repository.dart';
 import 'package:luqa/features/money/application/money_controller.dart';
-import 'package:luqa/features/money/data/money_cache.dart';
 import 'package:luqa/features/money/data/money_providers.dart';
 import 'package:luqa/features/money/data/money_repository.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
@@ -80,7 +79,7 @@ Future<FakeTimelineRepository> pumpLuqa(
         gymCacheProvider.overrideWithValue(const NullGymCache()),
         moneyOutboxProvider.overrideWithValue(const NullOutbox()),
         moneyDiscardLogProvider.overrideWithValue(const NullDiscardLog()),
-        moneyCacheProvider.overrideWithValue(const NullMoneyCache()),
+        moneyLocalStoreProvider.overrideWithValue(null),
         luqaApiProvider.overrideWithValue(FakeHealthApi()),
         gymRepositoryProvider.overrideWithValue(
           gymRepository ?? FakeGymRepository.sample(),

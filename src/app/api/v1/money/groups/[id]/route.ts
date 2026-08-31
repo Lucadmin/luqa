@@ -85,7 +85,10 @@ export const PATCH = moneyRoute<[Params]>(
 export const DELETE = moneyRoute<[Params]>(
   async (session, _request, { params }) => {
     const { id } = await params;
-    await db.personGroup.deleteMany({ where: { id, userId: session.userId } });
+    await db.personGroup.updateMany({
+      where: { id, userId: session.userId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
     return new Response(null, { status: 204 });
   },
 );

@@ -8,6 +8,7 @@ import { createMobilePersonSchema } from "@/lib/mobile-api-validation";
 import { toPersonDTO } from "@/lib/serializers";
 import { claimMoneyId } from "@/lib/server/money";
 import { moneyRoute, readJson } from "@/lib/server/money-routes";
+import { reviveDeletedPerson } from "@/lib/server/tombstones";
 
 // GET /api/v1/money/people — everyone, archived included, in display order.
 export const GET = moneyRoute(async (session) => {
@@ -46,6 +47,11 @@ export const POST = moneyRoute(async (session, request) => {
     where: { userId: session.userId, name: d.name },
   });
   if (existing) return mobileJson({ person: toPersonDTO(existing) });
+
+  // The name may still be held by someone this account deleted. Bringing them
+  // back is both what the user means and the only way past the unique key.
+  const revived = await reviveDeletedPerson(session.userId, d.name);
+  if (revived) return mobileJson({ person: toPersonDTO(revived) });
 
   const count = await db.person.count({ where: { userId: session.userId } });
   const person = await db.person.create({

@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/core/sync/sync_engine.dart';
 import 'package:luqa/features/money/data/money_outbox.dart';
-import 'package:luqa/features/money/data/money_overlay.dart';
+import 'package:luqa/features/money/data/money_fold.dart';
+import 'package:luqa/features/money/data/money_local_store.dart';
 import 'package:luqa/features/money/data/money_providers.dart';
 import 'package:luqa/features/money/data/money_repository.dart';
 
@@ -18,6 +19,10 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
   /// causes a network stack to be built at all.
   MoneyRepository get _remote => ref.read(remoteMoneyRepositoryProvider);
 
+  /// This device's own rows, so a write that has landed can stop being
+  /// treated as newer than the server's copy of it.
+  MoneyLocalStore? get _store => ref.read(moneyLocalStoreProvider);
+
   @override
   SyncState build() {
     adoptOutbox(ref.watch(moneyOutboxProvider), ref.watch(moneyDiscardLogProvider));
@@ -28,15 +33,35 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
   List<MoneyMutation> fold(List<MoneyMutation> queue, MoneyMutation mutation) =>
       foldMoney(queue, mutation);
 
+  /// A write has landed. Clearing its `pending` flag hands the row back to
+  /// the delta feed — until now a sync had to leave it alone, because the
+  /// local copy was the newer one.
+  ///
+  /// A row deleted here is not settled but forgotten: there is nothing left
+  /// for a delta to confirm, and leaving it would keep it hidden for ever.
+  Future<void> _settled(String table, String id) async =>
+      _store?.settle(table, id);
+
+  Future<void> _forgotten(String table, String id) async =>
+      _store?.forget(table, id);
+
+  /// The server chose a different id — it matched an existing row by name.
+  /// Everything on this device that pointed at the id we invented follows it.
+  Future<void> _remapped(String table, String from, String to) async =>
+      _store?.remapId(table, from, to);
+
   @override
   Future<void> send(MoneyMutation mutation) async {
     switch (mutation) {
       case CreateExpense(:final expenseId, :final write):
         await _remote.createExpense(id: expenseId, write: write);
+        await _settled('money_expense', expenseId);
       case UpdateExpense(:final expenseId, :final write):
         await _remote.updateExpense(expenseId, write);
+        await _settled('money_expense', expenseId);
       case DeleteExpense(:final previous):
         await _remote.deleteExpense(previous.id);
+        await _forgotten('money_expense', previous.id);
 
       case CreatePerson(:final person):
         final saved = await _remote.createPerson(
@@ -55,7 +80,9 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
           await rewriteQueue(
             (queue) => remapPersonId(queue, person.id, saved.id),
           );
+          await _remapped('money_person', person.id, saved.id);
         }
+        await _settled('money_person', saved.id);
       case UpdatePerson(:final personId):
         await _remote.updatePerson(
           id: personId,
@@ -68,8 +95,10 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
           order: mutation.order,
           archived: mutation.archived,
         );
+        await _settled('money_person', personId);
       case DeletePerson(:final personId):
         await _remote.deletePerson(personId);
+        await _forgotten('money_person', personId);
 
       case CreateGroup(:final group):
         final saved = await _remote.createGroup(
@@ -85,7 +114,9 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
           await rewriteQueue(
             (queue) => remapGroupId(queue, group.id, saved.id),
           );
+          await _remapped('money_group', group.id, saved.id);
         }
+        await _settled('money_group', saved.id);
       case UpdateGroup(:final groupId):
         await _remote.updateGroup(
           id: groupId,
@@ -96,8 +127,10 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
           memberIds: mutation.memberIds,
           archived: mutation.archived,
         );
+        await _settled('money_group', groupId);
       case DeleteGroup(:final groupId):
         await _remote.deleteGroup(groupId);
+        await _forgotten('money_group', groupId);
 
       case CreateSettlement(:final settlement):
         await _remote.createSettlement(
@@ -110,8 +143,10 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
             notes: settlement.notes,
           ),
         );
+        await _settled('money_settlement', settlement.id);
       case DeleteSettlement(:final previous):
         await _remote.deleteSettlement(previous.id);
+        await _forgotten('money_settlement', previous.id);
     }
   }
 }

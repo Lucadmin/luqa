@@ -206,6 +206,8 @@ class ApiClient {
           return value is DateTime ? value : DateTime.tryParse(value);
         case 'Category':
           return Category.fromJson(value);
+        case 'CategoryDelta':
+          return CategoryDelta.fromJson(value);
         case 'CategoryListResponse':
           return CategoryListResponse.fromJson(value);
         case 'CategoryResponse':
@@ -240,6 +242,8 @@ class ApiClient {
           return ErrorResponse.fromJson(value);
         case 'Expense':
           return Expense.fromJson(value);
+        case 'ExpenseDelta':
+          return ExpenseDelta.fromJson(value);
         case 'ExpenseListResponse':
           return ExpenseListResponse.fromJson(value);
         case 'ExpenseParticipantInput':
@@ -254,6 +258,8 @@ class ApiClient {
           return GroupResponse.fromJson(value);
         case 'GymExercise':
           return GymExercise.fromJson(value);
+        case 'GymExerciseDelta':
+          return GymExerciseDelta.fromJson(value);
         case 'GymExerciseHistory':
           return GymExerciseHistory.fromJson(value);
         case 'GymExerciseHistoryResponse':
@@ -264,6 +270,8 @@ class ApiClient {
           return GymExerciseReference.fromJson(value);
         case 'GymLocation':
           return GymLocation.fromJson(value);
+        case 'GymLocationDelta':
+          return GymLocationDelta.fromJson(value);
         case 'GymLocationResponse':
           return GymLocationResponse.fromJson(value);
         case 'GymOverview':
@@ -272,6 +280,8 @@ class ApiClient {
           return GymOverviewResponse.fromJson(value);
         case 'GymSession':
           return GymSession.fromJson(value);
+        case 'GymSessionDelta':
+          return GymSessionDelta.fromJson(value);
         case 'GymSessionExercise':
           return GymSessionExercise.fromJson(value);
         case 'GymSessionExerciseInput':
@@ -312,8 +322,12 @@ class ApiClient {
           return Person.fromJson(value);
         case 'PersonBalance':
           return PersonBalance.fromJson(value);
+        case 'PersonDelta':
+          return PersonDelta.fromJson(value);
         case 'PersonGroup':
           return PersonGroup.fromJson(value);
+        case 'PersonGroupDelta':
+          return PersonGroupDelta.fromJson(value);
         case 'PersonLedger':
           return PersonLedger.fromJson(value);
         case 'PersonLedgerResponse':
@@ -328,6 +342,8 @@ class ApiClient {
           return SessionCredentials.fromJson(value);
         case 'Settlement':
           return Settlement.fromJson(value);
+        case 'SettlementDelta':
+          return SettlementDelta.fromJson(value);
         case 'SettlementDirection':
           return SettlementDirectionTypeTransformer().decode(value);
         case 'SettlementListResponse':
@@ -336,6 +352,8 @@ class ApiClient {
           return SettlementResponse.fromJson(value);
         case 'SleepEntry':
           return SleepEntry.fromJson(value);
+        case 'SleepEntryDelta':
+          return SleepEntryDelta.fromJson(value);
         case 'SleepEntryListResponse':
           return SleepEntryListResponse.fromJson(value);
         case 'SleepSessionImport':
@@ -350,8 +368,16 @@ class ApiClient {
           return SleepSyncWindow.fromJson(value);
         case 'SplitMode':
           return SplitModeTypeTransformer().decode(value);
+        case 'SyncCollections':
+          return SyncCollections.fromJson(value);
+        case 'SyncResponse':
+          return SyncResponse.fromJson(value);
+        case 'SyncSettings':
+          return SyncSettings.fromJson(value);
         case 'TimeEntry':
           return TimeEntry.fromJson(value);
+        case 'TimeEntryDelta':
+          return TimeEntryDelta.fromJson(value);
         case 'TimeEntryListResponse':
           return TimeEntryListResponse.fromJson(value);
         case 'TimeEntryResponse':

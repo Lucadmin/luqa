@@ -88,6 +88,10 @@ model Category {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Set instead of removing the row, so a phone that syncs later can
+  /// be told the thing is gone. Filtered out of every ordinary read.
+  deletedAt DateTime?
+
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   timeEntries TimeEntry[]
   habits      Habit[]
@@ -95,6 +99,7 @@ model Category {
   // A user can't have two categories with the same name.
   @@unique([userId, name])
   @@index([userId])
+  @@index([userId, updatedAt])
   @@map("categories")
 }
 
@@ -461,6 +466,10 @@ model Person {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  /// Set instead of removing the row, so a phone that syncs later can
+  /// be told the thing is gone. Filtered out of every ordinary read.
+  deletedAt DateTime?
+
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   memberships  GroupMember[]
   shares       ExpenseShare[]
@@ -469,6 +478,7 @@ model Person {
 
   @@unique([userId, name])
   @@index([userId])
+  @@index([userId, updatedAt])
   @@map("people")
 }
 
@@ -485,12 +495,17 @@ model PersonGroup {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  /// Set instead of removing the row, so a phone that syncs later can
+  /// be told the thing is gone. Filtered out of every ordinary read.
+  deletedAt DateTime?
+
   user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   members  GroupMember[]
   expenses Expense[]
 
   @@unique([userId, name])
   @@index([userId])
+  @@index([userId, updatedAt])
   @@map("person_groups")
 }
 
@@ -539,6 +554,10 @@ model Expense {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Set instead of removing the row, so a phone that syncs later can
+  /// be told the thing is gone. Filtered out of every ordinary read.
+  deletedAt DateTime?
+
   user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   payer  Person?        @relation("ExpensePayer", fields: [paidByPersonId], references: [id], onDelete: Cascade)
   group  PersonGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
@@ -546,6 +565,7 @@ model Expense {
 
   @@index([userId, date])
   @@index([groupId])
+  @@index([userId, updatedAt])
   @@map("expenses")
 }
 
@@ -592,11 +612,16 @@ model Settlement {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
+  /// Set instead of removing the row, so a phone that syncs later can
+  /// be told the thing is gone. Filtered out of every ordinary read.
+  deletedAt DateTime?
+
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@index([userId, date])
   @@index([personId])
+  @@index([userId, updatedAt])
   @@map("settlements")
 }
 
@@ -639,11 +664,16 @@ model GymLocation {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  /// Set instead of removing the row, so a phone that syncs later can
+  /// be told the thing is gone. Filtered out of every ordinary read.
+  deletedAt DateTime?
+
   user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions GymSession[]
 
   @@unique([userId, code])
   @@index([userId])
+  @@index([userId, updatedAt])
   @@map("gym_locations")
 }
 
@@ -658,11 +688,16 @@ model Exercise {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  /// Set instead of removing the row, so a phone that syncs later can
+  /// be told the thing is gone. Filtered out of every ordinary read.
+  deletedAt DateTime?
+
   user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   entries SessionExercise[]
 
   @@unique([userId, name])
   @@index([userId])
+  @@index([userId, updatedAt])
   @@map("exercises")
 }
 
@@ -676,12 +711,17 @@ model GymSession {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  /// Set instead of removing the row, so a phone that syncs later can
+  /// be told the thing is gone. Filtered out of every ordinary read.
+  deletedAt DateTime?
+
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   location  GymLocation?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
   exercises SessionExercise[]
 
   @@index([userId, date])
   @@index([locationId])
+  @@index([userId, updatedAt])
   @@map("gym_sessions")
 }
 

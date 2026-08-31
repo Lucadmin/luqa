@@ -135,6 +135,6 @@ export async function DELETE(
   const expense = await db.expense.findFirst({ where: { id, userId } });
   if (!expense) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await db.expense.delete({ where: { id } });
+  await db.expense.update({ where: { id }, data: { deletedAt: new Date() } });
   return new NextResponse(null, { status: 204 });
 }

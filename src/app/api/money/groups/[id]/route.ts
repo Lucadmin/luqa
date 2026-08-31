@@ -97,6 +97,9 @@ export async function DELETE(
   const group = await db.personGroup.findFirst({ where: { id, userId } });
   if (!group) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await db.personGroup.delete({ where: { id } });
+  await db.personGroup.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
   return new NextResponse(null, { status: 204 });
 }

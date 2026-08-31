@@ -8,6 +8,7 @@ import { createMobileGroupSchema } from "@/lib/mobile-api-validation";
 import { toGroupDTO } from "@/lib/serializers";
 import { claimMoneyId } from "@/lib/server/money";
 import { moneyRoute, readJson, rejected } from "@/lib/server/money-routes";
+import { reviveDeletedGroup } from "@/lib/server/tombstones";
 
 // GET /api/v1/money/groups — the user's groups with their member ids.
 export const GET = moneyRoute(async (session) => {
@@ -55,6 +56,9 @@ export const POST = moneyRoute(async (session, request) => {
     include: { members: true },
   });
   if (existing) return mobileJson({ group: toGroupDTO(existing) });
+
+  const revived = await reviveDeletedGroup(session.userId, d.name);
+  if (revived) return mobileJson({ group: toGroupDTO(revived) });
 
   const count = await db.personGroup.count({
     where: { userId: session.userId },

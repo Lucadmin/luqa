@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luqa/core/sync/outbox.dart';
@@ -5,13 +7,15 @@ import 'package:luqa/core/sync/sync_engine.dart';
 import 'package:luqa/features/auth/application/auth_controller.dart';
 import 'package:luqa/features/money/application/money_controller.dart';
 import 'package:luqa/features/money/application/money_sync_engine.dart';
-import 'package:luqa/features/money/data/money_cache.dart';
+import 'package:luqa/core/storage/luqa_store.dart';
+import 'package:luqa/features/money/data/money_local_store.dart';
 import 'package:luqa/features/money/data/money_outbox.dart';
 import 'package:luqa/features/money/data/money_providers.dart';
 import 'package:luqa/features/money/data/money_repository.dart';
 import 'package:luqa/features/money/domain/money_models.dart';
 import 'package:luqa/features/money/domain/money_split.dart';
 import 'package:luqa_api/api.dart' as api;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../helpers/fake_money_repository.dart';
 import '../../helpers/pump_luqa.dart';
@@ -48,23 +52,6 @@ class _MemoryDiscardLog implements DiscardLog {
   }
 }
 
-class _MemoryCache implements MoneyCache {
-  MoneyOverview? overview;
-  List<Expense>? expenses;
-
-  @override
-  Future<MoneyOverview?> readOverview() async => overview;
-
-  @override
-  Future<void> writeOverview(MoneyOverview value) async => overview = value;
-
-  @override
-  Future<List<Expense>?> readExpenses() async => expenses;
-
-  @override
-  Future<void> writeExpenses(List<Expense> value) async => expenses = value;
-}
-
 /// Offline is modelled the way the generated client reports it: a synthetic
 /// 400 carrying the real cause, which the engine must read as "try again"
 /// rather than as a refusal.
@@ -84,20 +71,23 @@ class _Stack {
   _Stack({
     bool offline = false,
     _MemoryOutbox? outbox,
-    _MemoryCache? cache,
+    LuqaStore? store,
     _MemoryDiscardLog? discardLog,
   }) {
     remote = _FlakyMoneyRepository(FakeMoneyRepository.sample())
       ..offline = offline;
     this.outbox = outbox ?? _MemoryOutbox();
-    this.cache = cache ?? _MemoryCache();
+    this.store =
+        store ??
+        LuqaStore(factory: databaseFactoryFfi, path: inMemoryDatabasePath);
     this.discardLog = discardLog ?? _MemoryDiscardLog();
+    local = MoneyLocalStore(namespace: 'user-a', store: this.store);
     container = ProviderContainer(
       overrides: [
         remoteMoneyRepositoryProvider.overrideWithValue(remote),
         moneyOutboxProvider.overrideWithValue(this.outbox),
         moneyDiscardLogProvider.overrideWithValue(this.discardLog),
-        moneyCacheProvider.overrideWithValue(this.cache),
+        moneyLocalStoreProvider.overrideWithValue(local),
         moneyNowProvider.overrideWithValue(DateTime(2026, 8, 27, 12)),
         authControllerProvider.overrideWith(FixedAuthController.new),
       ],
@@ -106,7 +96,8 @@ class _Stack {
 
   late final _FlakyMoneyRepository remote;
   late final _MemoryOutbox outbox;
-  late final _MemoryCache cache;
+  late final LuqaStore store;
+  late final MoneyLocalStore local;
   late final _MemoryDiscardLog discardLog;
   late final ProviderContainer container;
 
@@ -121,7 +112,21 @@ class _Stack {
 
   /// Builds the controller and lets its first load run. Providers are lazy, so
   /// without this the screen state is still untouched when a test looks at it.
+  /// Seeds the device the way a completed sync would have, then lets the
+  /// controller read it. There is no network in these tests: the point of
+  /// every one of them is what the queue does, not what the feed returns.
   Future<void> warmUp() async {
+    final seed = await remote.inner.loadOverview();
+    await local.setCurrency(seed.currency);
+    await local.applyPeople(
+      [for (final balance in seed.people) balance.person],
+      const [],
+    );
+    await local.applyGroups(seed.groups, const []);
+    await local.applyExpenses(
+      (await remote.inner.loadExpenses(limit: 100)).expenses,
+      const [],
+    );
     container.read(moneyControllerProvider);
     await settle();
   }
@@ -132,7 +137,10 @@ class _Stack {
     }
   }
 
-  void dispose() => container.dispose();
+  void dispose() {
+    container.dispose();
+    unawaited(store.close());
+  }
 }
 
 class _FlakyMoneyRepository implements MoneyRepository {
@@ -518,8 +526,7 @@ void main() {
     expect(stack.state.pendingWrites, 1);
   });
 
-  test('once the queue drains, the server\'s copy replaces the overlay',
-      () async {
+  test('a synced bill keeps counting, because the row is real', () async {
     final stack = _Stack();
     addTearDown(stack.dispose);
     await stack.warmUp();
@@ -530,8 +537,10 @@ void main() {
     await stack.settle();
 
     expect(stack.state.pendingWrites, 0);
-    // The fake server does not recompute balances, so the overlay coming off
-    // is exactly what returns the number to the server's own answer.
-    expect(stack.state.overview!.owedToYouCents, 4800);
+    // Under the overlay this number fell back to the server's 4800 the moment
+    // the queue emptied, because what was on screen was a patch that had just
+    // been discarded. The row is the truth now, so draining changes nothing
+    // the user can see — which is the entire point of the rewrite.
+    expect(stack.state.overview!.owedToYouCents, 6300);
   });
 }

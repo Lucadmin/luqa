@@ -59,7 +59,7 @@ export async function DELETE(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  await db.category.delete({ where: { id } });
+  await db.category.update({ where: { id }, data: { deletedAt: new Date() } });
 
   return NextResponse.json({ ok: true });
 }

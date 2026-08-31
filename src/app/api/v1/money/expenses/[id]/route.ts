@@ -125,6 +125,9 @@ export const PATCH = moneyRoute<[Params]>(
 // a phone's queue from failing permanently on its second attempt.
 export const DELETE = moneyRoute<[Params]>(async (session, _request, { params }) => {
   const { id } = await params;
-  await db.expense.deleteMany({ where: { id, userId: session.userId } });
+  await db.expense.updateMany({
+    where: { id, userId: session.userId, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
   return new Response(null, { status: 204 });
 });

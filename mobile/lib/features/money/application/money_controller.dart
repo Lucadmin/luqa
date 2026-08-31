@@ -123,71 +123,61 @@ class MoneyController extends Notifier<MoneyState> {
       clearError: true,
     );
 
-    if (allowCache) {
-      // Painting the phone's copy first is what makes opening the tab feel
-      // like opening a local app rather than a web page.
-      try {
-        final local = ref.read(localFirstMoneyRepositoryProvider);
-        final cached =
-            await local?.cachedOverview() ?? await local?.queuedOverview();
-        final cachedExpenses = await local?.cachedExpenses();
-        if (!ref.mounted || generation != _generation) return;
-        if (cached != null) {
-          state = state.copyWith(
-            overview: cached,
-            expenses: cachedExpenses ?? state.expenses,
-            isLoading: false,
-            isRefreshing: true,
-          );
-        }
-      } on Object {
-        // A broken read cache must never block a fresh load.
-      }
-    }
-
-    MoneyOverview? overview;
+    // The device's own rows. Not a placeholder for the real answer — this is
+    // the answer, including anything entered here that has not synced yet.
     try {
-      overview = await _repository.loadOverview();
+      await _readLocal(generation);
       if (!ref.mounted || generation != _generation) return;
-      state = state.copyWith(
-        overview: overview,
-        isLoading: false,
-        clearError: true,
-      );
+      state = state.copyWith(isLoading: false, clearError: true);
     } on Object catch (error) {
       if (!ref.mounted || generation != _generation) return;
-      // Something already on screen beats an error page: the repository only
-      // throws once it has no cached copy either.
       state = state.copyWith(
         isLoading: false,
         isRefreshing: false,
-        error: state.overview != null
-            ? null
-            : describeNetworkFailure(error, whileDoing: 'loading your money'),
-        clearError: state.overview != null,
+        error: describeNetworkFailure(error, whileDoing: 'loading your money'),
       );
       return;
     }
 
-    // The feed is a second request, and it failing is a smaller event than the
-    // balances failing: the headline is already correct without it.
+    // Catching up with the server happens behind the screen, because the
+    // screen is already right. Failing to reach it is not an error the user
+    // needs to see — it only means nothing new arrived.
+    final local = ref.read(localFirstMoneyRepositoryProvider);
+    if (local == null) {
+      if (ref.mounted && generation == _generation) {
+        state = state.copyWith(isRefreshing: false);
+      }
+      return;
+    }
     try {
-      final page = await _repository.loadExpenses();
+      await local.pull();
+      if (!ref.mounted || generation != _generation) return;
+      await _readLocal(generation);
       if (!ref.mounted || generation != _generation) return;
       state = state.copyWith(
-        expenses: page.expenses,
-        nextCursor: page.nextCursor,
-        clearCursor: page.nextCursor == null,
         isRefreshing: false,
+        clearError: true,
         clearFeedError: true,
       );
-    } on Object catch (error) {
+    } on Object {
       if (!ref.mounted || generation != _generation) return;
-      state = state.copyWith(
-        isRefreshing: false,
-        feedError: describeNetworkFailure(error, whileDoing: 'loading bills'),
-      );
+      state = state.copyWith(isRefreshing: false);
     }
+  }
+
+  /// Reads the balances and the head of the feed from this device.
+  Future<void> _readLocal(int generation) async {
+    final overview = await _repository.loadOverview();
+    if (!ref.mounted || generation != _generation) return;
+    state = state.copyWith(overview: overview);
+
+    final page = await _repository.loadExpenses();
+    if (!ref.mounted || generation != _generation) return;
+    state = state.copyWith(
+      expenses: page.expenses,
+      nextCursor: page.nextCursor,
+      clearCursor: page.nextCursor == null,
+    );
   }
 
   /// The user has read the notice about a change that could not be saved.
@@ -341,12 +331,11 @@ class MoneyController extends Notifier<MoneyState> {
   }
 
   /// Re-reads the overview from the device so the balances on screen include
-  /// the write that just landed in the queue. No network is involved.
+  /// the write that just landed. No network is involved: the write is already
+  /// in the tables the balances are summed from.
   Future<void> _resync() async {
-    final local = ref.read(localFirstMoneyRepositoryProvider);
-    if (local == null) return;
-    final overview = await local.cachedOverview();
-    if (!ref.mounted || overview == null) return;
+    final overview = await _repository.loadOverview();
+    if (!ref.mounted) return;
     state = state.copyWith(overview: overview, clearError: true);
   }
 

@@ -1,12 +1,11 @@
-import 'dart:convert';
-
 import 'package:luqa/core/network/luqa_api_client.dart';
+import 'package:luqa/core/storage/document_cache.dart';
+import 'package:luqa/core/storage/luqa_store.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
 import 'package:luqa/features/today/domain/category.dart';
 import 'package:luqa/features/today/domain/sleep_entry.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa_api/api.dart' as api;
-import 'package:shared_preferences/shared_preferences.dart';
 
 abstract interface class TimelineCache {
   Future<List<Category>?> readCategories();
@@ -21,52 +20,41 @@ abstract interface class TimelineCache {
 /// App-private, user-scoped read cache. It holds the most recent window only —
 /// enough to paint a cold start instantly, small enough that it never grows
 /// without bound. No credential ever reaches it.
-class SharedPreferencesTimelineCache implements TimelineCache {
-  SharedPreferencesTimelineCache({
-    required String namespace,
-    SharedPreferencesAsync? preferences,
-  }) : _namespace = base64Url.encode(utf8.encode(namespace)),
-       _injected = preferences;
+class SqliteTimelineCache implements TimelineCache {
+  SqliteTimelineCache({required String namespace, LuqaStore? store})
+    : _documents = DocumentCache(
+        namespace: namespace,
+        collection: 'timeline',
+        store: store,
+      );
 
-  static const _version = 'v2';
-
-  final String _namespace;
-  final SharedPreferencesAsync? _injected;
-
-  // Deferred, so building the cache does not require the platform channel.
-  late final SharedPreferencesAsync _preferences =
-      _injected ?? SharedPreferencesAsync();
-
-  String get _categoriesKey => 'luqa.timeline.$_version.$_namespace.categories';
-  String get _windowKey => 'luqa.timeline.$_version.$_namespace.window';
+  final DocumentCache _documents;
 
   @override
   Future<List<Category>?> readCategories() async {
-    final encoded = await _preferences.getString(_categoriesKey);
-    if (encoded == null) return null;
+    final value = await _documents.read<List<Object?>>('categories');
+    if (value == null) return null;
     try {
-      return (jsonDecode(encoded) as List<Object?>)
+      return value
           .map((item) => _categoryFromJson(item! as Map<String, Object?>))
           .toList(growable: false);
     } on Object {
-      await _preferences.remove(_categoriesKey);
+      await _documents.remove('categories');
       return null;
     }
   }
 
   @override
-  Future<void> writeCategories(List<Category> categories) =>
-      _preferences.setString(
-        _categoriesKey,
-        jsonEncode(categories.map(_categoryToJson).toList()),
-      );
+  Future<void> writeCategories(List<Category> categories) => _documents.write(
+    'categories',
+    categories.map(_categoryToJson).toList(),
+  );
 
   @override
   Future<TimelineWindow?> readWindow(DateTime from, DateTime to) async {
-    final encoded = await _preferences.getString(_windowKey);
-    if (encoded == null) return null;
+    final value = await _documents.read<Map<String, Object?>>('window');
+    if (value == null) return null;
     try {
-      final value = jsonDecode(encoded) as Map<String, Object?>;
       // A cached window for a different range is useless; the caller is
       // looking at other days.
       if (value['from'] != _dayKey(from) || value['to'] != _dayKey(to)) {
@@ -83,21 +71,18 @@ class SharedPreferencesTimelineCache implements TimelineCache {
             .toList(growable: false),
       );
     } on Object {
-      await _preferences.remove(_windowKey);
+      await _documents.remove('window');
       return null;
     }
   }
 
   @override
-  Future<void> writeWindow(TimelineWindow window) => _preferences.setString(
-    _windowKey,
-    jsonEncode({
-      'from': _dayKey(window.from),
-      'to': _dayKey(window.to),
-      'entries': window.entries.map(_entryToJson).toList(),
-      'sleep': window.sleep.map(_sleepToJson).toList(),
-    }),
-  );
+  Future<void> writeWindow(TimelineWindow window) => _documents.write('window', {
+    'from': _dayKey(window.from),
+    'to': _dayKey(window.to),
+    'entries': window.entries.map(_entryToJson).toList(),
+    'sleep': window.sleep.map(_sleepToJson).toList(),
+  });
 }
 
 class RemoteTodayRepository implements TodayRepository {

@@ -3,7 +3,8 @@ import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/auth/application/auth_controller.dart';
 import 'package:luqa/features/money/application/money_sync_engine.dart';
 import 'package:luqa/features/money/data/local_first_money_repository.dart';
-import 'package:luqa/features/money/data/money_cache.dart';
+import 'package:luqa/features/money/data/money_local_store.dart';
+import 'package:luqa/features/money/data/money_sync_service.dart';
 import 'package:luqa/features/money/data/money_outbox.dart';
 import 'package:luqa/features/money/data/money_repository.dart';
 import 'package:luqa/features/money/data/remote_money_repository.dart';
@@ -19,17 +20,24 @@ final remoteMoneyRepositoryProvider = Provider<MoneyRepository>(
   (ref) => RemoteMoneyRepository(ref.watch(luqaApiProvider)),
 );
 
-final moneyCacheProvider = Provider<MoneyCache>((ref) {
+/// This device's own money rows. Null while signed out: there is no account
+/// to file them under, and a write with nobody to send it as is stranded.
+final moneyLocalStoreProvider = Provider<MoneyLocalStore?>((ref) {
   final userId = ref.watch(_namespaceProvider);
-  if (userId == null) return const NullMoneyCache();
-  return SharedPreferencesMoneyCache(namespace: userId);
+  return userId == null ? null : MoneyLocalStore(namespace: userId);
+});
+
+final moneySyncServiceProvider = Provider<MoneySyncService?>((ref) {
+  final store = ref.watch(moneyLocalStoreProvider);
+  if (store == null) return null;
+  return MoneySyncService(client: ref.watch(luqaApiProvider), store: store);
 });
 
 final moneyOutboxProvider = Provider<Outbox<MoneyMutation>>((ref) {
   final userId = ref.watch(_namespaceProvider);
   // Queueing a write with nobody to send it as would strand it for ever.
   if (userId == null) return const NullOutbox();
-  return SharedPreferencesMoneyOutbox(namespace: userId);
+  return SqliteMoneyOutbox(namespace: userId);
 });
 
 /// Where an abandoned write is recorded so the user can still be told about
@@ -38,14 +46,22 @@ final moneyOutboxProvider = Provider<Outbox<MoneyMutation>>((ref) {
 final moneyDiscardLogProvider = Provider<DiscardLog>((ref) {
   final userId = ref.watch(_namespaceProvider);
   if (userId == null) return const NullDiscardLog();
-  return SharedPreferencesDiscardLog(key: 'money', namespace: userId);
+  return SqliteDiscardLog(key: 'money', namespace: userId);
 });
 
 /// What screens use. Writes land here and return immediately.
+///
+/// Signed out there is nowhere local to put anything, so the plain remote
+/// repository stands in — it will simply fail, which is the honest answer.
 final moneyRepositoryProvider = Provider<MoneyRepository>((ref) {
+  final store = ref.watch(moneyLocalStoreProvider);
+  final sync = ref.watch(moneySyncServiceProvider);
+  if (store == null || sync == null) {
+    return ref.watch(remoteMoneyRepositoryProvider);
+  }
   return LocalFirstMoneyRepository(
-    remote: ref.watch(remoteMoneyRepositoryProvider),
-    cache: ref.watch(moneyCacheProvider),
+    store: store,
+    sync: sync,
     queue: ref.watch(moneySyncEngineProvider.notifier),
   );
 });

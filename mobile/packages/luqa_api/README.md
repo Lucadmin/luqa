@@ -93,6 +93,7 @@ Class | Method | HTTP request | Description
 *MoneyApi* | [**updatePerson**](doc//MoneyApi.md#updateperson) | **PATCH** /money/people/{id} | Rename, restyle, reorder, archive, or restore someone
 *MoneyApi* | [**updateSettlement**](doc//MoneyApi.md#updatesettlement) | **PATCH** /money/settlements/{id} | Correct a payback
 *SleepApi* | [**listSleepEntries**](doc//SleepApi.md#listsleepentries) | **GET** /sleep-entries | List sleep sessions that ended inside a half-open UTC window
+*SyncApi* | [**syncChanges**](doc//SyncApi.md#syncchanges) | **GET** /sync | Everything that changed since the cursors the caller holds
 *TimeEntriesApi* | [**createTimeEntry**](doc//TimeEntriesApi.md#createtimeentry) | **POST** /time-entries | Create a completed block or running timer
 *TimeEntriesApi* | [**deleteTimeEntry**](doc//TimeEntriesApi.md#deletetimeentry) | **DELETE** /time-entries/{id} | Soft-delete an entry
 *TimeEntriesApi* | [**listTimeEntries**](doc//TimeEntriesApi.md#listtimeentries) | **GET** /time-entries | List entries overlapping a half-open UTC window
@@ -102,6 +103,7 @@ Class | Method | HTTP request | Description
 ## Documentation For Models
 
  - [Category](doc//Category.md)
+ - [CategoryDelta](doc//CategoryDelta.md)
  - [CategoryListResponse](doc//CategoryListResponse.md)
  - [CategoryResponse](doc//CategoryResponse.md)
  - [CreateCategoryRequest](doc//CreateCategoryRequest.md)
@@ -119,6 +121,7 @@ Class | Method | HTTP request | Description
  - [ErrorDetail](doc//ErrorDetail.md)
  - [ErrorResponse](doc//ErrorResponse.md)
  - [Expense](doc//Expense.md)
+ - [ExpenseDelta](doc//ExpenseDelta.md)
  - [ExpenseListResponse](doc//ExpenseListResponse.md)
  - [ExpenseParticipantInput](doc//ExpenseParticipantInput.md)
  - [ExpenseResponse](doc//ExpenseResponse.md)
@@ -126,15 +129,18 @@ Class | Method | HTTP request | Description
  - [GroupListResponse](doc//GroupListResponse.md)
  - [GroupResponse](doc//GroupResponse.md)
  - [GymExercise](doc//GymExercise.md)
+ - [GymExerciseDelta](doc//GymExerciseDelta.md)
  - [GymExerciseHistory](doc//GymExerciseHistory.md)
  - [GymExerciseHistoryResponse](doc//GymExerciseHistoryResponse.md)
  - [GymExercisePoint](doc//GymExercisePoint.md)
  - [GymExerciseReference](doc//GymExerciseReference.md)
  - [GymLocation](doc//GymLocation.md)
+ - [GymLocationDelta](doc//GymLocationDelta.md)
  - [GymLocationResponse](doc//GymLocationResponse.md)
  - [GymOverview](doc//GymOverview.md)
  - [GymOverviewResponse](doc//GymOverviewResponse.md)
  - [GymSession](doc//GymSession.md)
+ - [GymSessionDelta](doc//GymSessionDelta.md)
  - [GymSessionExercise](doc//GymSessionExercise.md)
  - [GymSessionExerciseInput](doc//GymSessionExerciseInput.md)
  - [GymSessionListResponse](doc//GymSessionListResponse.md)
@@ -155,7 +161,9 @@ Class | Method | HTTP request | Description
  - [MoneyOverviewResponse](doc//MoneyOverviewResponse.md)
  - [Person](doc//Person.md)
  - [PersonBalance](doc//PersonBalance.md)
+ - [PersonDelta](doc//PersonDelta.md)
  - [PersonGroup](doc//PersonGroup.md)
+ - [PersonGroupDelta](doc//PersonGroupDelta.md)
  - [PersonLedger](doc//PersonLedger.md)
  - [PersonLedgerResponse](doc//PersonLedgerResponse.md)
  - [PersonListResponse](doc//PersonListResponse.md)
@@ -163,10 +171,12 @@ Class | Method | HTTP request | Description
  - [RefreshSessionRequest](doc//RefreshSessionRequest.md)
  - [SessionCredentials](doc//SessionCredentials.md)
  - [Settlement](doc//Settlement.md)
+ - [SettlementDelta](doc//SettlementDelta.md)
  - [SettlementDirection](doc//SettlementDirection.md)
  - [SettlementListResponse](doc//SettlementListResponse.md)
  - [SettlementResponse](doc//SettlementResponse.md)
  - [SleepEntry](doc//SleepEntry.md)
+ - [SleepEntryDelta](doc//SleepEntryDelta.md)
  - [SleepEntryListResponse](doc//SleepEntryListResponse.md)
  - [SleepSessionImport](doc//SleepSessionImport.md)
  - [SleepSource](doc//SleepSource.md)
@@ -174,7 +184,11 @@ Class | Method | HTTP request | Description
  - [SleepSyncPayload](doc//SleepSyncPayload.md)
  - [SleepSyncWindow](doc//SleepSyncWindow.md)
  - [SplitMode](doc//SplitMode.md)
+ - [SyncCollections](doc//SyncCollections.md)
+ - [SyncResponse](doc//SyncResponse.md)
+ - [SyncSettings](doc//SyncSettings.md)
  - [TimeEntry](doc//TimeEntry.md)
+ - [TimeEntryDelta](doc//TimeEntryDelta.md)
  - [TimeEntryListResponse](doc//TimeEntryListResponse.md)
  - [TimeEntryResponse](doc//TimeEntryResponse.md)
  - [UpdateExpenseRequest](doc//UpdateExpenseRequest.md)

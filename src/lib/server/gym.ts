@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { db } from "@/lib/db";
+import { type DbTransaction, db } from "@/lib/db";
 import {
   best1RM,
   estimate1RM,
@@ -19,6 +19,7 @@ import type {
   GymSetDTO,
 } from "@/lib/types";
 import { toDateKey } from "@/lib/life";
+import { reviveExercises } from "@/lib/server/tombstones";
 
 /** Everything a session DTO needs, in one include. */
 export const sessionInclude = {
@@ -52,6 +53,10 @@ export async function resolveExerciseIds(
   userId: string,
   names: string[],
 ): Promise<Map<string, string>> {
+  // Anything deleted whose name is being used again comes back first, so the
+  // pass below finds it rather than colliding with it on the unique key.
+  await reviveExercises(userId, names.map((name) => name.trim()));
+
   const existing = await db.exercise.findMany({
     where: { userId },
     select: { id: true, name: true },
@@ -89,7 +94,7 @@ export async function resolveExerciseIds(
  * the one place it happens, so it always reads the way the editor wrote it.
  */
 export async function writeSessionExercises(
-  tx: Prisma.TransactionClient,
+  tx: DbTransaction,
   sessionId: string,
   inputs: ExerciseInput[],
   idByKey: Map<string, string>,

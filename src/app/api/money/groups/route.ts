@@ -3,6 +3,7 @@ import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { toGroupDTO } from "@/lib/serializers";
 import { createGroupSchema } from "@/lib/validations";
+import { reviveDeletedGroup } from "@/lib/server/tombstones";
 
 // GET /api/money/groups — the user's groups with their member ids.
 export async function GET() {
@@ -48,6 +49,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unknown person" }, { status: 400 });
     }
   }
+
+  const revived = await reviveDeletedGroup(userId, d.name);
+  if (revived) return NextResponse.json({ group: revived }, { status: 201 });
 
   const taken = await db.personGroup.findFirst({
     where: { userId, name: d.name },

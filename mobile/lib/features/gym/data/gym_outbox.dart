@@ -365,7 +365,7 @@ List<GymMutation> remapLocationId(
 }
 
 /// The gym log's durable queue.
-class SharedPreferencesGymOutbox extends SharedPreferencesOutbox<GymMutation> {
-  SharedPreferencesGymOutbox({required super.namespace, super.preferences})
+class SqliteGymOutbox extends SqliteOutbox<GymMutation> {
+  SqliteGymOutbox({required super.namespace, super.store})
     : super(key: 'gym', decode: GymMutation.fromJson);
 }

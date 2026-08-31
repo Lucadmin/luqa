@@ -5,6 +5,7 @@ import {
   pushEntryUpdate,
 } from "@/lib/google/push-sync";
 import { toCategoryDTO, toEntryDTO, toSleepDTO } from "@/lib/serializers";
+import { reviveDeletedCategory } from "@/lib/server/tombstones";
 import type {
   CreateCategoryInput,
   CreateEntryInput,
@@ -80,6 +81,10 @@ export async function createCategory(
   if (existing) {
     return { category: toCategoryDTO(existing), created: false };
   }
+
+  // The name may still be held by a category this user deleted.
+  const revived = await reviveDeletedCategory(userId, input.name);
+  if (revived) return { category: toCategoryDTO(revived), created: false };
 
   const count = await db.category.count({ where: { userId } });
   const category = await db.category.create({
