@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  clientId,
+  createExpenseSchema,
+  createGroupSchema,
+  createPersonSchema,
+  createSettlementSchema,
   credentialsSchema,
   healthMetricType,
   healthSampleImportSchema,
@@ -60,3 +65,26 @@ export const healthSyncSchema = z.object({
 });
 
 export type HealthSyncInput = z.infer<typeof healthSyncSchema>;
+
+// --- Shared expenses ---
+//
+// Same rules as the browser, plus a client-minted id. A phone splits a bill at
+// the table, where the network is whatever the restaurant's basement allows;
+// the row has to have an identity before the server has seen it, and a create
+// retried after a lost response has to be recognised as the same row.
+
+export const createMobilePersonSchema = createPersonSchema.extend({
+  id: clientId.optional(),
+});
+
+export const createMobileGroupSchema = createGroupSchema.extend({
+  id: clientId.optional(),
+});
+
+export const createMobileExpenseSchema = createExpenseSchema.extend({
+  id: clientId.optional(),
+});
+
+export const createMobileSettlementSchema = createSettlementSchema.extend({
+  id: clientId.optional(),
+});

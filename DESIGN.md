@@ -32,6 +32,10 @@ colors:
   identity-pink-dark: "#F472B6"
   error-light: "#B42318"
   error-dark: "#FF8A80"
+  credit-light: "#127C46"
+  credit-dark: "#63E8A3"
+  debit-light: "#86280F"
+  debit-dark: "#FF8A66"
 typography:
   display:
     fontFamily: "Geist Sans, Roboto, sans-serif"
@@ -189,6 +193,13 @@ Ink and white do most of the work; purple is rare enough to remain recognizable.
   failed states only. Success, warning, syncing, and offline roles will receive
   separate semantic tokens when their components are implemented; they never
   borrow identity colors by implication.
+- **Money Direction** (`credit-*` / `debit-*`): which way a balance points —
+  credit is owed to the owner, debit is owed by them. Neither is success or
+  failure and neither is an error, so neither borrows the error token or an
+  identity color. The pair is separated by lightness as well as hue, because a
+  red and a green of equal luminance are the same color to the most common form
+  of color blindness, and every amount drawn in them carries the words that
+  state the direction on their own.
 
 ### Neutral
 
@@ -327,6 +338,25 @@ spacing and dividers instead of a card per row.
   list rows, not a cloud of pills or a generic recommendation card.
 - The single filled sheet action is `Add entry` or `Save changes`. Category
   selection and spatial timeline adjustment use progressive disclosure.
+
+### Money hierarchy
+
+- The money tab has one focal object: the net position, at display size, above
+  a divided rule showing what is out in each direction to scale. There is no
+  chart, because there is no series — only two numbers and the ratio between
+  them.
+- `Add expense` is the single filled action. Group and person chips beneath it
+  are shortcuts into the same composer, not a second class of action.
+- Balances and bills are rows on a continuous surface. A list of cards turns
+  fifteen people into fifteen competing objects.
+- The bill composer is amount-first: the number opens focused at display size,
+  and everything else on the sheet qualifies it.
+- A split is previewed in exact cents while it is being decided, using the same
+  allocation the server re-runs on save — down to which person absorbs the odd
+  cent. The number read off the screen at the table is the number that is owed.
+- A person's screen leads with their balance; settling up opens pre-filled with
+  the whole outstanding amount, because settling in full is what a payback
+  almost always is.
 
 ### Inputs / Fields
 

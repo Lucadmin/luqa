@@ -35,6 +35,19 @@ abstract final class LuqaColors {
 
   static const errorLight = Color(0xFFB42318);
   static const errorDark = Color(0xFFFF8A80);
+
+  // Direction of money, not success and failure. A balance is owed to the user
+  // or owed by them; neither is good news or bad news, and neither is an
+  // error, so neither borrows the error token or an identity colour.
+  //
+  // The pair is separated by lightness as well as hue — a red and a green of
+  // equal luminance are the same colour to the most common form of colour
+  // blindness — and every amount drawn in them is accompanied by the words
+  // that carry the meaning on their own: "owes you", "you owe".
+  static const creditLight = Color(0xFF127C46);
+  static const creditDark = Color(0xFF63E8A3);
+  static const debitLight = Color(0xFF86280F);
+  static const debitDark = Color(0xFFFF8A66);
 }
 
 abstract final class LuqaSpacing {
@@ -49,6 +62,8 @@ abstract final class LuqaSpacing {
 }
 
 abstract final class LuqaRadii {
+  /// Bars, marks, and progress: rounded just enough not to look cut.
+  static const indicator = 2.0;
   static const compact = 6.0;
   static const control = 8.0;
   static const surface = 12.0;
@@ -76,6 +91,8 @@ class LuqaPalette extends ThemeExtension<LuqaPalette> {
     required this.amber,
     required this.orange,
     required this.pink,
+    required this.credit,
+    required this.debit,
   });
 
   final Color canvas;
@@ -89,6 +106,12 @@ class LuqaPalette extends ThemeExtension<LuqaPalette> {
   final Color amber;
   final Color orange;
   final Color pink;
+
+  /// Money owed to the user.
+  final Color credit;
+
+  /// Money the user owes.
+  final Color debit;
 
   static LuqaPalette of(BuildContext context) =>
       Theme.of(context).extension<LuqaPalette>()!;
@@ -106,6 +129,8 @@ class LuqaPalette extends ThemeExtension<LuqaPalette> {
     Color? amber,
     Color? orange,
     Color? pink,
+    Color? credit,
+    Color? debit,
   }) {
     return LuqaPalette(
       canvas: canvas ?? this.canvas,
@@ -119,6 +144,8 @@ class LuqaPalette extends ThemeExtension<LuqaPalette> {
       amber: amber ?? this.amber,
       orange: orange ?? this.orange,
       pink: pink ?? this.pink,
+      credit: credit ?? this.credit,
+      debit: debit ?? this.debit,
     );
   }
 
@@ -137,6 +164,8 @@ class LuqaPalette extends ThemeExtension<LuqaPalette> {
       amber: Color.lerp(amber, other.amber, t)!,
       orange: Color.lerp(orange, other.orange, t)!,
       pink: Color.lerp(pink, other.pink, t)!,
+      credit: Color.lerp(credit, other.credit, t)!,
+      debit: Color.lerp(debit, other.debit, t)!,
     );
   }
 }

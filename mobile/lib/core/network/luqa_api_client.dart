@@ -76,6 +76,47 @@ abstract interface class LuqaApi {
     String id,
     api.UpdateGymLocationRequest request,
   );
+
+  Future<api.MoneyOverview> getMoneyOverview();
+
+  Future<api.ExpenseListResponse> listExpenses({
+    String? personId,
+    String? groupId,
+    String? cursor,
+    int limit = 20,
+  });
+
+  Future<api.Expense> createExpense(api.CreateExpenseRequest request);
+
+  Future<api.Expense> updateExpense(
+    String id,
+    api.UpdateExpenseRequest request,
+  );
+
+  Future<void> deleteExpense(String id);
+
+  Future<api.PersonLedger> getPersonLedger(String personId);
+
+  Future<api.Person> createPerson(api.CreatePersonRequest request);
+
+  Future<api.Person> updatePerson(String id, api.UpdatePersonRequest request);
+
+  Future<void> deletePerson(String id);
+
+  Future<api.PersonGroup> createGroup(api.CreateGroupRequest request);
+
+  Future<api.PersonGroup> updateGroup(
+    String id,
+    api.UpdateGroupRequest request,
+  );
+
+  Future<void> deleteGroup(String id);
+
+  Future<api.Settlement> createSettlement(
+    api.CreateSettlementRequest request,
+  );
+
+  Future<void> deleteSettlement(String id);
 }
 
 class LuqaApiClient implements LuqaApi {
@@ -409,6 +450,142 @@ class LuqaApiClient implements LuqaApi {
     if (response == null) throw api.ApiException(500, 'Empty response');
     return response.location;
   });
+
+  @override
+  Future<api.MoneyOverview> getMoneyOverview() => _authorized((client) async {
+    final response = await api.MoneyApi(
+      client,
+    ).getMoneyOverview().timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.overview;
+  });
+
+  @override
+  Future<api.ExpenseListResponse> listExpenses({
+    String? personId,
+    String? groupId,
+    String? cursor,
+    int limit = 20,
+  }) => _authorized((client) async {
+    final response = await api.MoneyApi(client)
+        .listExpenses(
+          personId: personId,
+          groupId: groupId,
+          cursor: cursor,
+          limit: limit,
+        )
+        .timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response;
+  });
+
+  @override
+  Future<api.Expense> createExpense(api.CreateExpenseRequest request) =>
+      _authorized((client) async {
+        final response = await api.MoneyApi(
+          client,
+        ).createExpense(request).timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response.expense;
+      });
+
+  @override
+  Future<api.Expense> updateExpense(
+    String id,
+    api.UpdateExpenseRequest request,
+  ) => _authorized((client) async {
+    final response = await api.MoneyApi(
+      client,
+    ).updateExpense(id, request).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.expense;
+  });
+
+  @override
+  Future<void> deleteExpense(String id) => _authorized(
+    (client) => api.MoneyApi(client).deleteExpense(id).timeout(_requestTimeout),
+  );
+
+  @override
+  Future<api.PersonLedger> getPersonLedger(String personId) =>
+      _authorized((client) async {
+        final response = await api.MoneyApi(
+          client,
+        ).getPersonLedger(personId).timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response.ledger;
+      });
+
+  @override
+  Future<api.Person> createPerson(api.CreatePersonRequest request) =>
+      _authorized((client) async {
+        final response = await api.MoneyApi(
+          client,
+        ).createPerson(request).timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response.person;
+      });
+
+  @override
+  Future<api.Person> updatePerson(
+    String id,
+    api.UpdatePersonRequest request,
+  ) => _authorized((client) async {
+    final response = await api.MoneyApi(
+      client,
+    ).updatePerson(id, request).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.person;
+  });
+
+  @override
+  Future<void> deletePerson(String id) => _authorized(
+    (client) => api.MoneyApi(client).deletePerson(id).timeout(_requestTimeout),
+  );
+
+  @override
+  Future<api.PersonGroup> createGroup(api.CreateGroupRequest request) =>
+      _authorized((client) async {
+        final response = await api.MoneyApi(
+          client,
+        ).createGroup(request).timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response.group;
+      });
+
+  @override
+  Future<api.PersonGroup> updateGroup(
+    String id,
+    api.UpdateGroupRequest request,
+  ) => _authorized((client) async {
+    final response = await api.MoneyApi(
+      client,
+    ).updateGroup(id, request).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.group;
+  });
+
+  @override
+  Future<void> deleteGroup(String id) => _authorized(
+    (client) => api.MoneyApi(client).deleteGroup(id).timeout(_requestTimeout),
+  );
+
+  @override
+  Future<api.Settlement> createSettlement(
+    api.CreateSettlementRequest request,
+  ) => _authorized((client) async {
+    final response = await api.MoneyApi(
+      client,
+    ).createSettlement(request).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.settlement;
+  });
+
+  @override
+  Future<void> deleteSettlement(String id) => _authorized(
+    (client) =>
+        api.MoneyApi(client).deleteSettlement(id).timeout(_requestTimeout),
+  );
 
   Future<T> _authorized<T>(
     Future<T> Function(api.ApiClient client) request,

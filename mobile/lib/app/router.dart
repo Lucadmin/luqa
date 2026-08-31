@@ -11,6 +11,10 @@ import 'package:luqa/features/gym/presentation/gym_history_screen.dart';
 import 'package:luqa/features/gym/presentation/gym_locations_screen.dart';
 import 'package:luqa/features/gym/presentation/gym_screen.dart';
 import 'package:luqa/features/gym/presentation/workout_screen.dart';
+import 'package:luqa/features/money/presentation/groups_screen.dart';
+import 'package:luqa/features/money/presentation/money_screen.dart';
+import 'package:luqa/features/money/presentation/people_screen.dart';
+import 'package:luqa/features/money/presentation/person_ledger_screen.dart';
 import 'package:luqa/features/today/presentation/timeline_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -45,14 +49,8 @@ final luqaRouter = GoRouter(
           routes: <RouteBase>[
             GoRoute(
               path: '/money',
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: DestinationPlaceholder(
-                  title: 'Money',
-                  icon: Icons.account_balance_wallet_outlined,
-                  description:
-                      'Balances, expenses, and settlements will share this shell.',
-                ),
-              ),
+              pageBuilder: (context, state) =>
+                  const NoTransitionPage(child: MoneyScreen()),
             ),
           ],
         ),
@@ -131,6 +129,22 @@ final luqaRouter = GoRouter(
       parentNavigatorKey: _rootNavigatorKey,
       path: '/gym/locations',
       builder: (context, state) => const GymLocationsScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootNavigatorKey,
+      path: '/money/people',
+      builder: (context, state) => const PeopleScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootNavigatorKey,
+      path: '/money/people/:personId',
+      builder: (context, state) =>
+          PersonLedgerScreen(personId: state.pathParameters['personId']!),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootNavigatorKey,
+      path: '/money/groups',
+      builder: (context, state) => const GroupsScreen(),
     ),
   ],
 );

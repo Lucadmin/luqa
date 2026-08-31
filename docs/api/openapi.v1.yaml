@@ -26,6 +26,12 @@ tags:
       server never pulls from a provider.
   - name: Gym
     description: Location-aware workout logging, exercise history, and gyms.
+  - name: Money
+    description: >-
+      Shared expenses: who owes whom, the bills behind it, and the paybacks
+      that settle it. Every amount is integer cents so no split ever loses one,
+      and every balance is written from the user's point of view — positive
+      means this person owes the user.
 paths:
   /auth/session:
     post:
@@ -525,6 +531,438 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /money:
+    get:
+      operationId: getMoneyOverview
+      tags: [Money]
+      summary: Load every balance, the groups, and the headline totals
+      responses:
+        "200":
+          description: Money overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoneyOverviewResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /money/expenses:
+    get:
+      operationId: listExpenses
+      tags: [Money]
+      summary: List bills newest first
+      parameters:
+        - name: personId
+          in: query
+          required: false
+          description: Only bills this person is on, or fronted.
+          schema:
+            type: string
+        - name: groupId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Bill page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createExpense
+      tags: [Money]
+      summary: Log a bill and who carries what
+      description: >-
+        The split is recomputed server-side from `splitMode`, `includeMe` and
+        `participants`, so the stored shares can never disagree with the rules
+        the editor previewed. Shares plus the user's own slice always add up to
+        the bill exactly.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExpenseRequest"
+      responses:
+        "200":
+          description: >-
+            The `id` was already used by an earlier create from this account;
+            the existing bill is returned untouched.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseResponse"
+        "201":
+          description: Bill created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/IdConflict"
+  /money/expenses/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updateExpense
+      tags: [Money]
+      summary: Edit a bill
+      description: >-
+        Omitted fields stay unchanged. Anything that can move the numbers
+        re-runs the split; fields left out of a re-split fall back to how the
+        bill already looks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateExpenseRequest"
+      responses:
+        "200":
+          description: Saved bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteExpense
+      tags: [Money]
+      summary: Drop a bill and every share on it
+      responses:
+        "204":
+          description: >-
+            Gone. Also the answer for a bill that was already deleted, so a
+            queued delete replayed from a device cannot fail on its second try.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /money/people:
+    get:
+      operationId: listPeople
+      tags: [Money]
+      summary: List everyone, archived included, in display order
+      responses:
+        "200":
+          description: People
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createPerson
+      tags: [Money]
+      summary: Add someone to split with
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePersonRequest"
+      responses:
+        "200":
+          description: >-
+            Someone with this name — or this id — already exists on the
+            account; they are returned rather than duplicated, so the same
+            person added offline on two devices converges on one row.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "201":
+          description: Person created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/IdConflict"
+  /money/people/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updatePerson
+      tags: [Money]
+      summary: Rename, restyle, reorder, archive, or restore someone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePersonRequest"
+      responses:
+        "200":
+          description: Person updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deletePerson
+      tags: [Money]
+      summary: Remove someone
+      description: >-
+        Anyone who has been on a bill is archived instead, so the history that
+        produced their balance survives. `deleted` says which happened.
+      responses:
+        "200":
+          description: Removed or archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletePersonResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /money/people/{id}/ledger:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getPersonLedger
+      tags: [Money]
+      summary: Load one person's whole history with the user
+      responses:
+        "200":
+          description: Person ledger
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonLedgerResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /money/groups:
+    get:
+      operationId: listGroups
+      tags: [Money]
+      summary: List groups with their member ids
+      responses:
+        "200":
+          description: Groups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createGroup
+      tags: [Money]
+      summary: Create a group from a set of people
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupRequest"
+      responses:
+        "200":
+          description: >-
+            A group with this name — or this id — already exists; it is
+            returned rather than duplicated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupResponse"
+        "201":
+          description: Group created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/IdConflict"
+  /money/groups/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updateGroup
+      tags: [Money]
+      summary: Rename, restyle, change membership, archive, or restore a group
+      description: >-
+        Sending `memberIds` replaces the membership wholesale; omitting it
+        leaves the members alone.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGroupRequest"
+      responses:
+        "200":
+          description: Group updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteGroup
+      tags: [Money]
+      summary: Remove a group
+      description: >-
+        Past bills keep their people and amounts; they simply lose the label.
+      responses:
+        "204":
+          description: Gone, or already gone.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /money/settlements:
+    get:
+      operationId: listSettlements
+      tags: [Money]
+      summary: List paybacks, newest first
+      parameters:
+        - name: personId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paybacks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createSettlement
+      tags: [Money]
+      summary: Record a payback
+      description: >-
+        Moves the balance without touching any of the bills behind it, so the
+        history stays readable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSettlementRequest"
+      responses:
+        "200":
+          description: >-
+            The `id` was already used by an earlier create from this account;
+            the existing payback is returned rather than double-counted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementResponse"
+        "201":
+          description: Payback recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/IdConflict"
+  /money/settlements/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updateSettlement
+      tags: [Money]
+      summary: Correct a payback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettlementRequest"
+      responses:
+        "200":
+          description: Payback updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteSettlement
+      tags: [Money]
+      summary: Undo a payback
+      responses:
+        "204":
+          description: Gone, or already gone.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     mobileBearer:
@@ -1488,6 +1926,628 @@ components:
           minimum: 0
         archived:
           type: boolean
+    SplitMode:
+      type: string
+      description: >-
+        How the per-person shares were arrived at. Stored so reopening a bill
+        shows the editor state it was saved with.
+      enum: [EQUAL, PERCENT, AMOUNT]
+    SettlementDirection:
+      type: string
+      description: Which way the money moved when a debt was paid off.
+      enum: [TO_ME, FROM_ME]
+    Person:
+      type: object
+      additionalProperties: false
+      required: [id, name, color, emoji, defaultPercent, order, archived]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        emoji:
+          type: [string, "null"]
+        defaultPercent:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100
+          description: >-
+            The cut of a bill this person usually carries, in whole percent.
+            Null means share equally with everyone else on it.
+        order:
+          type: integer
+        archived:
+          type: boolean
+    PersonBalance:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - color
+        - emoji
+        - defaultPercent
+        - order
+        - archived
+        - balanceCents
+        - coveredCents
+        - lastActivity
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        emoji:
+          type: [string, "null"]
+        defaultPercent:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100
+        order:
+          type: integer
+        archived:
+          type: boolean
+        balanceCents:
+          type: integer
+          description: >-
+            Positive means they owe the user, negative means the user owes
+            them, zero means settled up.
+        coveredCents:
+          type: integer
+          description: >-
+            All-time total the user covered for them as a treat. Recorded, but
+            never part of a balance.
+        lastActivity:
+          type: [string, "null"]
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    PersonGroup:
+      type: object
+      additionalProperties: false
+      required: [id, name, color, emoji, order, archived, memberIds]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        emoji:
+          type: [string, "null"]
+        order:
+          type: integer
+        archived:
+          type: boolean
+        memberIds:
+          type: array
+          items:
+            type: string
+    ExpenseShare:
+      type: object
+      additionalProperties: false
+      required: [personId, amountCents, percentBp, gifted]
+      properties:
+        personId:
+          type: string
+        amountCents:
+          type: integer
+        percentBp:
+          type: [integer, "null"]
+          description: This slice as basis points of the bill; 10000 is 100%.
+        gifted:
+          type: boolean
+          description: >-
+            Covered as a treat. Still totalled against the person, never a debt.
+    Expense:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - description
+        - amountCents
+        - date
+        - paidByPersonId
+        - groupId
+        - splitMode
+        - myShareCents
+        - notes
+        - shares
+        - createdAt
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        amountCents:
+          type: integer
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        paidByPersonId:
+          type: [string, "null"]
+          description: >-
+            Who fronted the money. Null means the user did. When someone else
+            paid, only the user's own share moves a balance.
+        groupId:
+          type: [string, "null"]
+        splitMode:
+          $ref: "#/components/schemas/SplitMode"
+        myShareCents:
+          type: integer
+          description: The user's own slice. Shares plus this equals the bill.
+        notes:
+          type: string
+        shares:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseShare"
+        createdAt:
+          type: string
+          format: date-time
+    Settlement:
+      type: object
+      additionalProperties: false
+      required: [id, personId, amountCents, direction, date, notes, createdAt]
+      properties:
+        id:
+          type: string
+        personId:
+          type: string
+        amountCents:
+          type: integer
+        direction:
+          $ref: "#/components/schemas/SettlementDirection"
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    MoneyOverview:
+      type: object
+      additionalProperties: false
+      required:
+        - currency
+        - people
+        - groups
+        - owedToYouCents
+        - youOweCents
+        - netCents
+        - coveredCents
+      properties:
+        currency:
+          type: string
+        people:
+          type: array
+          description: >-
+            Biggest outstanding balance first; settled people sink to the
+            bottom. Archived people are included — they may still carry a
+            balance, and their names have to resolve on old bills.
+          items:
+            $ref: "#/components/schemas/PersonBalance"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonGroup"
+        owedToYouCents:
+          type: integer
+        youOweCents:
+          type: integer
+          description: Sum of the negative balances, as a positive number.
+        netCents:
+          type: integer
+        coveredCents:
+          type: integer
+    LedgerItem:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - id
+        - date
+        - title
+        - deltaCents
+        - shareCents
+        - gifted
+        - amountCents
+        - paidByPersonId
+        - direction
+        - expense
+        - createdAt
+      properties:
+        kind:
+          type: string
+          enum: [expense, settlement]
+        id:
+          type: string
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        title:
+          type: string
+        deltaCents:
+          type: integer
+          description: >-
+            Effect on the balance. Positive raises what they owe the user; a
+            gift is zero.
+        shareCents:
+          type: integer
+        gifted:
+          type: boolean
+        amountCents:
+          type: [integer, "null"]
+          description: The whole bill, for context. Null on paybacks.
+        paidByPersonId:
+          type: [string, "null"]
+        direction:
+          oneOf:
+            - $ref: "#/components/schemas/SettlementDirection"
+            - type: "null"
+        expense:
+          oneOf:
+            - $ref: "#/components/schemas/Expense"
+            - type: "null"
+          description: Full editor state for bill rows. Null on paybacks.
+        createdAt:
+          type: string
+          format: date-time
+    PersonLedger:
+      type: object
+      additionalProperties: false
+      required:
+        - person
+        - currency
+        - balanceCents
+        - coveredCents
+        - coveredThisYearCents
+        - items
+      properties:
+        person:
+          $ref: "#/components/schemas/Person"
+        currency:
+          type: string
+        balanceCents:
+          type: integer
+        coveredCents:
+          type: integer
+        coveredThisYearCents:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LedgerItem"
+    MoneyOverviewResponse:
+      type: object
+      additionalProperties: false
+      required: [overview]
+      properties:
+        overview:
+          $ref: "#/components/schemas/MoneyOverview"
+    ExpenseResponse:
+      type: object
+      additionalProperties: false
+      required: [expense]
+      properties:
+        expense:
+          $ref: "#/components/schemas/Expense"
+    ExpenseListResponse:
+      type: object
+      additionalProperties: false
+      required: [expenses, nextCursor]
+      properties:
+        expenses:
+          type: array
+          items:
+            $ref: "#/components/schemas/Expense"
+        nextCursor:
+          type: [string, "null"]
+    PersonResponse:
+      type: object
+      additionalProperties: false
+      required: [person]
+      properties:
+        person:
+          $ref: "#/components/schemas/Person"
+    PersonListResponse:
+      type: object
+      additionalProperties: false
+      required: [people]
+      properties:
+        people:
+          type: array
+          items:
+            $ref: "#/components/schemas/Person"
+    DeletePersonResponse:
+      type: object
+      additionalProperties: false
+      required: [deleted]
+      properties:
+        deleted:
+          type: boolean
+          description: >-
+            True when the person was removed outright, false when they were
+            archived because bills or paybacks still reference them.
+    PersonLedgerResponse:
+      type: object
+      additionalProperties: false
+      required: [ledger]
+      properties:
+        ledger:
+          $ref: "#/components/schemas/PersonLedger"
+    GroupResponse:
+      type: object
+      additionalProperties: false
+      required: [group]
+      properties:
+        group:
+          $ref: "#/components/schemas/PersonGroup"
+    GroupListResponse:
+      type: object
+      additionalProperties: false
+      required: [groups]
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonGroup"
+    SettlementResponse:
+      type: object
+      additionalProperties: false
+      required: [settlement]
+      properties:
+        settlement:
+          $ref: "#/components/schemas/Settlement"
+    SettlementListResponse:
+      type: object
+      additionalProperties: false
+      required: [settlements]
+      properties:
+        settlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Settlement"
+    ExpenseParticipantInput:
+      type: object
+      additionalProperties: false
+      required: [personId]
+      properties:
+        personId:
+          type: string
+        percentBp:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 10000
+          description: "PERCENT mode: this person's cut, in basis points."
+        amountCents:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100000000
+          description: "AMOUNT mode: the exact cents this person carries."
+        gifted:
+          type: boolean
+    CreateExpenseRequest:
+      type: object
+      additionalProperties: false
+      required: [amountCents]
+      properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: >-
+            Client-minted identity for the bill, so one split at the table with no signal can still be edited and referred to. Supplying it makes the create idempotent.
+        description:
+          type: string
+          maxLength: 200
+        amountCents:
+          type: integer
+          minimum: 1
+          maximum: 100000000
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        paidByPersonId:
+          type: [string, "null"]
+        groupId:
+          type: [string, "null"]
+        splitMode:
+          $ref: "#/components/schemas/SplitMode"
+        includeMe:
+          type: boolean
+          description: "EQUAL mode: whether the user is one of the equal parts."
+        participants:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/ExpenseParticipantInput"
+        notes:
+          type: string
+          maxLength: 2000
+    UpdateExpenseRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        description:
+          type: string
+          maxLength: 200
+        amountCents:
+          type: integer
+          minimum: 1
+          maximum: 100000000
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        paidByPersonId:
+          type: [string, "null"]
+        groupId:
+          type: [string, "null"]
+        splitMode:
+          $ref: "#/components/schemas/SplitMode"
+        includeMe:
+          type: boolean
+        participants:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/ExpenseParticipantInput"
+        notes:
+          type: string
+          maxLength: 2000
+    CreatePersonRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: >-
+            Preferred identity for someone added offline. Honoured only when free; an existing person with the same name wins, so the response is authoritative.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        emoji:
+          type: [string, "null"]
+          maxLength: 8
+        defaultPercent:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100
+    UpdatePersonRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        emoji:
+          type: [string, "null"]
+          maxLength: 8
+        defaultPercent:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100
+        order:
+          type: integer
+          minimum: 0
+        archived:
+          type: boolean
+    CreateGroupRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: >-
+            Preferred identity for a group made offline. Honoured only when free; an existing group with the same name wins.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        emoji:
+          type: [string, "null"]
+          maxLength: 8
+        memberIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+    UpdateGroupRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        emoji:
+          type: [string, "null"]
+          maxLength: 8
+        memberIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+        order:
+          type: integer
+          minimum: 0
+        archived:
+          type: boolean
+    CreateSettlementRequest:
+      type: object
+      additionalProperties: false
+      required: [personId, amountCents]
+      properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: >-
+            Client-minted identity, so a payback recorded offline is not double-counted when the create is retried.
+        personId:
+          type: string
+        amountCents:
+          type: integer
+          minimum: 1
+          maximum: 100000000
+        direction:
+          $ref: "#/components/schemas/SettlementDirection"
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        notes:
+          type: string
+          maxLength: 500
+    UpdateSettlementRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        amountCents:
+          type: integer
+          minimum: 1
+          maximum: 100000000
+        direction:
+          $ref: "#/components/schemas/SettlementDirection"
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        notes:
+          type: string
+          maxLength: 500
     ErrorDetail:
       type: object
       additionalProperties: true

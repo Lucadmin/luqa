@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/features/gym/application/gym_sync_engine.dart';
+import 'package:luqa/features/money/application/money_sync_engine.dart';
 import 'package:luqa/features/today/application/sync_engine.dart';
 
 /// Gives every queue of local writes a chance to drain whenever the app comes
@@ -47,6 +48,7 @@ class _OutboxAutoSyncState extends ConsumerState<OutboxAutoSync>
       if (!mounted) return;
       ref.read(syncEngineProvider.notifier).sync();
       ref.read(gymSyncEngineProvider.notifier).sync();
+      ref.read(moneySyncEngineProvider.notifier).sync();
     });
   }
 

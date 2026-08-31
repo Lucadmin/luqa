@@ -74,6 +74,24 @@ Class | Method | HTTP request | Description
 *GymApi* | [**updateGymSession**](doc//GymApi.md#updategymsession) | **PATCH** /gym/sessions/{id} | Autosave a workout draft
 *HealthApi* | [**getHealthSyncState**](doc//HealthApi.md#gethealthsyncstate) | **GET** /health/sync | Read what the server last accepted, per source and metric
 *HealthApi* | [**pushHealthSync**](doc//HealthApi.md#pushhealthsync) | **POST** /health/sync | Push sleep sessions and samples read from the device
+*MoneyApi* | [**createExpense**](doc//MoneyApi.md#createexpense) | **POST** /money/expenses | Log a bill and who carries what
+*MoneyApi* | [**createGroup**](doc//MoneyApi.md#creategroup) | **POST** /money/groups | Create a group from a set of people
+*MoneyApi* | [**createPerson**](doc//MoneyApi.md#createperson) | **POST** /money/people | Add someone to split with
+*MoneyApi* | [**createSettlement**](doc//MoneyApi.md#createsettlement) | **POST** /money/settlements | Record a payback
+*MoneyApi* | [**deleteExpense**](doc//MoneyApi.md#deleteexpense) | **DELETE** /money/expenses/{id} | Drop a bill and every share on it
+*MoneyApi* | [**deleteGroup**](doc//MoneyApi.md#deletegroup) | **DELETE** /money/groups/{id} | Remove a group
+*MoneyApi* | [**deletePerson**](doc//MoneyApi.md#deleteperson) | **DELETE** /money/people/{id} | Remove someone
+*MoneyApi* | [**deleteSettlement**](doc//MoneyApi.md#deletesettlement) | **DELETE** /money/settlements/{id} | Undo a payback
+*MoneyApi* | [**getMoneyOverview**](doc//MoneyApi.md#getmoneyoverview) | **GET** /money | Load every balance, the groups, and the headline totals
+*MoneyApi* | [**getPersonLedger**](doc//MoneyApi.md#getpersonledger) | **GET** /money/people/{id}/ledger | Load one person's whole history with the user
+*MoneyApi* | [**listExpenses**](doc//MoneyApi.md#listexpenses) | **GET** /money/expenses | List bills newest first
+*MoneyApi* | [**listGroups**](doc//MoneyApi.md#listgroups) | **GET** /money/groups | List groups with their member ids
+*MoneyApi* | [**listPeople**](doc//MoneyApi.md#listpeople) | **GET** /money/people | List everyone, archived included, in display order
+*MoneyApi* | [**listSettlements**](doc//MoneyApi.md#listsettlements) | **GET** /money/settlements | List paybacks, newest first
+*MoneyApi* | [**updateExpense**](doc//MoneyApi.md#updateexpense) | **PATCH** /money/expenses/{id} | Edit a bill
+*MoneyApi* | [**updateGroup**](doc//MoneyApi.md#updategroup) | **PATCH** /money/groups/{id} | Rename, restyle, change membership, archive, or restore a group
+*MoneyApi* | [**updatePerson**](doc//MoneyApi.md#updateperson) | **PATCH** /money/people/{id} | Rename, restyle, reorder, archive, or restore someone
+*MoneyApi* | [**updateSettlement**](doc//MoneyApi.md#updatesettlement) | **PATCH** /money/settlements/{id} | Correct a payback
 *SleepApi* | [**listSleepEntries**](doc//SleepApi.md#listsleepentries) | **GET** /sleep-entries | List sleep sessions that ended inside a half-open UTC window
 *TimeEntriesApi* | [**createTimeEntry**](doc//TimeEntriesApi.md#createtimeentry) | **POST** /time-entries | Create a completed block or running timer
 *TimeEntriesApi* | [**deleteTimeEntry**](doc//TimeEntriesApi.md#deletetimeentry) | **DELETE** /time-entries/{id} | Soft-delete an entry
@@ -87,14 +105,26 @@ Class | Method | HTTP request | Description
  - [CategoryListResponse](doc//CategoryListResponse.md)
  - [CategoryResponse](doc//CategoryResponse.md)
  - [CreateCategoryRequest](doc//CreateCategoryRequest.md)
+ - [CreateExpenseRequest](doc//CreateExpenseRequest.md)
+ - [CreateGroupRequest](doc//CreateGroupRequest.md)
  - [CreateGymLocationRequest](doc//CreateGymLocationRequest.md)
  - [CreateGymSessionRequest](doc//CreateGymSessionRequest.md)
+ - [CreatePersonRequest](doc//CreatePersonRequest.md)
  - [CreateSessionRequest](doc//CreateSessionRequest.md)
+ - [CreateSettlementRequest](doc//CreateSettlementRequest.md)
  - [CreateTimeEntryRequest](doc//CreateTimeEntryRequest.md)
+ - [DeletePersonResponse](doc//DeletePersonResponse.md)
  - [DeviceHealthSource](doc//DeviceHealthSource.md)
  - [EntrySource](doc//EntrySource.md)
  - [ErrorDetail](doc//ErrorDetail.md)
  - [ErrorResponse](doc//ErrorResponse.md)
+ - [Expense](doc//Expense.md)
+ - [ExpenseListResponse](doc//ExpenseListResponse.md)
+ - [ExpenseParticipantInput](doc//ExpenseParticipantInput.md)
+ - [ExpenseResponse](doc//ExpenseResponse.md)
+ - [ExpenseShare](doc//ExpenseShare.md)
+ - [GroupListResponse](doc//GroupListResponse.md)
+ - [GroupResponse](doc//GroupResponse.md)
  - [GymExercise](doc//GymExercise.md)
  - [GymExerciseHistory](doc//GymExerciseHistory.md)
  - [GymExerciseHistoryResponse](doc//GymExerciseHistoryResponse.md)
@@ -119,9 +149,23 @@ Class | Method | HTTP request | Description
  - [HealthSyncResponse](doc//HealthSyncResponse.md)
  - [HealthSyncState](doc//HealthSyncState.md)
  - [HealthSyncStateListResponse](doc//HealthSyncStateListResponse.md)
+ - [LedgerItem](doc//LedgerItem.md)
  - [MobileUser](doc//MobileUser.md)
+ - [MoneyOverview](doc//MoneyOverview.md)
+ - [MoneyOverviewResponse](doc//MoneyOverviewResponse.md)
+ - [Person](doc//Person.md)
+ - [PersonBalance](doc//PersonBalance.md)
+ - [PersonGroup](doc//PersonGroup.md)
+ - [PersonLedger](doc//PersonLedger.md)
+ - [PersonLedgerResponse](doc//PersonLedgerResponse.md)
+ - [PersonListResponse](doc//PersonListResponse.md)
+ - [PersonResponse](doc//PersonResponse.md)
  - [RefreshSessionRequest](doc//RefreshSessionRequest.md)
  - [SessionCredentials](doc//SessionCredentials.md)
+ - [Settlement](doc//Settlement.md)
+ - [SettlementDirection](doc//SettlementDirection.md)
+ - [SettlementListResponse](doc//SettlementListResponse.md)
+ - [SettlementResponse](doc//SettlementResponse.md)
  - [SleepEntry](doc//SleepEntry.md)
  - [SleepEntryListResponse](doc//SleepEntryListResponse.md)
  - [SleepSessionImport](doc//SleepSessionImport.md)
@@ -129,11 +173,16 @@ Class | Method | HTTP request | Description
  - [SleepStage](doc//SleepStage.md)
  - [SleepSyncPayload](doc//SleepSyncPayload.md)
  - [SleepSyncWindow](doc//SleepSyncWindow.md)
+ - [SplitMode](doc//SplitMode.md)
  - [TimeEntry](doc//TimeEntry.md)
  - [TimeEntryListResponse](doc//TimeEntryListResponse.md)
  - [TimeEntryResponse](doc//TimeEntryResponse.md)
+ - [UpdateExpenseRequest](doc//UpdateExpenseRequest.md)
+ - [UpdateGroupRequest](doc//UpdateGroupRequest.md)
  - [UpdateGymLocationRequest](doc//UpdateGymLocationRequest.md)
  - [UpdateGymSessionRequest](doc//UpdateGymSessionRequest.md)
+ - [UpdatePersonRequest](doc//UpdatePersonRequest.md)
+ - [UpdateSettlementRequest](doc//UpdateSettlementRequest.md)
  - [UpdateTimeEntryRequest](doc//UpdateTimeEntryRequest.md)
 
 

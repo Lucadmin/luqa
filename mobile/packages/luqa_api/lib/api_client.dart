@@ -212,14 +212,24 @@ class ApiClient {
           return CategoryResponse.fromJson(value);
         case 'CreateCategoryRequest':
           return CreateCategoryRequest.fromJson(value);
+        case 'CreateExpenseRequest':
+          return CreateExpenseRequest.fromJson(value);
+        case 'CreateGroupRequest':
+          return CreateGroupRequest.fromJson(value);
         case 'CreateGymLocationRequest':
           return CreateGymLocationRequest.fromJson(value);
         case 'CreateGymSessionRequest':
           return CreateGymSessionRequest.fromJson(value);
+        case 'CreatePersonRequest':
+          return CreatePersonRequest.fromJson(value);
         case 'CreateSessionRequest':
           return CreateSessionRequest.fromJson(value);
+        case 'CreateSettlementRequest':
+          return CreateSettlementRequest.fromJson(value);
         case 'CreateTimeEntryRequest':
           return CreateTimeEntryRequest.fromJson(value);
+        case 'DeletePersonResponse':
+          return DeletePersonResponse.fromJson(value);
         case 'DeviceHealthSource':
           return DeviceHealthSourceTypeTransformer().decode(value);
         case 'EntrySource':
@@ -228,6 +238,20 @@ class ApiClient {
           return ErrorDetail.fromJson(value);
         case 'ErrorResponse':
           return ErrorResponse.fromJson(value);
+        case 'Expense':
+          return Expense.fromJson(value);
+        case 'ExpenseListResponse':
+          return ExpenseListResponse.fromJson(value);
+        case 'ExpenseParticipantInput':
+          return ExpenseParticipantInput.fromJson(value);
+        case 'ExpenseResponse':
+          return ExpenseResponse.fromJson(value);
+        case 'ExpenseShare':
+          return ExpenseShare.fromJson(value);
+        case 'GroupListResponse':
+          return GroupListResponse.fromJson(value);
+        case 'GroupResponse':
+          return GroupResponse.fromJson(value);
         case 'GymExercise':
           return GymExercise.fromJson(value);
         case 'GymExerciseHistory':
@@ -276,12 +300,40 @@ class ApiClient {
           return HealthSyncState.fromJson(value);
         case 'HealthSyncStateListResponse':
           return HealthSyncStateListResponse.fromJson(value);
+        case 'LedgerItem':
+          return LedgerItem.fromJson(value);
         case 'MobileUser':
           return MobileUser.fromJson(value);
+        case 'MoneyOverview':
+          return MoneyOverview.fromJson(value);
+        case 'MoneyOverviewResponse':
+          return MoneyOverviewResponse.fromJson(value);
+        case 'Person':
+          return Person.fromJson(value);
+        case 'PersonBalance':
+          return PersonBalance.fromJson(value);
+        case 'PersonGroup':
+          return PersonGroup.fromJson(value);
+        case 'PersonLedger':
+          return PersonLedger.fromJson(value);
+        case 'PersonLedgerResponse':
+          return PersonLedgerResponse.fromJson(value);
+        case 'PersonListResponse':
+          return PersonListResponse.fromJson(value);
+        case 'PersonResponse':
+          return PersonResponse.fromJson(value);
         case 'RefreshSessionRequest':
           return RefreshSessionRequest.fromJson(value);
         case 'SessionCredentials':
           return SessionCredentials.fromJson(value);
+        case 'Settlement':
+          return Settlement.fromJson(value);
+        case 'SettlementDirection':
+          return SettlementDirectionTypeTransformer().decode(value);
+        case 'SettlementListResponse':
+          return SettlementListResponse.fromJson(value);
+        case 'SettlementResponse':
+          return SettlementResponse.fromJson(value);
         case 'SleepEntry':
           return SleepEntry.fromJson(value);
         case 'SleepEntryListResponse':
@@ -296,16 +348,26 @@ class ApiClient {
           return SleepSyncPayload.fromJson(value);
         case 'SleepSyncWindow':
           return SleepSyncWindow.fromJson(value);
+        case 'SplitMode':
+          return SplitModeTypeTransformer().decode(value);
         case 'TimeEntry':
           return TimeEntry.fromJson(value);
         case 'TimeEntryListResponse':
           return TimeEntryListResponse.fromJson(value);
         case 'TimeEntryResponse':
           return TimeEntryResponse.fromJson(value);
+        case 'UpdateExpenseRequest':
+          return UpdateExpenseRequest.fromJson(value);
+        case 'UpdateGroupRequest':
+          return UpdateGroupRequest.fromJson(value);
         case 'UpdateGymLocationRequest':
           return UpdateGymLocationRequest.fromJson(value);
         case 'UpdateGymSessionRequest':
           return UpdateGymSessionRequest.fromJson(value);
+        case 'UpdatePersonRequest':
+          return UpdatePersonRequest.fromJson(value);
+        case 'UpdateSettlementRequest':
+          return UpdateSettlementRequest.fromJson(value);
         case 'UpdateTimeEntryRequest':
           return UpdateTimeEntryRequest.fromJson(value);
         default:

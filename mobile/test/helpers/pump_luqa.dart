@@ -12,6 +12,10 @@ import 'package:luqa/features/gym/application/gym_overview_controller.dart';
 import 'package:luqa/features/gym/data/gym_cache.dart';
 import 'package:luqa/features/gym/data/gym_providers.dart';
 import 'package:luqa/features/gym/data/gym_repository.dart';
+import 'package:luqa/features/money/application/money_controller.dart';
+import 'package:luqa/features/money/data/money_cache.dart';
+import 'package:luqa/features/money/data/money_providers.dart';
+import 'package:luqa/features/money/data/money_repository.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
 import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/today/data/today_providers.dart';
@@ -19,6 +23,7 @@ import 'package:luqa/features/today/presentation/widgets/timeline_view.dart';
 
 import 'fake_health.dart';
 import 'fake_gym_repository.dart';
+import 'fake_money_repository.dart';
 import 'fake_timeline_repository.dart';
 
 final fixedNow = DateTime(2026, 8, 27, 15);
@@ -46,6 +51,8 @@ Future<FakeTimelineRepository> pumpLuqa(
   ThemeMode themeMode = ThemeMode.light,
   Size size = const Size(412, 915),
   GymRepository? gymRepository,
+  MoneyRepository? moneyRepository,
+  String initialLocation = '/',
 }) async {
   final repository = FakeTimelineRepository(today: fixedNow);
   tester.view.devicePixelRatio = 1;
@@ -53,7 +60,7 @@ Future<FakeTimelineRepository> pumpLuqa(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
-  luqaRouter.go('/');
+  luqaRouter.go(initialLocation);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -69,11 +76,17 @@ Future<FakeTimelineRepository> pumpLuqa(
         outboxProvider.overrideWithValue(const NullOutbox()),
         gymOutboxProvider.overrideWithValue(const NullOutbox()),
         gymCacheProvider.overrideWithValue(const NullGymCache()),
+        moneyOutboxProvider.overrideWithValue(const NullOutbox()),
+        moneyCacheProvider.overrideWithValue(const NullMoneyCache()),
         luqaApiProvider.overrideWithValue(FakeHealthApi()),
         gymRepositoryProvider.overrideWithValue(
           gymRepository ?? FakeGymRepository.sample(),
         ),
         gymNowProvider.overrideWithValue(fixedNow),
+        moneyRepositoryProvider.overrideWithValue(
+          moneyRepository ?? FakeMoneyRepository.sample(),
+        ),
+        moneyNowProvider.overrideWithValue(fixedNow),
         currentTimeProvider.overrideWithValue(fixedNow),
         todayRepositoryProvider.overrideWithValue(repository),
         authControllerProvider.overrideWith(FixedAuthController.new),

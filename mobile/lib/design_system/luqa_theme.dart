@@ -124,6 +124,8 @@ abstract final class LuqaTheme {
           amber: isDark ? LuqaColors.amberDark : LuqaColors.amberLight,
           orange: isDark ? LuqaColors.orangeDark : LuqaColors.orangeLight,
           pink: isDark ? LuqaColors.pinkDark : LuqaColors.pinkLight,
+          credit: isDark ? LuqaColors.creditDark : LuqaColors.creditLight,
+          debit: isDark ? LuqaColors.debitDark : LuqaColors.debitLight,
         ),
       ],
       appBarTheme: AppBarTheme(
