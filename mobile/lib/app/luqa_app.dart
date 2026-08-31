@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/app/router.dart';
+import 'package:luqa/core/sync/outbox_auto_sync.dart';
 import 'package:luqa/app/theme_mode_controller.dart';
 import 'package:luqa/design_system/luqa_theme.dart';
 import 'package:luqa/features/auth/application/auth_controller.dart';
 import 'package:luqa/features/auth/presentation/auth_bootstrap_screen.dart';
 import 'package:luqa/features/auth/presentation/sign_in_screen.dart';
 import 'package:luqa/features/health/presentation/health_auto_sync.dart';
-import 'package:luqa/features/today/presentation/outbox_auto_sync.dart';
 
 class LuqaApp extends ConsumerWidget {
   const LuqaApp({super.key});

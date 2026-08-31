@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:luqa/features/gym/application/gym_sync_engine.dart';
 import 'package:luqa/features/today/application/sync_engine.dart';
 
-/// Gives the queue of local writes a chance to drain whenever the app comes
+/// Gives every queue of local writes a chance to drain whenever the app comes
 /// back to the foreground.
 ///
 /// The engine retries on its own timer, but that timer backs off to minutes
@@ -45,6 +46,7 @@ class _OutboxAutoSyncState extends ConsumerState<OutboxAutoSync>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(syncEngineProvider.notifier).sync();
+      ref.read(gymSyncEngineProvider.notifier).sync();
     });
   }
 

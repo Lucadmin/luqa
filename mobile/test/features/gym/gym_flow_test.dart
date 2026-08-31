@@ -25,7 +25,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gym.saves, 1);
-    expect(find.text('Autosaved'), findsOneWidget);
+    // "Saved" is a promise about the phone, which is the one the app can keep
+    // in a gym. Reaching the server is reported as "Saved · syncing".
+    expect(find.text('Saved'), findsOneWidget);
   });
 
   testWidgets('switching gyms refreshes references without clearing input', (

@@ -165,11 +165,12 @@ class FakeGymRepository implements GymRepository {
 
   @override
   Future<GymSession> createSession({
+    String? id,
     required String dateKey,
     required String? locationId,
   }) async {
     final session = GymSession(
-      id: 'new-workout',
+      id: id ?? 'new-workout',
       dateKey: dateKey,
       locationId: locationId,
       notes: '',
@@ -245,12 +246,13 @@ class FakeGymRepository implements GymRepository {
 
   @override
   Future<GymLocation> createLocation({
+    String? id,
     required String name,
     required String code,
     required int colorValue,
   }) async {
     final location = GymLocation(
-      id: 'location-${overview.locations.length}',
+      id: id ?? 'location-${overview.locations.length}',
       code: code,
       name: name,
       colorValue: colorValue,

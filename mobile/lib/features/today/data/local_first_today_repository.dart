@@ -1,4 +1,5 @@
 import 'package:luqa/core/id/local_id.dart';
+import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/today/data/outbox.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
 import 'package:luqa/features/today/domain/category.dart';
@@ -22,7 +23,7 @@ class LocalFirstTodayRepository implements TodayRepository {
 
   /// The server, reached only for reads and by the sync engine.
   final TodayRepository remote;
-  final MutationQueue queue;
+  final MutationQueue<TimelineMutation> queue;
 
   final String Function() _mintId;
   final DateTime Function() _now;

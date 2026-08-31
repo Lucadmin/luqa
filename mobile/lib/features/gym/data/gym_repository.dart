@@ -39,7 +39,11 @@ class GymSessionWrite {
 abstract interface class GymRepository {
   Future<GymOverview> loadOverview({int limit = 30});
 
+  /// [id] is the identity the device already gave the workout. Sending it
+  /// makes the create idempotent, so a retry after a lost response cannot
+  /// leave two empty workouts in the same day.
   Future<GymSession> createSession({
+    String? id,
     required String dateKey,
     required String? locationId,
   });
@@ -57,6 +61,7 @@ abstract interface class GymRepository {
   });
 
   Future<GymLocation> createLocation({
+    String? id,
     required String name,
     required String code,
     required int colorValue,

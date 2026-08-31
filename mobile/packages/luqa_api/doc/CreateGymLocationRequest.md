@@ -8,6 +8,7 @@ import 'package:luqa_api/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**id** | **Optional<String?>** | Preferred identity for a gym added offline. Honoured only when free; a gym with the same code already existing wins, so the response is authoritative. | [optional]
 **code** | **String** |  |
 **name** | **String** |  |
 **color** | **Optional<String?>** |  | [optional]

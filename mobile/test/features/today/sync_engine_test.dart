@@ -7,6 +7,8 @@ import 'package:luqa/features/today/data/remote_today_repository.dart';
 import 'package:luqa/features/today/data/today_providers.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
 
+import 'package:luqa/core/sync/outbox.dart';
+
 import 'sync_engine_harness.dart';
 
 void main() {
@@ -180,7 +182,7 @@ NewTimeEntry _draft(String description, {String? categoryId}) => NewTimeEntry(
 );
 
 class _Harness {
-  _Harness({Outbox? outbox}) {
+  _Harness({Outbox<TimelineMutation>? outbox}) {
     final remote = RemoteTodayRepository(client: api, cache: MemoryCache());
     container = ProviderContainer(
       overrides: [

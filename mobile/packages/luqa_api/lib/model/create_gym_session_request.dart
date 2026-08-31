@@ -13,11 +13,21 @@ part of openapi.api;
 class CreateGymSessionRequest {
   /// Returns a new [CreateGymSessionRequest] instance.
   CreateGymSessionRequest({
+    this.id = const Optional.absent(),
     this.date = const Optional.absent(),
     this.locationId = const Optional.absent(),
     this.notes = const Optional.absent(),
     this.exercises = const Optional.present(const []),
   });
+
+  /// Client-minted identity for the workout, so one started with no signal can still be opened and saved into. Supplying it makes the create idempotent.
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<String?> id;
 
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
@@ -49,6 +59,7 @@ class CreateGymSessionRequest {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is CreateGymSessionRequest &&
+          other.id == id &&
           other.date == date &&
           other.locationId == locationId &&
           other.notes == notes &&
@@ -57,6 +68,7 @@ class CreateGymSessionRequest {
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
+      (id == null ? 0 : id!.hashCode) +
       (date == null ? 0 : date!.hashCode) +
       (locationId == null ? 0 : locationId!.hashCode) +
       (notes == null ? 0 : notes!.hashCode) +
@@ -64,10 +76,14 @@ class CreateGymSessionRequest {
 
   @override
   String toString() =>
-      'CreateGymSessionRequest[date=$date, locationId=$locationId, notes=$notes, exercises=$exercises]';
+      'CreateGymSessionRequest[id=$id, date=$date, locationId=$locationId, notes=$notes, exercises=$exercises]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
+    if (this.id.isPresent) {
+      final value = this.id.value;
+      json[r'id'] = value;
+    }
     if (this.date.isPresent) {
       final value = this.date.value;
       json[r'date'] = value;
@@ -90,12 +106,14 @@ class CreateGymSessionRequest {
   /// Clones this instance of [CreateGymSessionRequest] and returns a new one where some of the
   /// properties have changed.
   CreateGymSessionRequest copyWith({
+    Optional<String?>? id,
     Optional<String?>? date,
     Optional<String?>? locationId,
     Optional<String?>? notes,
     Optional<List<GymSessionExerciseInput>?>? exercises,
   }) =>
       CreateGymSessionRequest(
+        id: id ?? this.id,
         date: date ?? this.date,
         locationId: locationId ?? this.locationId,
         notes: notes ?? this.notes,
@@ -117,6 +135,9 @@ class CreateGymSessionRequest {
       }());
 
       return CreateGymSessionRequest(
+        id: json.containsKey(r'id')
+            ? Optional.present(mapValueOfType<String>(json, r'id'))
+            : const Optional.absent(),
         date: json.containsKey(r'date')
             ? Optional.present(mapValueOfType<String>(json, r'date'))
             : const Optional.absent(),

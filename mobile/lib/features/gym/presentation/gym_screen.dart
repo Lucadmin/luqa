@@ -89,6 +89,14 @@ class GymScreen extends ConsumerWidget {
                           style: Theme.of(context).textTheme.headlineLarge,
                         ),
                       ),
+                      // What is waiting to go out matters more than what is
+                      // coming in: it is the user's own training, and the one
+                      // thing they might want to stay on this screen for.
+                      if (state.pendingWrites > 0)
+                        _PendingChip(
+                          count: state.pendingWrites,
+                          onRetry: controller.refresh,
+                        ),
                       IconButton(
                         tooltip: 'Manage gyms',
                         onPressed: () => context.push('/gym/locations'),
@@ -101,14 +109,10 @@ class GymScreen extends ConsumerWidget {
                     _CurrentWorkout(
                       session: current,
                       location: overview.locationById(current.locationId),
-                      isBusy: false,
                       onTap: () => context.push('/gym/workouts/${current.id}'),
                     )
                   else
-                    _StartWorkout(
-                      isBusy: state.isCreatingWorkout,
-                      onTap: startWorkout,
-                    ),
+                    _StartWorkout(onTap: startWorkout),
                   if (state.error != null) ...[
                     const SizedBox(height: LuqaSpacing.md),
                     _InlineError(
@@ -185,17 +189,51 @@ class GymScreen extends ConsumerWidget {
   }
 }
 
+class _PendingChip extends StatelessWidget {
+  const _PendingChip({required this.count, required this.onRetry});
+
+  final int count;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Semantics(
+      liveRegion: true,
+      child: IconButton(
+        key: const ValueKey('gym-pending-writes'),
+        tooltip: count == 1
+            ? '1 change waiting to sync. Tap to retry'
+            : '$count changes waiting to sync. Tap to retry',
+        onPressed: onRetry,
+        visualDensity: VisualDensity.compact,
+        icon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_upload_outlined, size: 16, color: muted),
+            const SizedBox(width: 3),
+            Text(
+              '$count',
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(color: muted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CurrentWorkout extends StatelessWidget {
   const _CurrentWorkout({
     required this.session,
     required this.location,
-    required this.isBusy,
     required this.onTap,
   });
 
   final GymSession session;
   final GymLocation? location;
-  final bool isBusy;
   final VoidCallback onTap;
 
   @override
@@ -204,7 +242,7 @@ class _CurrentWorkout extends StatelessWidget {
       color: Theme.of(context).colorScheme.onSurface,
       borderRadius: BorderRadius.circular(LuqaRadii.control),
       child: InkWell(
-        onTap: isBusy ? null : onTap,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(LuqaRadii.control),
         child: Padding(
           padding: const EdgeInsets.all(LuqaSpacing.lg),
@@ -247,29 +285,21 @@ class _CurrentWorkout extends StatelessWidget {
 }
 
 class _StartWorkout extends StatelessWidget {
-  const _StartWorkout({required this.isBusy, required this.onTap});
+  const _StartWorkout({required this.onTap});
 
-  final bool isBusy;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    // No busy state: the workout exists on the phone the moment this is
+    // tapped, and the screen for it opens straight away.
     return SizedBox(
       height: 64,
       child: FilledButton(
-        onPressed: isBusy ? null : onTap,
-        child: Row(
+        onPressed: onTap,
+        child: const Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(isBusy ? 'Starting…' : 'Start workout'),
-            if (isBusy)
-              const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              const Icon(Icons.arrow_forward_rounded),
-          ],
+          children: [Text('Start workout'), Icon(Icons.arrow_forward_rounded)],
         ),
       ),
     );

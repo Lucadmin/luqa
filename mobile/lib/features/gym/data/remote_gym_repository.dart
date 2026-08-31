@@ -14,11 +14,13 @@ class RemoteGymRepository implements GymRepository {
 
   @override
   Future<GymSession> createSession({
+    String? id,
     required String dateKey,
     required String? locationId,
   }) async => _sessionFromApi(
     await client.createGymSession(
       api.CreateGymSessionRequest(
+        id: id == null ? const api.Optional.absent() : api.Optional.present(id),
         date: api.Optional.present(dateKey),
         locationId: api.Optional.present(locationId),
         exercises: const api.Optional.absent(),
@@ -84,12 +86,14 @@ class RemoteGymRepository implements GymRepository {
 
   @override
   Future<GymLocation> createLocation({
+    String? id,
     required String name,
     required String code,
     required int colorValue,
   }) async => _locationFromApi(
     await client.createGymLocation(
       api.CreateGymLocationRequest(
+        id: id == null ? const api.Optional.absent() : api.Optional.present(id),
         code: code,
         name: name,
         color: api.Optional.present(_hexColor(colorValue)),

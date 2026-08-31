@@ -9,10 +9,11 @@ import 'package:luqa/features/auth/domain/auth_user.dart';
 import 'package:luqa/features/health/application/health_sync_controller.dart';
 import 'package:luqa/features/health/data/health_connect_reader.dart';
 import 'package:luqa/features/gym/application/gym_overview_controller.dart';
+import 'package:luqa/features/gym/data/gym_cache.dart';
 import 'package:luqa/features/gym/data/gym_providers.dart';
 import 'package:luqa/features/gym/data/gym_repository.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
-import 'package:luqa/features/today/data/outbox.dart';
+import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/today/data/today_providers.dart';
 import 'package:luqa/features/today/presentation/widgets/timeline_view.dart';
 
@@ -63,9 +64,11 @@ Future<FakeTimelineRepository> pumpLuqa(
           FakeHealthReader(available: HealthAvailability.unsupportedPlatform),
         ),
         healthSyncStoreProvider.overrideWithValue(InMemoryHealthSyncStore()),
-        // Same reason for the write queue: OutboxAutoSync is mounted next to
-        // HealthAutoSync, and the real store wants a platform channel.
+        // Same reason for the write queues: OutboxAutoSync is mounted next to
+        // HealthAutoSync, and the real stores want a platform channel.
         outboxProvider.overrideWithValue(const NullOutbox()),
+        gymOutboxProvider.overrideWithValue(const NullOutbox()),
+        gymCacheProvider.overrideWithValue(const NullGymCache()),
         luqaApiProvider.overrideWithValue(FakeHealthApi()),
         gymRepositoryProvider.overrideWithValue(
           gymRepository ?? FakeGymRepository.sample(),

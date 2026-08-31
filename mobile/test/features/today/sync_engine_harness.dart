@@ -1,5 +1,6 @@
 import 'package:luqa/core/network/luqa_api_client.dart';
 import 'package:luqa/features/auth/data/secure_credential_store.dart';
+import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/today/data/outbox.dart';
 import 'package:luqa/features/today/data/remote_today_repository.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
@@ -29,17 +30,17 @@ class MemoryCache implements TimelineCache {
   }
 }
 
-class MemoryOutbox implements Outbox {
-  List<PendingMutation> stored = const [];
+class MemoryOutbox implements Outbox<TimelineMutation> {
+  List<TimelineMutation> stored = const [];
 
   @override
-  Future<List<PendingMutation>> read() async => [
+  Future<List<TimelineMutation>> read() async => [
     // Round-tripped deliberately: this is what a real launch reads back.
-    for (final pending in stored) PendingMutation.fromJson(pending.toJson())!,
+    for (final pending in stored) TimelineMutation.fromJson(pending.toJson())!,
   ];
 
   @override
-  Future<void> write(List<PendingMutation> queue) async {
+  Future<void> write(List<TimelineMutation> queue) async {
     stored = List.of(queue);
   }
 }

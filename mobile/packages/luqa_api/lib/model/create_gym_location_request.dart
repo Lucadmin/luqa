@@ -13,10 +13,20 @@ part of openapi.api;
 class CreateGymLocationRequest {
   /// Returns a new [CreateGymLocationRequest] instance.
   CreateGymLocationRequest({
+    this.id = const Optional.absent(),
     required this.code,
     required this.name,
     this.color = const Optional.absent(),
   });
+
+  /// Preferred identity for a gym added offline. Honoured only when free; a gym with the same code already existing wins, so the response is authoritative.
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<String?> id;
 
   final String code;
 
@@ -34,6 +44,7 @@ class CreateGymLocationRequest {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is CreateGymLocationRequest &&
+          other.id == id &&
           other.code == code &&
           other.name == name &&
           other.color == color;
@@ -41,14 +52,21 @@ class CreateGymLocationRequest {
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (code.hashCode) + (name.hashCode) + (color == null ? 0 : color!.hashCode);
+      (id == null ? 0 : id!.hashCode) +
+      (code.hashCode) +
+      (name.hashCode) +
+      (color == null ? 0 : color!.hashCode);
 
   @override
   String toString() =>
-      'CreateGymLocationRequest[code=$code, name=$name, color=$color]';
+      'CreateGymLocationRequest[id=$id, code=$code, name=$name, color=$color]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
+    if (this.id.isPresent) {
+      final value = this.id.value;
+      json[r'id'] = value;
+    }
     json[r'code'] = this.code;
     json[r'name'] = this.name;
     if (this.color.isPresent) {
@@ -61,11 +79,13 @@ class CreateGymLocationRequest {
   /// Clones this instance of [CreateGymLocationRequest] and returns a new one where some of the
   /// properties have changed.
   CreateGymLocationRequest copyWith({
+    Optional<String?>? id,
     String? code,
     String? name,
     Optional<String?>? color,
   }) =>
       CreateGymLocationRequest(
+        id: id ?? this.id,
         code: code ?? this.code,
         name: name ?? this.name,
         color: color ?? this.color,
@@ -94,6 +114,9 @@ class CreateGymLocationRequest {
       }());
 
       return CreateGymLocationRequest(
+        id: json.containsKey(r'id')
+            ? Optional.present(mapValueOfType<String>(json, r'id'))
+            : const Optional.absent(),
         code: mapValueOfType<String>(json, r'code')!,
         name: mapValueOfType<String>(json, r'name')!,
         color: json.containsKey(r'color')

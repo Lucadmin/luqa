@@ -70,6 +70,25 @@ export async function POST(request: Request) {
   if (!parsed.success) return invalidInput(parsed.error.flatten());
   const input = parsed.data;
 
+  if (input.id) {
+    // A device that never saw the response sends the same request again. It
+    // must get the workout it already started, not a second empty one beside
+    // it in the same day.
+    const existing = await db.gymSession.findUnique({
+      where: { id: input.id },
+      include: sessionInclude,
+    });
+    if (existing) {
+      if (existing.userId !== mobileSession.userId) {
+        return mobileJson(
+          { error: { code: "id_conflict", message: "That id is already in use" } },
+          { status: 409 },
+        );
+      }
+      return mobileJson({ session: toGymSessionDTO(existing) }, { status: 200 });
+    }
+  }
+
   if (input.locationId) {
     const location = await db.gymLocation.findFirst({
       where: { id: input.locationId, userId: mobileSession.userId },
@@ -101,6 +120,7 @@ export async function POST(request: Request) {
   const session = await db.$transaction(async (tx) => {
     const created = await tx.gymSession.create({
       data: {
+        ...(input.id ? { id: input.id } : {}),
         userId: mobileSession.userId,
         date: dateFromKey(input.date ?? todayKey()),
         locationId: input.locationId ?? null,

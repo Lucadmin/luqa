@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/core/network/network_failure.dart';
+import 'package:luqa/features/gym/application/gym_sync_engine.dart';
 import 'package:luqa/features/gym/data/gym_providers.dart';
 import 'package:luqa/features/gym/data/gym_repository.dart';
 import 'package:luqa/features/gym/domain/gym_models.dart';
@@ -151,6 +152,7 @@ class WorkoutState {
     this.isLoading = true,
     this.isLoadingHistory = false,
     this.isSaving = false,
+    this.pendingWrites = 0,
     this.revision = 0,
     this.persistedRevision = 0,
     this.loadError,
@@ -163,14 +165,28 @@ class WorkoutState {
   final int activeExerciseIndex;
   final GymExerciseHistory? activeHistory;
   final bool isLoading;
+
   final bool isLoadingHistory;
+
+  /// True only while the draft is being written to the device, which is
+  /// measured in milliseconds. Reaching the server is [pendingWrites].
   final bool isSaving;
+
+  /// Changes recorded on this device that the server has not acknowledged.
+  final int pendingWrites;
+
   final int revision;
   final int persistedRevision;
   final String? loadError;
   final String? saveError;
 
+  /// Edits not yet written to the device. Distinct from [pendingWrites],
+  /// which is about the server.
   bool get hasUnsavedChanges => revision > persistedRevision;
+
+  /// Everything the user typed is on the phone and, eventually, on the server.
+  bool get isFullySynced =>
+      !hasUnsavedChanges && !isSaving && pendingWrites == 0;
 
   WorkoutExerciseDraft? get activeExercise {
     final exercises = draft?.exercises;
@@ -189,6 +205,7 @@ class WorkoutState {
     bool? isLoading,
     bool? isLoadingHistory,
     bool? isSaving,
+    int? pendingWrites,
     int? revision,
     int? persistedRevision,
     Object? loadError = _unset,
@@ -204,6 +221,7 @@ class WorkoutState {
     isLoading: isLoading ?? this.isLoading,
     isLoadingHistory: isLoadingHistory ?? this.isLoadingHistory,
     isSaving: isSaving ?? this.isSaving,
+    pendingWrites: pendingWrites ?? this.pendingWrites,
     revision: revision ?? this.revision,
     persistedRevision: persistedRevision ?? this.persistedRevision,
     loadError: identical(loadError, _unset)
@@ -231,6 +249,12 @@ class WorkoutController extends Notifier<WorkoutState> {
   WorkoutState build() {
     _repository = ref.watch(gymRepositoryProvider);
     ref.onDispose(() => _autosaveTimer?.cancel());
+
+    ref.listen(gymSyncEngineProvider, (previous, next) {
+      if (!ref.mounted || next.pending == state.pendingWrites) return;
+      state = state.copyWith(pendingWrites: next.pending);
+    });
+
     Future<void>.microtask(load);
     return WorkoutState(sessionId: _sessionId);
   }
@@ -238,15 +262,20 @@ class WorkoutController extends Notifier<WorkoutState> {
   Future<void> load() async {
     final generation = ++_loadGeneration;
     state = state.copyWith(isLoading: true, loadError: null);
+
+    // The two are loaded independently on purpose. The workout is the screen;
+    // the overview only supplies gym names and exercise suggestions, and a
+    // phone that has never loaded one must still be able to log a session.
+    final overview = _repository
+        .loadOverview()
+        .then<GymOverview?>((value) => value)
+        .catchError((Object _) => null);
+
     try {
-      final results = await Future.wait<Object>([
-        _repository.loadOverview(),
-        _repository.loadSession(_sessionId),
-      ]);
+      final session = await _repository.loadSession(_sessionId);
       if (!ref.mounted || generation != _loadGeneration) return;
-      final session = results[1] as GymSession;
       state = state.copyWith(
-        overview: results[0] as GymOverview,
+        overview: await overview,
         draft: WorkoutDraft.fromSession(session),
         activeExerciseIndex: 0,
         activeHistory: null,
@@ -258,6 +287,7 @@ class WorkoutController extends Notifier<WorkoutState> {
     } on Object catch (error) {
       if (!ref.mounted || generation != _loadGeneration) return;
       state = state.copyWith(
+        overview: await overview,
         isLoading: false,
         loadError: describeNetworkFailure(
           error,

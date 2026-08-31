@@ -1,30 +1,16 @@
-import 'dart:convert';
-
+import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
 import 'package:luqa/features/today/domain/category.dart';
 import 'package:luqa/features/today/domain/time_entry.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-/// A write that has already happened on this device and still has to reach the
-/// server.
-///
-/// Every mutation lands here first and is answered from here immediately, so
-/// nothing the user does waits on a round trip. The queue is durable: a write
-/// made in a tunnel survives the app being killed and is sent on the next
-/// launch that finds a network.
-sealed class PendingMutation {
-  const PendingMutation({required this.queuedAt});
+/// The writes the timeline can make while offline.
+sealed class TimelineMutation implements PendingMutation {
+  const TimelineMutation({required this.queuedAt});
 
-  /// When the user made the change, not when it was last attempted. Sorting by
-  /// it keeps the replay in the order things actually happened.
+  @override
   final DateTime queuedAt;
 
-  /// The row this mutation is about, so the queue can be folded per entity.
-  String get subjectId;
-
-  Map<String, Object?> toJson();
-
-  static PendingMutation? fromJson(Map<String, Object?> json) {
+  static TimelineMutation? fromJson(Map<String, Object?> json) {
     final queuedAt = DateTime.tryParse(json['queuedAt'] as String? ?? '');
     if (queuedAt == null) return null;
     return switch (json['op']) {
@@ -51,7 +37,7 @@ sealed class PendingMutation {
   }
 }
 
-final class CreateEntry extends PendingMutation {
+final class CreateEntry extends TimelineMutation {
   const CreateEntry({required this.entry, required super.queuedAt});
 
   final TimeEntry entry;
@@ -67,7 +53,7 @@ final class CreateEntry extends PendingMutation {
   };
 }
 
-final class UpdateEntry extends PendingMutation {
+final class UpdateEntry extends TimelineMutation {
   const UpdateEntry({
     required this.entryId,
     required this.patch,
@@ -89,7 +75,7 @@ final class UpdateEntry extends PendingMutation {
   };
 }
 
-final class DeleteEntry extends PendingMutation {
+final class DeleteEntry extends TimelineMutation {
   const DeleteEntry({required this.entryId, required super.queuedAt});
 
   final String entryId;
@@ -105,7 +91,7 @@ final class DeleteEntry extends PendingMutation {
   };
 }
 
-final class CreateCategory extends PendingMutation {
+final class CreateCategory extends TimelineMutation {
   const CreateCategory({required this.category, required super.queuedAt});
 
   final Category category;
@@ -127,9 +113,9 @@ final class CreateCategory extends PendingMutation {
 /// drawn, nudged twice and then deleted while offline must reach the server as
 /// nothing at all, not as four requests racing to describe a row that no longer
 /// exists.
-List<PendingMutation> foldInto(
-  List<PendingMutation> queue,
-  PendingMutation next,
+List<TimelineMutation> foldInto(
+  List<TimelineMutation> queue,
+  TimelineMutation next,
 ) {
   switch (next) {
     case DeleteEntry(:final entryId):
@@ -144,7 +130,7 @@ List<PendingMutation> foldInto(
       return createdHere ? rest : [...rest, next];
 
     case UpdateEntry(:final entryId, :final patch):
-      final folded = <PendingMutation>[];
+      final folded = <TimelineMutation>[];
       var absorbed = false;
       for (final pending in queue) {
         switch (pending) {
@@ -212,7 +198,7 @@ TimeEntry applyPatch(TimeEntry entry, EntryPatch patch) => entry.copyWith(
 /// dropped or rejected write can never leave a stale row behind.
 TimelineWindow overlayPending(
   TimelineWindow window,
-  List<PendingMutation> queue,
+  List<TimelineMutation> queue,
 ) {
   if (queue.isEmpty) return window;
 
@@ -257,7 +243,7 @@ TimelineWindow overlayPending(
 
 List<Category> overlayPendingCategories(
   List<Category> categories,
-  List<PendingMutation> queue,
+  List<TimelineMutation> queue,
 ) {
   final pending = [
     for (final mutation in queue)
@@ -268,74 +254,6 @@ List<Category> overlayPendingCategories(
   if (pending.isEmpty) return categories;
   return [...categories, ...pending]
     ..sort((left, right) => left.name.compareTo(right.name));
-}
-
-/// Durable home for the queue.
-abstract interface class Outbox {
-  Future<List<PendingMutation>> read();
-
-  Future<void> write(List<PendingMutation> queue);
-}
-
-class SharedPreferencesOutbox implements Outbox {
-  SharedPreferencesOutbox({
-    required String namespace,
-    SharedPreferencesAsync? preferences,
-  }) : _namespace = base64Url.encode(utf8.encode(namespace)),
-       _injected = preferences;
-
-  static const _version = 'v1';
-
-  final String _namespace;
-  final SharedPreferencesAsync? _injected;
-
-  // Deferred: building the store is not the same as needing the platform
-  // channel, and a provider that merely exists must not require one.
-  late final SharedPreferencesAsync _preferences =
-      _injected ?? SharedPreferencesAsync();
-
-  String get _key => 'luqa.outbox.$_version.$_namespace';
-
-  @override
-  Future<List<PendingMutation>> read() async {
-    final encoded = await _preferences.getString(_key);
-    if (encoded == null) return const [];
-    try {
-      return [
-        for (final item in jsonDecode(encoded) as List<Object?>)
-          ?PendingMutation.fromJson(item! as Map<String, Object?>),
-      ];
-    } on Object {
-      // Unreadable queue: dropping it loses writes, but keeping it would block
-      // every future write behind a record nothing can replay.
-      await _preferences.remove(_key);
-      return const [];
-    }
-  }
-
-  @override
-  Future<void> write(List<PendingMutation> queue) async {
-    if (queue.isEmpty) {
-      await _preferences.remove(_key);
-      return;
-    }
-    await _preferences.setString(
-      _key,
-      jsonEncode([for (final pending in queue) pending.toJson()]),
-    );
-  }
-}
-
-/// An outbox that keeps nothing. Signed-out and test contexts use it so a
-/// write is simply attempted once and forgotten.
-class NullOutbox implements Outbox {
-  const NullOutbox();
-
-  @override
-  Future<List<PendingMutation>> read() async => const [];
-
-  @override
-  Future<void> write(List<PendingMutation> queue) async {}
 }
 
 Map<String, Object?> _entryToJson(TimeEntry value) => {
@@ -393,8 +311,8 @@ Category _categoryFromJson(Map<String, Object?> value) => Category(
 /// the row something else. Only categories need it: a name that already exists
 /// server-side comes back under its original id, and the entries queued behind
 /// it are still pointing at the one this device made up.
-List<PendingMutation> remapCategoryId(
-  List<PendingMutation> queue,
+List<TimelineMutation> remapCategoryId(
+  List<TimelineMutation> queue,
   String from,
   String to,
 ) {
@@ -421,16 +339,4 @@ List<PendingMutation> remapCategoryId(
         _ => pending,
       },
   ];
-}
-
-/// The queue, as the repository sees it. The sync engine implements it, so
-/// every read and write of the outbox goes through one owner and two writers
-/// can never interleave a read-modify-write.
-abstract interface class MutationQueue {
-  /// Completes once the durable queue has been read back after a cold start.
-  Future<void> get ready;
-
-  List<PendingMutation> get pending;
-
-  Future<void> enqueue(PendingMutation mutation);
 }

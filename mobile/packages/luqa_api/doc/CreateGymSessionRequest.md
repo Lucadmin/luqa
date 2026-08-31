@@ -8,6 +8,7 @@ import 'package:luqa_api/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**id** | **Optional<String?>** | Client-minted identity for the workout, so one started with no signal can still be opened and saved into. Supplying it makes the create idempotent. | [optional]
 **date** | **Optional<String?>** |  | [optional]
 **locationId** | **Optional<String?>** |  | [optional]
 **notes** | **Optional<String?>** |  | [optional]

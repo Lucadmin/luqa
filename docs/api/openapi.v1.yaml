@@ -362,6 +362,14 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateGymSessionRequest"
       responses:
+        "200":
+          description: >-
+            The `id` was already used by an earlier create from this account;
+            the existing workout is returned untouched.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymSessionResponse"
         "201":
           description: Workout created
           content:
@@ -372,6 +380,8 @@ paths:
           $ref: "#/components/responses/InvalidInput"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/IdConflict"
   /gym/sessions/{id}:
     parameters:
       - name: id
@@ -467,6 +477,14 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateGymLocationRequest"
       responses:
+        "200":
+          description: >-
+            A gym with this code already exists; it is returned rather than
+            duplicated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymLocationResponse"
         "201":
           description: Gym created
           content:
@@ -1388,6 +1406,13 @@ components:
       type: object
       additionalProperties: false
       properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: >-
+            Client-minted identity for the workout, so one started with no signal can still be opened and saved into. Supplying it makes the create idempotent.
         date:
           type: string
           pattern: "^\\d{4}-\\d{2}-\\d{2}$"
@@ -1424,6 +1449,13 @@ components:
       additionalProperties: false
       required: [code, name]
       properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: >-
+            Preferred identity for a gym added offline. Honoured only when free; a gym with the same code already existing wins, so the response is authoritative.
         code:
           type: string
           minLength: 1

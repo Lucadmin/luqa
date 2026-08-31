@@ -236,7 +236,7 @@ void main() {
 
   group('persistence', () {
     test('every kind of mutation survives a round trip', () {
-      final queue = <PendingMutation>[
+      final queue = <TimelineMutation>[
         CreateEntry(
           entry: _entry('a', categoryId: 'food'),
           queuedAt: _at,
@@ -259,7 +259,7 @@ void main() {
 
       final restored = [
         for (final pending in queue)
-          PendingMutation.fromJson(pending.toJson())!,
+          TimelineMutation.fromJson(pending.toJson())!,
       ];
 
       expect(restored.map((pending) => pending.subjectId), [
@@ -275,7 +275,7 @@ void main() {
 
     test('an op written by a newer build is skipped rather than fatal', () {
       expect(
-        PendingMutation.fromJson({
+        TimelineMutation.fromJson({
           'op': 'reticulateSplines',
           'queuedAt': _at.toIso8601String(),
         }),

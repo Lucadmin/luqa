@@ -247,11 +247,16 @@ class _WorkoutContextRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final location = state.location;
+    // "Saved" means saved on this phone, which is the promise the app can
+    // actually keep in a basement. Reaching the server is reported separately
+    // and never as a failure the user has to act on.
     final status = state.saveError != null
         ? 'Save failed'
-        : state.isSaving || state.hasUnsavedChanges
+        : state.hasUnsavedChanges || state.isSaving
         ? 'Saving…'
-        : 'Autosaved';
+        : state.pendingWrites > 0
+        ? 'Saved · syncing'
+        : 'Saved';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: LuqaSpacing.lg),
       child: SizedBox(

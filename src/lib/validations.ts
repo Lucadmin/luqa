@@ -414,15 +414,21 @@ export type UpdateSettlementInput = z.infer<typeof updateSettlementSchema>;
 // --- Gym log ---
 
 export const createGymLocationSchema = z.object({
+  // Only a preference: a gym with this code may already exist, in which case
+  // the response carries that row's id instead.
+  id: clientId.optional(),
   code: z.string().trim().min(1).max(12),
   name: z.string().trim().min(1).max(60),
   color: hexColor.optional(),
 });
 
-export const updateGymLocationSchema = createGymLocationSchema.partial().extend({
-  order: z.number().int().min(0).optional(),
-  archived: z.boolean().optional(),
-});
+export const updateGymLocationSchema = createGymLocationSchema
+  .partial()
+  .omit({ id: true })
+  .extend({
+    order: z.number().int().min(0).optional(),
+    archived: z.boolean().optional(),
+  });
 
 // One structured set, as entered through the weight/reps inputs.
 const gymSetInputSchema = z.object({
@@ -449,6 +455,10 @@ const sessionExerciseSchema = z
   });
 
 export const createGymSessionSchema = z.object({
+  // Client-minted, so a workout started with no signal has an identity the
+  // phone can navigate to and keep saving into. Supplying it also makes the
+  // create idempotent.
+  id: clientId.optional(),
   date: dateKey.optional(),
   locationId: z.string().nullish(),
   notes: z.string().trim().max(4000).optional().default(""),
@@ -457,7 +467,9 @@ export const createGymSessionSchema = z.object({
 
 // Omitting `exercises` leaves the session's exercises alone; sending it
 // replaces them wholesale, which is how the editor saves.
-export const updateGymSessionSchema = createGymSessionSchema.partial();
+export const updateGymSessionSchema = createGymSessionSchema
+  .partial()
+  .omit({ id: true });
 
 export const updateExerciseSchema = z.object({
   // Renaming onto a name that already exists merges the two, which is the fix

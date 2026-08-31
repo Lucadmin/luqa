@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/features/auth/application/auth_controller.dart';
+import 'package:luqa/core/sync/outbox.dart';
 import 'package:luqa/features/today/application/sync_engine.dart';
 import 'package:luqa/features/today/data/local_first_today_repository.dart';
 import 'package:luqa/features/today/data/outbox.dart';
@@ -22,11 +23,15 @@ final remoteTodayRepositoryProvider = Provider<RemoteTodayRepository>((ref) {
   );
 });
 
-final outboxProvider = Provider<Outbox>((ref) {
+final outboxProvider = Provider<Outbox<TimelineMutation>>((ref) {
   final userId = ref.watch(_namespaceProvider);
   // Queueing a write with nobody to send it as would strand it for ever.
   if (userId == null) return const NullOutbox();
-  return SharedPreferencesOutbox(namespace: userId);
+  return SharedPreferencesOutbox(
+    key: 'timeline',
+    namespace: userId,
+    decode: TimelineMutation.fromJson,
+  );
 });
 
 /// What screens use. Writes land here and return immediately.
