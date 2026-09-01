@@ -71,6 +71,15 @@ String parameterToString(dynamic value) {
   if (value is EntrySource) {
     return EntrySourceTypeTransformer().encode(value).toString();
   }
+  if (value is HabitGoalPeriod) {
+    return HabitGoalPeriodTypeTransformer().encode(value).toString();
+  }
+  if (value is HabitGoalType) {
+    return HabitGoalTypeTypeTransformer().encode(value).toString();
+  }
+  if (value is HabitScheduleType) {
+    return HabitScheduleTypeTypeTransformer().encode(value).toString();
+  }
   if (value is HealthMetricType) {
     return HealthMetricTypeTypeTransformer().encode(value).toString();
   }

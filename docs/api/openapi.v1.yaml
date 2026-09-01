@@ -37,6 +37,13 @@ tags:
       that settle it. Every amount is integer cents so no split ever loses one,
       and every balance is written from the user's point of view — positive
       means this person owes the user.
+  - name: Habits
+    description: >-
+      What the user is trying to keep up, and how it is going. A habit is a
+      goal (a task, a count, or a duration) plus a schedule, and a log is one
+      day's progress against it. A device resolves which habits a day holds,
+      and whether each is done, from the rows it already has — so the strip on
+      Today is correct with no network at all.
   - name: People
     description: >-
       The person behind the balance: birthdays, notes, gift ideas, the cities
@@ -1415,6 +1422,173 @@ paths:
           description: Gone, or already gone.
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /habits:
+    get:
+      operationId: listHabits
+      tags: [Habits]
+      summary: Every habit on the account, archived included
+      description: >-
+        The delta feed is how a device normally stays current. This is the
+        first read after a sign-in, and the recovery path for a cache that had
+        to be thrown away: one page, no cursor, always complete.
+      responses:
+        "200":
+          description: Habits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HabitListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createHabit
+      tags: [Habits]
+      summary: Create a habit
+      responses:
+        "200":
+          description: >-
+            A habit already exists under this id; it is returned rather than
+            duplicated, so a retry after a lost response is harmless.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HabitResponse"
+        "201":
+          description: Habit created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HabitResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHabitRequest"
+  /habits/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updateHabit
+      tags: [Habits]
+      summary: Edit a habit's goal, schedule, icon, or archived state
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHabitRequest"
+      responses:
+        "200":
+          description: Habit updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HabitResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: archiveHabit
+      tags: [Habits]
+      summary: Archive a habit
+      description: >-
+        Habits are archived rather than removed. The logs behind one are the
+        record of a stretch of someone's life, and a streak that can be deleted
+        by accident is worse than a list that needs tidying. Archiving one that
+        is already archived succeeds.
+      responses:
+        "204":
+          description: Habit archived
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /habits/reorder:
+    post:
+      operationId: reorderHabits
+      tags: [Habits]
+      summary: Persist a new ordering of habits
+      description: >-
+        The whole ordering rather than one habit's new position, so a replayed
+        write restates the order instead of shuffling it again. Ids the account
+        does not own are ignored rather than refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderHabitsRequest"
+      responses:
+        "200":
+          description: The habits, in the order they are now stored in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HabitListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /habits/{id}/logs/{date}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: date
+        in: path
+        required: true
+        description: The logical day, as a YYYY-MM-DD key in the user's timezone.
+        schema:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    put:
+      operationId: putHabitLog
+      tags: [Habits]
+      summary: Record a day's progress
+      description: >-
+        A PUT of state rather than a POST of an action. The browser posts
+        "increment" and lets the server add one; a queued write cannot, because
+        a retry after a lost response would add one twice. A device resolves
+        habits locally, so it already knows what the day looks like and sends
+        the numbers — replaying the write lands on the same numbers.
+
+
+        Completion is recomputed from the habit's goal rather than taken from
+        the request, so the two clients cannot disagree about what a streak is
+        made of. The moment a day was first completed is kept once it is known.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutHabitLogRequest"
+      responses:
+        "200":
+          description: Progress recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HabitLogResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /sync:
     get:
       operationId: syncChanges
@@ -1475,6 +1649,10 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: cursor.habits
+          in: query
+          required: false
+          schema: { type: string }
         - name: cursor.timeEntries
           in: query
           required: false
@@ -1492,6 +1670,10 @@ paths:
           required: false
           schema: { type: string }
         - name: cursor.gymSessions
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor.habitLogs
           in: query
           required: false
           schema: { type: string }
@@ -3755,6 +3937,399 @@ components:
         hasMore:
           type: boolean
           description: True when the limit was reached and another page waits.
+    HabitGoalType:
+      type: string
+      description: >-
+        What "done" means for one day. TASK is done or not; COUNT reaches a
+        number of reps; TIME accumulates a duration.
+      enum: [TASK, COUNT, TIME]
+    HabitGoalPeriod:
+      type: string
+      description: >-
+        Whether a TIME target is a daily quota or a running total for the week
+        or month.
+      enum: [DAY, WEEK, MONTH]
+    HabitScheduleType:
+      type: string
+      description: >-
+        How a habit recurs. The TIMES_PER_* forms are active every day and
+        track a quota across the period instead of naming particular days.
+      enum:
+        - DAILY
+        - WEEKDAYS
+        - INTERVAL
+        - TIMES_PER_WEEK
+        - TIMES_PER_MONTH
+        - TIMES_PER_YEAR
+        - DATES
+    Habit:
+      type: object
+      additionalProperties: false
+      description: >-
+        A goal plus a schedule. Together they decide what shows on a given day
+        and what counts as done on it.
+      required:
+        - id
+        - name
+        - icon
+        - color
+        - order
+        - goalType
+        - goalPeriod
+        - targetCount
+        - targetSeconds
+        - categoryId
+        - scheduleType
+        - weekdays
+        - weekInterval
+        - intervalDays
+        - timesPerPeriod
+        - anchorDate
+        - dates
+        - excludedDates
+        - archived
+        - createdAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        icon:
+          type: [string, "null"]
+          description: Name from the shared habit icon set.
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        order:
+          type: integer
+        goalType:
+          $ref: "#/components/schemas/HabitGoalType"
+        goalPeriod:
+          $ref: "#/components/schemas/HabitGoalPeriod"
+        targetCount:
+          type: integer
+          description: Reps needed for a COUNT goal. Always 1 for TASK.
+        targetSeconds:
+          type: integer
+          description: Duration goal in seconds for a TIME habit.
+        categoryId:
+          type: [string, "null"]
+          description: >-
+            A TIME habit linked to a tracking category draws its progress from
+            the time tracked on that category, and its timer is a real time
+            entry rather than a number kept beside one.
+        scheduleType:
+          $ref: "#/components/schemas/HabitScheduleType"
+        weekdays:
+          type: array
+          description: For WEEKDAYS — 0 is Sunday, 6 is Saturday.
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
+        weekInterval:
+          type: integer
+          description: For WEEKDAYS — every N weeks.
+        intervalDays:
+          type: integer
+          description: For INTERVAL — every N days from the anchor.
+        timesPerPeriod:
+          type: integer
+          description: For TIMES_PER_* — the quota within each period.
+        anchorDate:
+          type: [string, "null"]
+          description: >-
+            YYYY-MM-DD the interval counts from. Null falls back to the day the
+            habit was created.
+        dates:
+          type: array
+          description: For DATES — the explicit YYYY-MM-DD days.
+          items:
+            type: string
+        excludedDates:
+          type: array
+          description: Days to skip, whatever the schedule would otherwise say.
+          items:
+            type: string
+        archived:
+          type: boolean
+          description: >-
+            Archived habits stay in the feed so a device is told one it is
+            showing has been put away.
+        createdAt:
+          type: string
+          format: date-time
+    HabitLog:
+      type: object
+      additionalProperties: false
+      description: One habit's stored progress for one logical day.
+      required: [id, habitId, date, count, seconds, runningSince, completedAt]
+      properties:
+        id:
+          type: string
+        habitId:
+          type: string
+        date:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        count:
+          type: integer
+          description: Reps done for a COUNT goal, or 0/1 for a TASK.
+        seconds:
+          type: integer
+          description: Seconds banked toward an unlinked TIME goal.
+        runningSince:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            When an unlinked timer started. The elapsed time is added as it
+            runs rather than written every second, so a device that is asleep
+            still shows the right total when it wakes.
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            The first moment the day's goal was met. A seventh glass of water
+            does not re-complete the day.
+    CreateHabitRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        id:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: >-
+            Preferred identity for a habit minted offline. Honoured when it is
+            free; a repeat of one already here answers with that habit rather
+            than making a second.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        icon:
+          type: [string, "null"]
+          maxLength: 40
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        goalType:
+          $ref: "#/components/schemas/HabitGoalType"
+        goalPeriod:
+          $ref: "#/components/schemas/HabitGoalPeriod"
+        targetCount:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        targetSeconds:
+          type: integer
+          minimum: 0
+          maximum: 2592000
+        categoryId:
+          type: [string, "null"]
+        scheduleType:
+          $ref: "#/components/schemas/HabitScheduleType"
+        weekdays:
+          type: array
+          maxItems: 7
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
+        weekInterval:
+          type: integer
+          minimum: 1
+          maximum: 12
+        intervalDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+        timesPerPeriod:
+          type: integer
+          minimum: 1
+          maximum: 366
+        anchorDate:
+          type: [string, "null"]
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        dates:
+          type: array
+          maxItems: 366
+          items:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        excludedDates:
+          type: array
+          maxItems: 366
+          items:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    UpdateHabitRequest:
+      type: object
+      additionalProperties: false
+      description: Every field optional; only what is sent is changed.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        icon:
+          type: [string, "null"]
+          maxLength: 40
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        order:
+          type: integer
+          minimum: 0
+        goalType:
+          $ref: "#/components/schemas/HabitGoalType"
+        goalPeriod:
+          $ref: "#/components/schemas/HabitGoalPeriod"
+        targetCount:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        targetSeconds:
+          type: integer
+          minimum: 0
+          maximum: 2592000
+        categoryId:
+          type: [string, "null"]
+        scheduleType:
+          $ref: "#/components/schemas/HabitScheduleType"
+        weekdays:
+          type: array
+          maxItems: 7
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
+        weekInterval:
+          type: integer
+          minimum: 1
+          maximum: 12
+        intervalDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+        timesPerPeriod:
+          type: integer
+          minimum: 1
+          maximum: 366
+        anchorDate:
+          type: [string, "null"]
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        dates:
+          type: array
+          maxItems: 366
+          items:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        excludedDates:
+          type: array
+          maxItems: 366
+          items:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        archived:
+          type: boolean
+    PutHabitLogRequest:
+      type: object
+      additionalProperties: false
+      required: [count, seconds]
+      properties:
+        count:
+          type: integer
+          minimum: 0
+          maximum: 100000
+        seconds:
+          type: integer
+          minimum: 0
+          maximum: 2592000
+        runningSince:
+          type: [string, "null"]
+          format: date-time
+    ReorderHabitsRequest:
+      type: object
+      additionalProperties: false
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: string
+    HabitResponse:
+      type: object
+      required: [habit]
+      properties:
+        habit:
+          $ref: "#/components/schemas/Habit"
+    HabitListResponse:
+      type: object
+      required: [habits]
+      properties:
+        habits:
+          type: array
+          items:
+            $ref: "#/components/schemas/Habit"
+    HabitLogResponse:
+      type: object
+      required: [log]
+      properties:
+        log:
+          $ref: "#/components/schemas/HabitLog"
+    HabitDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/Habit"
+        deleted:
+          type: array
+          description: >-
+            Always empty. A habit is archived rather than removed, and arrives
+            as a row with `archived` set.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
+    HabitLogDelta:
+      type: object
+      description: One collection's changes since a cursor.
+      required: [rows, deleted, hasMore]
+      properties:
+        rows:
+          type: array
+          description: Current state of everything created or changed.
+          items:
+            $ref: "#/components/schemas/HabitLog"
+        deleted:
+          type: array
+          description: Always empty. A log is only ever written, never removed.
+          items:
+            type: string
+        cursor:
+          type: [string, "null"]
+          description: >-
+            Where to resume. Null when this collection has never had a row, in
+            which case the caller keeps the cursor it already had.
+        hasMore:
+          type: boolean
+          description: True when the limit was reached and another page waits.
     SyncCollections:
       type: object
       description: >-
@@ -3772,6 +4347,8 @@ components:
           $ref: "#/components/schemas/GymLocationDelta"
         exercises:
           $ref: "#/components/schemas/GymExerciseDelta"
+        habits:
+          $ref: "#/components/schemas/HabitDelta"
         timeEntries:
           $ref: "#/components/schemas/TimeEntryDelta"
         sleepEntries:
@@ -3782,6 +4359,8 @@ components:
           $ref: "#/components/schemas/SettlementDelta"
         gymSessions:
           $ref: "#/components/schemas/GymSessionDelta"
+        habitLogs:
+          $ref: "#/components/schemas/HabitLogDelta"
     SyncExercise:
       type: object
       additionalProperties: false
@@ -3804,11 +4383,27 @@ components:
       description: >-
         Account-level values no collection carries, but a screen rendered
         entirely from the device still needs.
-      required: [currency]
+      required: [currency, dayStartHour, weekStartsOn]
       properties:
         currency:
           type: string
           description: ISO 4217 code the amounts are in.
+        dayStartHour:
+          type: integer
+          minimum: 0
+          maximum: 23
+          description: >-
+            The hour a logical day flips. Someone who logs a block at 01:00
+            means it for the day that has not ended yet, so the day a row
+            belongs to is not the day its clock says.
+        weekStartsOn:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: >-
+            0 = Sunday, 1 = Monday. Habit weeks are counted from here, so a
+            device that guessed would put a "3x per week" quota in the wrong
+            week for half the world.
     SyncResponse:
       type: object
       required: [settings, collections]

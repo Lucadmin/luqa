@@ -169,6 +169,25 @@ abstract interface class LuqaApi {
 
   Future<void> deleteSettlement(String id);
 
+  Future<List<api.Habit>> listHabits();
+
+  Future<api.Habit> createHabit(api.CreateHabitRequest request);
+
+  Future<api.Habit> updateHabit(String id, api.UpdateHabitRequest request);
+
+  Future<void> archiveHabit(String id);
+
+  Future<List<api.Habit>> reorderHabits(List<String> ids);
+
+  /// A day's progress as this device resolved it, rather than an action to
+  /// replay. Sending the numbers is what makes a queued check-in safe to
+  /// retry.
+  Future<api.HabitLog> putHabitLog(
+    String habitId,
+    String date,
+    api.PutHabitLogRequest request,
+  );
+
   /// Everything that changed since the cursors this device holds.
   Future<api.SyncResponse> syncChanges({
     String? collections,
@@ -531,6 +550,63 @@ class LuqaApiClient implements LuqaApi {
   });
 
   @override
+  Future<List<api.Habit>> listHabits() => _authorized((client) async {
+    final response = await api.HabitsApi(
+      client,
+    ).listHabits().timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.habits;
+  });
+
+  @override
+  Future<api.Habit> createHabit(api.CreateHabitRequest request) =>
+      _authorized((client) async {
+        final response = await api.HabitsApi(
+          client,
+        ).createHabit(request).timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response.habit;
+      });
+
+  @override
+  Future<api.Habit> updateHabit(String id, api.UpdateHabitRequest request) =>
+      _authorized((client) async {
+        final response = await api.HabitsApi(
+          client,
+        ).updateHabit(id, request).timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response.habit;
+      });
+
+  @override
+  Future<void> archiveHabit(String id) => _authorized((client) async {
+    await api.HabitsApi(client).archiveHabit(id).timeout(_requestTimeout);
+  });
+
+  @override
+  Future<List<api.Habit>> reorderHabits(List<String> ids) =>
+      _authorized((client) async {
+        final response = await api.HabitsApi(client)
+            .reorderHabits(api.ReorderHabitsRequest(ids: ids))
+            .timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response.habits;
+      });
+
+  @override
+  Future<api.HabitLog> putHabitLog(
+    String habitId,
+    String date,
+    api.PutHabitLogRequest request,
+  ) => _authorized((client) async {
+    final response = await api.HabitsApi(
+      client,
+    ).putHabitLog(habitId, date, request).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response.log;
+  });
+
+  @override
   Future<api.SyncResponse> syncChanges({
     String? collections,
     int? limit,
@@ -545,11 +621,13 @@ class LuqaApiClient implements LuqaApi {
           cursorPeriodGroups: cursors['groups'],
           cursorPeriodGymLocations: cursors['gymLocations'],
           cursorPeriodExercises: cursors['exercises'],
+          cursorPeriodHabits: cursors['habits'],
           cursorPeriodTimeEntries: cursors['timeEntries'],
           cursorPeriodSleepEntries: cursors['sleepEntries'],
           cursorPeriodExpenses: cursors['expenses'],
           cursorPeriodSettlements: cursors['settlements'],
           cursorPeriodGymSessions: cursors['gymSessions'],
+          cursorPeriodHabitLogs: cursors['habitLogs'],
         )
         // A first sync pages through history, so it is given more room than an
         // ordinary request before it is called dead.

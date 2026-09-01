@@ -12,6 +12,8 @@ import {
   toGroupDTO,
   toGymLocationDTO,
   toGymSessionDTO,
+  toHabitDTO,
+  toHabitLogDTO,
   toPersonDTO,
   toSettlementDTO,
   toSleepDTO,
@@ -52,6 +54,16 @@ function changedSince(userId: string, since: Cursor | null) {
   };
 }
 
+/// The cursor half of [changedSince], for rows whose ownership is expressed
+/// some other way than a `userId` column.
+function changedSinceRow(since: Cursor | null) {
+  if (!since) return {};
+  const t = new Date(since.t);
+  return {
+    OR: [{ updatedAt: { gt: t } }, { updatedAt: t, id: { gt: since.id } }],
+  };
+}
+
 function page<T extends { id: string; updatedAt: Date; deletedAt: Date | null }>(
   rows: T[],
   limit: number,
@@ -76,6 +88,27 @@ function split<T extends { id: string; updatedAt: Date; deletedAt: Date | null }
     rows: kept.filter((row) => !row.deletedAt).map(toDTO),
     deleted: kept.filter((row) => row.deletedAt).map((row) => row.id),
     cursor,
+    hasMore,
+  };
+}
+
+/// The same paging for rows that cannot be deleted at all.
+///
+/// A habit is archived rather than removed, and a habit log only ever gets
+/// upserted, so neither has a tombstone column to split on. They still page
+/// and still carry a cursor; the `deleted` list is simply always empty.
+function keep<T extends { id: string; updatedAt: Date }, D>(
+  rows: T[],
+  limit: number,
+  toDTO: (row: T) => D,
+): CollectionDelta<D> {
+  const hasMore = rows.length > limit;
+  const kept = hasMore ? rows.slice(0, limit) : rows;
+  const last = kept.at(-1);
+  return {
+    rows: kept.map(toDTO),
+    deleted: [],
+    cursor: last ? encodeSyncCursor(last.updatedAt, last.id) : null,
     hasMore,
   };
 }
@@ -173,6 +206,29 @@ export async function collectionDelta(
         limit,
         toSettlementDTO,
       );
+    case "habits":
+      // Archived habits stay in the feed rather than being filtered out here:
+      // a phone that has one on its Today strip has to be told it was put
+      // away, and an empty page would only look like nothing changed.
+      return keep(
+        await dbWithDeleted.habit.findMany(query),
+        limit,
+        toHabitDTO,
+      );
+    case "habitLogs":
+      // A log has no owner column; it belongs to whoever owns its habit. The
+      // relation filter is therefore the ownership check, and it is applied
+      // before the cursor clause rather than alongside it, so a cursor can
+      // never widen what the query can reach.
+      return keep(
+        await dbWithDeleted.habitLog.findMany({
+          where: { habit: { userId }, ...changedSinceRow(since) },
+          orderBy: ORDER,
+          take,
+        }),
+        limit,
+        toHabitLogDTO,
+      );
     case "gymSessions":
       return split(
         await dbWithDeleted.gymSession.findMany({
@@ -196,9 +252,16 @@ export async function collectionDelta(
 export async function syncSettings(userId: string) {
   const user = await dbWithDeleted.user.findUnique({
     where: { id: userId },
-    select: { currency: true },
+    select: { currency: true, dayStartHour: true, weekStartsOn: true },
   });
-  return { currency: user?.currency ?? "EUR" };
+  return {
+    currency: user?.currency ?? "EUR",
+    // Both of these decide which day a row belongs to, and a device that
+    // guessed would put a late-evening check-in — or a whole "3x per week"
+    // quota — in the wrong bucket. Cheap enough to send on every sync.
+    dayStartHour: user?.dayStartHour ?? 3,
+    weekStartsOn: user?.weekStartsOn ?? 1,
+  };
 }
 
 export async function syncDelta(

@@ -318,6 +318,29 @@ export const reorderHabitsSchema = z.object({
   ids: z.array(z.string()).min(1).max(200),
 });
 
+// --- Habits, from a native client ---
+//
+// The phone names a habit before the server has seen it, the same way it names
+// a time entry, so an edit or a check-in made while offline has something
+// stable to point at.
+export const createHabitMobileSchema = createHabitSchema.extend({
+  id: clientId.optional(),
+});
+
+/// A day's progress as the device believes it to be, rather than an action to
+/// replay.
+///
+/// The web client posts "increment" and lets the server work out what that
+/// means. A queued write cannot: a drain that retries after a lost response
+/// would increment twice. The phone has already resolved the day locally, so
+/// it sends the resulting state and the write becomes idempotent — replaying
+/// it lands on the same numbers.
+export const putHabitLogSchema = z.object({
+  count: z.number().int().min(0).max(100000),
+  seconds: z.number().int().min(0).max(30 * 24 * 3600),
+  runningSince: z.string().datetime().nullish(),
+});
+
 // Mutate progress for a habit on a given day.
 export const habitLogSchema = z.object({
   date: dateKey,
@@ -581,3 +604,5 @@ export type UpsertWeekNoteInput = z.infer<typeof upsertWeekNoteSchema>;
 export type CreateHabitInput = z.infer<typeof createHabitSchema>;
 export type UpdateHabitInput = z.infer<typeof updateHabitSchema>;
 export type HabitLogInput = z.infer<typeof habitLogSchema>;
+export type CreateHabitMobileInput = z.infer<typeof createHabitMobileSchema>;
+export type PutHabitLogInput = z.infer<typeof putHabitLogSchema>;

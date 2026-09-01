@@ -73,6 +73,12 @@ Class | Method | HTTP request | Description
 *GymApi* | [**mergeGymExercise**](doc//GymApi.md#mergegymexercise) | **POST** /gym/exercises/{id}/merge | Merge a duplicate exercise into another exercise
 *GymApi* | [**updateGymLocation**](doc//GymApi.md#updategymlocation) | **PATCH** /gym/locations/{id} | Edit, archive, or restore a gym
 *GymApi* | [**updateGymSession**](doc//GymApi.md#updategymsession) | **PATCH** /gym/sessions/{id} | Autosave a workout draft
+*HabitsApi* | [**archiveHabit**](doc//HabitsApi.md#archivehabit) | **DELETE** /habits/{id} | Archive a habit
+*HabitsApi* | [**createHabit**](doc//HabitsApi.md#createhabit) | **POST** /habits | Create a habit
+*HabitsApi* | [**listHabits**](doc//HabitsApi.md#listhabits) | **GET** /habits | Every habit on the account, archived included
+*HabitsApi* | [**putHabitLog**](doc//HabitsApi.md#puthabitlog) | **PUT** /habits/{id}/logs/{date} | Record a day's progress
+*HabitsApi* | [**reorderHabits**](doc//HabitsApi.md#reorderhabits) | **POST** /habits/reorder | Persist a new ordering of habits
+*HabitsApi* | [**updateHabit**](doc//HabitsApi.md#updatehabit) | **PATCH** /habits/{id} | Edit a habit's goal, schedule, icon, or archived state
 *HealthApi* | [**getHealthSyncState**](doc//HealthApi.md#gethealthsyncstate) | **GET** /health/sync | Read what the server last accepted, per source and metric
 *HealthApi* | [**pushHealthSync**](doc//HealthApi.md#pushhealthsync) | **POST** /health/sync | Push sleep sessions and samples read from the device
 *MoneyApi* | [**createExpense**](doc//MoneyApi.md#createexpense) | **POST** /money/expenses | Log a bill and who carries what
@@ -127,6 +133,7 @@ Class | Method | HTTP request | Description
  - [CreateGroupRequest](doc//CreateGroupRequest.md)
  - [CreateGymLocationRequest](doc//CreateGymLocationRequest.md)
  - [CreateGymSessionRequest](doc//CreateGymSessionRequest.md)
+ - [CreateHabitRequest](doc//CreateHabitRequest.md)
  - [CreatePersonGiftRequest](doc//CreatePersonGiftRequest.md)
  - [CreatePersonNoteRequest](doc//CreatePersonNoteRequest.md)
  - [CreatePersonPlaceRequest](doc//CreatePersonPlaceRequest.md)
@@ -168,6 +175,16 @@ Class | Method | HTTP request | Description
  - [GymSessionResponse](doc//GymSessionResponse.md)
  - [GymSet](doc//GymSet.md)
  - [GymSetInput](doc//GymSetInput.md)
+ - [Habit](doc//Habit.md)
+ - [HabitDelta](doc//HabitDelta.md)
+ - [HabitGoalPeriod](doc//HabitGoalPeriod.md)
+ - [HabitGoalType](doc//HabitGoalType.md)
+ - [HabitListResponse](doc//HabitListResponse.md)
+ - [HabitLog](doc//HabitLog.md)
+ - [HabitLogDelta](doc//HabitLogDelta.md)
+ - [HabitLogResponse](doc//HabitLogResponse.md)
+ - [HabitResponse](doc//HabitResponse.md)
+ - [HabitScheduleType](doc//HabitScheduleType.md)
  - [HealthMetricType](doc//HealthMetricType.md)
  - [HealthSampleImport](doc//HealthSampleImport.md)
  - [HealthSampleRef](doc//HealthSampleRef.md)
@@ -195,7 +212,9 @@ Class | Method | HTTP request | Description
  - [PersonNote](doc//PersonNote.md)
  - [PersonPlace](doc//PersonPlace.md)
  - [PersonResponse](doc//PersonResponse.md)
+ - [PutHabitLogRequest](doc//PutHabitLogRequest.md)
  - [RefreshSessionRequest](doc//RefreshSessionRequest.md)
+ - [ReorderHabitsRequest](doc//ReorderHabitsRequest.md)
  - [SessionCredentials](doc//SessionCredentials.md)
  - [Settlement](doc//Settlement.md)
  - [SettlementDelta](doc//SettlementDelta.md)
@@ -223,6 +242,7 @@ Class | Method | HTTP request | Description
  - [UpdateGroupRequest](doc//UpdateGroupRequest.md)
  - [UpdateGymLocationRequest](doc//UpdateGymLocationRequest.md)
  - [UpdateGymSessionRequest](doc//UpdateGymSessionRequest.md)
+ - [UpdateHabitRequest](doc//UpdateHabitRequest.md)
  - [UpdatePersonGiftRequest](doc//UpdatePersonGiftRequest.md)
  - [UpdatePersonNoteRequest](doc//UpdatePersonNoteRequest.md)
  - [UpdatePersonRequest](doc//UpdatePersonRequest.md)

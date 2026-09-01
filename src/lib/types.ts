@@ -189,6 +189,8 @@ export interface HabitDTO {
   dates: string[];
   excludedDates: string[];
 
+  /** Archived habits stay in the feed so a device learns they went away. */
+  archived: boolean;
   createdAt: string;
 }
 
@@ -206,6 +208,22 @@ export interface HabitDayDTO extends HabitDTO {
   periodDone: number | null;
   /** For TIMES_PER_* schedules: the period quota. */
   periodTarget: number | null;
+}
+
+/** One habit's stored progress for one logical day. */
+export interface HabitLogDTO {
+  id: string;
+  habitId: string;
+  /** "YYYY-MM-DD" logical day in the user's timezone. */
+  date: string;
+  /** Reps done (COUNT) or 0/1 (TASK). */
+  count: number;
+  /** Seconds banked toward an unlinked TIME goal. */
+  seconds: number;
+  /** ISO instant an unlinked timer has been running since, or null. */
+  runningSince: string | null;
+  /** ISO instant the day's goal was first met, or null. */
+  completedAt: string | null;
 }
 
 /** Per-habit analytics over a date range (for the stats view). */

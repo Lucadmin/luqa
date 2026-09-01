@@ -13,10 +13,12 @@ Name | Type | Description | Notes
 **groups** | [**Optional<PersonGroupDelta?>**](PersonGroupDelta.md) |  | [optional]
 **gymLocations** | [**Optional<GymLocationDelta?>**](GymLocationDelta.md) |  | [optional]
 **exercises** | [**Optional<GymExerciseDelta?>**](GymExerciseDelta.md) |  | [optional]
+**habits** | [**Optional<HabitDelta?>**](HabitDelta.md) |  | [optional]
 **timeEntries** | [**Optional<TimeEntryDelta?>**](TimeEntryDelta.md) |  | [optional]
 **sleepEntries** | [**Optional<SleepEntryDelta?>**](SleepEntryDelta.md) |  | [optional]
 **expenses** | [**Optional<ExpenseDelta?>**](ExpenseDelta.md) |  | [optional]
 **settlements** | [**Optional<SettlementDelta?>**](SettlementDelta.md) |  | [optional]
 **gymSessions** | [**Optional<GymSessionDelta?>**](GymSessionDelta.md) |  | [optional]
+**habitLogs** | [**Optional<HabitLogDelta?>**](HabitLogDelta.md) |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

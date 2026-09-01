@@ -74,11 +74,13 @@ export const SYNC_COLLECTIONS = [
   "groups",
   "gymLocations",
   "exercises",
+  "habits",
   "timeEntries",
   "sleepEntries",
   "expenses",
   "settlements",
   "gymSessions",
+  "habitLogs",
 ] as const;
 
 export type SyncCollection = (typeof SYNC_COLLECTIONS)[number];

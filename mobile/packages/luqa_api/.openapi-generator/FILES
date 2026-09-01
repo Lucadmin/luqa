@@ -12,6 +12,7 @@ doc/CreateExpenseRequest.md
 doc/CreateGroupRequest.md
 doc/CreateGymLocationRequest.md
 doc/CreateGymSessionRequest.md
+doc/CreateHabitRequest.md
 doc/CreatePersonGiftRequest.md
 doc/CreatePersonNoteRequest.md
 doc/CreatePersonPlaceRequest.md
@@ -54,6 +55,17 @@ doc/GymSessionListResponse.md
 doc/GymSessionResponse.md
 doc/GymSet.md
 doc/GymSetInput.md
+doc/Habit.md
+doc/HabitDelta.md
+doc/HabitGoalPeriod.md
+doc/HabitGoalType.md
+doc/HabitListResponse.md
+doc/HabitLog.md
+doc/HabitLogDelta.md
+doc/HabitLogResponse.md
+doc/HabitResponse.md
+doc/HabitScheduleType.md
+doc/HabitsApi.md
 doc/HealthApi.md
 doc/HealthMetricType.md
 doc/HealthSampleImport.md
@@ -84,7 +96,9 @@ doc/PersonListResponse.md
 doc/PersonNote.md
 doc/PersonPlace.md
 doc/PersonResponse.md
+doc/PutHabitLogRequest.md
 doc/RefreshSessionRequest.md
+doc/ReorderHabitsRequest.md
 doc/SessionCredentials.md
 doc/Settlement.md
 doc/SettlementDelta.md
@@ -115,6 +129,7 @@ doc/UpdateExpenseRequest.md
 doc/UpdateGroupRequest.md
 doc/UpdateGymLocationRequest.md
 doc/UpdateGymSessionRequest.md
+doc/UpdateHabitRequest.md
 doc/UpdatePersonGiftRequest.md
 doc/UpdatePersonNoteRequest.md
 doc/UpdatePersonRequest.md
@@ -124,6 +139,7 @@ lib/api.dart
 lib/api/authentication_api.dart
 lib/api/categories_api.dart
 lib/api/gym_api.dart
+lib/api/habits_api.dart
 lib/api/health_api.dart
 lib/api/money_api.dart
 lib/api/people_api.dart
@@ -147,6 +163,7 @@ lib/model/create_expense_request.dart
 lib/model/create_group_request.dart
 lib/model/create_gym_location_request.dart
 lib/model/create_gym_session_request.dart
+lib/model/create_habit_request.dart
 lib/model/create_person_gift_request.dart
 lib/model/create_person_note_request.dart
 lib/model/create_person_place_request.dart
@@ -188,6 +205,16 @@ lib/model/gym_session_list_response.dart
 lib/model/gym_session_response.dart
 lib/model/gym_set.dart
 lib/model/gym_set_input.dart
+lib/model/habit.dart
+lib/model/habit_delta.dart
+lib/model/habit_goal_period.dart
+lib/model/habit_goal_type.dart
+lib/model/habit_list_response.dart
+lib/model/habit_log.dart
+lib/model/habit_log_delta.dart
+lib/model/habit_log_response.dart
+lib/model/habit_response.dart
+lib/model/habit_schedule_type.dart
 lib/model/health_metric_type.dart
 lib/model/health_sample_import.dart
 lib/model/health_sample_ref.dart
@@ -215,7 +242,9 @@ lib/model/person_list_response.dart
 lib/model/person_note.dart
 lib/model/person_place.dart
 lib/model/person_response.dart
+lib/model/put_habit_log_request.dart
 lib/model/refresh_session_request.dart
+lib/model/reorder_habits_request.dart
 lib/model/session_credentials.dart
 lib/model/settlement.dart
 lib/model/settlement_delta.dart
@@ -243,6 +272,7 @@ lib/model/update_expense_request.dart
 lib/model/update_group_request.dart
 lib/model/update_gym_location_request.dart
 lib/model/update_gym_session_request.dart
+lib/model/update_habit_request.dart
 lib/model/update_person_gift_request.dart
 lib/model/update_person_note_request.dart
 lib/model/update_person_request.dart

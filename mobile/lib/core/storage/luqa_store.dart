@@ -33,7 +33,7 @@ class LuqaStore {
   /// providers build them eagerly and signed-out ones never read anything.
   static final LuqaStore shared = LuqaStore();
 
-  static const _version = 6;
+  static const _version = 7;
 
   final DatabaseFactory? _injectedFactory;
   final String? _path;
@@ -95,6 +95,7 @@ class LuqaStore {
         _createMoneyTables(batch);
         _createGymTables(batch);
         _createTimelineTables(batch);
+        _createHabitTables(batch);
         _createRemapTable(batch);
         await batch.commit();
       },
@@ -109,6 +110,7 @@ class LuqaStore {
         if (oldVersion < 5) _promotePersonTable(batch, oldVersion);
         if (oldVersion < 6) _addEntryPeople(batch, oldVersion);
         if (oldVersion < 5) _createRemapTable(batch);
+        if (oldVersion < 7) _createHabitTables(batch);
         await batch.commit();
       },
       // Going backwards means an older build opened a newer file. There is
@@ -512,6 +514,70 @@ class LuqaStore {
     batch.execute('''
       CREATE INDEX timeline_sleep_by_start
         ON timeline_sleep (namespace, start_ms)
+    ''');
+  }
+
+  /// The habits, and one row per habit per day of progress against them.
+  ///
+  /// The schedule columns are stored as the habit sends them rather than
+  /// flattened into "due on these dates": a habit is a rule, and expanding it
+  /// into rows would have to be redone every time the rule changed, or the
+  /// year turned over. Which days a habit is actually due is worked out in
+  /// Dart, from these columns, whenever a day is drawn.
+  ///
+  /// A log carries no `removed` flag. There is no way to delete a day's
+  /// progress — only to set it back to nothing — so the state the flag would
+  /// describe cannot occur.
+  static void _createHabitTables(Batch batch) {
+    batch.execute('''
+      CREATE TABLE habit (
+        namespace TEXT NOT NULL,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        icon TEXT,
+        color INTEGER NOT NULL,
+        ord INTEGER NOT NULL DEFAULT 0,
+        goal_type TEXT NOT NULL,
+        goal_period TEXT NOT NULL,
+        target_count INTEGER NOT NULL DEFAULT 1,
+        target_seconds INTEGER NOT NULL DEFAULT 0,
+        category_id TEXT,
+        schedule_type TEXT NOT NULL,
+        -- The list-shaped parts of a schedule, as json arrays. They are read
+        -- only ever with their habit and never queried across, so columns for
+        -- them would buy nothing a decode does not already give.
+        weekdays TEXT NOT NULL DEFAULT '[]',
+        week_interval INTEGER NOT NULL DEFAULT 1,
+        interval_days INTEGER NOT NULL DEFAULT 2,
+        times_per_period INTEGER NOT NULL DEFAULT 3,
+        anchor_date TEXT,
+        dates TEXT NOT NULL DEFAULT '[]',
+        excluded_dates TEXT NOT NULL DEFAULT '[]',
+        archived INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        pending INTEGER NOT NULL DEFAULT 0,
+        removed INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, id)
+      )
+    ''');
+    batch.execute('''
+      CREATE TABLE habit_log (
+        namespace TEXT NOT NULL,
+        habit_id TEXT NOT NULL,
+        date_key TEXT NOT NULL,
+        count INTEGER NOT NULL DEFAULT 0,
+        seconds INTEGER NOT NULL DEFAULT 0,
+        running_since INTEGER,
+        completed_at INTEGER,
+        pending INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (namespace, habit_id, date_key)
+      )
+    ''');
+    // Every read is "the logs across this stretch of days", for a strip, a
+    // week, or a month of insights.
+    batch.execute('''
+      CREATE INDEX habit_log_by_date
+        ON habit_log (namespace, date_key)
     ''');
   }
 

@@ -416,6 +416,7 @@ model Habit {
   category Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([userId, updatedAt])
   @@index([categoryId])
   @@map("habits")
 }
@@ -850,6 +851,10 @@ model HabitLog {
   habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
 
   @@unique([habitId, date])
+  // The delta feed walks logs by when they last changed — for the whole
+  // account, and for one habit at a time.
+  @@index([updatedAt])
+  @@index([habitId, updatedAt])
   @@map("habit_logs")
 }
 

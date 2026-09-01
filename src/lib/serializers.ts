@@ -8,6 +8,7 @@ import type {
   GymSession,
   GymSet,
   Habit,
+  HabitLog,
   LifePeriod,
   Person,
   PersonChannel,
@@ -27,6 +28,7 @@ import type {
   GymLocationDTO,
   GymSessionDTO,
   HabitDTO,
+  HabitLogDTO,
   LifePeriodDTO,
   PersonChannelDTO,
   PersonDTO,
@@ -293,7 +295,20 @@ export function toHabitDTO(h: Habit): HabitDTO {
     anchorDate: h.anchorDate,
     dates: h.dates,
     excludedDates: h.excludedDates,
+    archived: h.archivedAt !== null,
     createdAt: h.createdAt.toISOString(),
+  };
+}
+
+export function toHabitLogDTO(l: HabitLog): HabitLogDTO {
+  return {
+    id: l.id,
+    habitId: l.habitId,
+    date: l.date,
+    count: l.count,
+    seconds: l.seconds,
+    runningSince: l.runningSince ? l.runningSince.toISOString() : null,
+    completedAt: l.completedAt ? l.completedAt.toISOString() : null,
   };
 }
 

@@ -13,7 +13,7 @@ Method | HTTP request | Description
 
 
 # **syncChanges**
-> SyncResponse syncChanges(collections, limit, cursorPeriodCategories, cursorPeriodPeople, cursorPeriodGroups, cursorPeriodGymLocations, cursorPeriodExercises, cursorPeriodTimeEntries, cursorPeriodSleepEntries, cursorPeriodExpenses, cursorPeriodSettlements, cursorPeriodGymSessions)
+> SyncResponse syncChanges(collections, limit, cursorPeriodCategories, cursorPeriodPeople, cursorPeriodGroups, cursorPeriodGymLocations, cursorPeriodExercises, cursorPeriodHabits, cursorPeriodTimeEntries, cursorPeriodSleepEntries, cursorPeriodExpenses, cursorPeriodSettlements, cursorPeriodGymSessions, cursorPeriodHabitLogs)
 
 Everything that changed since the cursors the caller holds
 
@@ -37,14 +37,16 @@ final cursorPeriodPeople = cursorPeriodPeople_example; // String |
 final cursorPeriodGroups = cursorPeriodGroups_example; // String |
 final cursorPeriodGymLocations = cursorPeriodGymLocations_example; // String |
 final cursorPeriodExercises = cursorPeriodExercises_example; // String |
+final cursorPeriodHabits = cursorPeriodHabits_example; // String |
 final cursorPeriodTimeEntries = cursorPeriodTimeEntries_example; // String |
 final cursorPeriodSleepEntries = cursorPeriodSleepEntries_example; // String |
 final cursorPeriodExpenses = cursorPeriodExpenses_example; // String |
 final cursorPeriodSettlements = cursorPeriodSettlements_example; // String |
 final cursorPeriodGymSessions = cursorPeriodGymSessions_example; // String |
+final cursorPeriodHabitLogs = cursorPeriodHabitLogs_example; // String |
 
 try {
-    final result = api_instance.syncChanges(collections, limit, cursorPeriodCategories, cursorPeriodPeople, cursorPeriodGroups, cursorPeriodGymLocations, cursorPeriodExercises, cursorPeriodTimeEntries, cursorPeriodSleepEntries, cursorPeriodExpenses, cursorPeriodSettlements, cursorPeriodGymSessions);
+    final result = api_instance.syncChanges(collections, limit, cursorPeriodCategories, cursorPeriodPeople, cursorPeriodGroups, cursorPeriodGymLocations, cursorPeriodExercises, cursorPeriodHabits, cursorPeriodTimeEntries, cursorPeriodSleepEntries, cursorPeriodExpenses, cursorPeriodSettlements, cursorPeriodGymSessions, cursorPeriodHabitLogs);
     print(result);
 } catch (e) {
     print('Exception when calling SyncApi->syncChanges: $e\n');
@@ -62,11 +64,13 @@ Name | Type | Description  | Notes
  **cursorPeriodGroups** | **String**|  | [optional]
  **cursorPeriodGymLocations** | **String**|  | [optional]
  **cursorPeriodExercises** | **String**|  | [optional]
+ **cursorPeriodHabits** | **String**|  | [optional]
  **cursorPeriodTimeEntries** | **String**|  | [optional]
  **cursorPeriodSleepEntries** | **String**|  | [optional]
  **cursorPeriodExpenses** | **String**|  | [optional]
  **cursorPeriodSettlements** | **String**|  | [optional]
  **cursorPeriodGymSessions** | **String**|  | [optional]
+ **cursorPeriodHabitLogs** | **String**|  | [optional]
 
 ### Return type
 

@@ -39,6 +39,8 @@ class SyncApi {
   ///
   /// * [String] cursorPeriodExercises:
   ///
+  /// * [String] cursorPeriodHabits:
+  ///
   /// * [String] cursorPeriodTimeEntries:
   ///
   /// * [String] cursorPeriodSleepEntries:
@@ -48,6 +50,8 @@ class SyncApi {
   /// * [String] cursorPeriodSettlements:
   ///
   /// * [String] cursorPeriodGymSessions:
+  ///
+  /// * [String] cursorPeriodHabitLogs:
   Future<Response> syncChangesWithHttpInfo({
     String? collections,
     int? limit,
@@ -56,11 +60,13 @@ class SyncApi {
     String? cursorPeriodGroups,
     String? cursorPeriodGymLocations,
     String? cursorPeriodExercises,
+    String? cursorPeriodHabits,
     String? cursorPeriodTimeEntries,
     String? cursorPeriodSleepEntries,
     String? cursorPeriodExpenses,
     String? cursorPeriodSettlements,
     String? cursorPeriodGymSessions,
+    String? cursorPeriodHabitLogs,
     Future<void>? abortTrigger,
   }) async {
     // ignore: prefer_const_declarations
@@ -97,6 +103,9 @@ class SyncApi {
       queryParams
           .addAll(_queryParams('', 'cursor.exercises', cursorPeriodExercises));
     }
+    if (cursorPeriodHabits != null) {
+      queryParams.addAll(_queryParams('', 'cursor.habits', cursorPeriodHabits));
+    }
     if (cursorPeriodTimeEntries != null) {
       queryParams.addAll(
           _queryParams('', 'cursor.timeEntries', cursorPeriodTimeEntries));
@@ -116,6 +125,10 @@ class SyncApi {
     if (cursorPeriodGymSessions != null) {
       queryParams.addAll(
           _queryParams('', 'cursor.gymSessions', cursorPeriodGymSessions));
+    }
+    if (cursorPeriodHabitLogs != null) {
+      queryParams
+          .addAll(_queryParams('', 'cursor.habitLogs', cursorPeriodHabitLogs));
     }
 
     const contentTypes = <String>[];
@@ -154,6 +167,8 @@ class SyncApi {
   ///
   /// * [String] cursorPeriodExercises:
   ///
+  /// * [String] cursorPeriodHabits:
+  ///
   /// * [String] cursorPeriodTimeEntries:
   ///
   /// * [String] cursorPeriodSleepEntries:
@@ -163,6 +178,8 @@ class SyncApi {
   /// * [String] cursorPeriodSettlements:
   ///
   /// * [String] cursorPeriodGymSessions:
+  ///
+  /// * [String] cursorPeriodHabitLogs:
   Future<SyncResponse?> syncChanges({
     String? collections,
     int? limit,
@@ -171,11 +188,13 @@ class SyncApi {
     String? cursorPeriodGroups,
     String? cursorPeriodGymLocations,
     String? cursorPeriodExercises,
+    String? cursorPeriodHabits,
     String? cursorPeriodTimeEntries,
     String? cursorPeriodSleepEntries,
     String? cursorPeriodExpenses,
     String? cursorPeriodSettlements,
     String? cursorPeriodGymSessions,
+    String? cursorPeriodHabitLogs,
     Future<void>? abortTrigger,
   }) async {
     final response = await syncChangesWithHttpInfo(
@@ -186,11 +205,13 @@ class SyncApi {
       cursorPeriodGroups: cursorPeriodGroups,
       cursorPeriodGymLocations: cursorPeriodGymLocations,
       cursorPeriodExercises: cursorPeriodExercises,
+      cursorPeriodHabits: cursorPeriodHabits,
       cursorPeriodTimeEntries: cursorPeriodTimeEntries,
       cursorPeriodSleepEntries: cursorPeriodSleepEntries,
       cursorPeriodExpenses: cursorPeriodExpenses,
       cursorPeriodSettlements: cursorPeriodSettlements,
       cursorPeriodGymSessions: cursorPeriodGymSessions,
+      cursorPeriodHabitLogs: cursorPeriodHabitLogs,
       abortTrigger: abortTrigger,
     );
     if (response.statusCode >= HttpStatus.badRequest) {

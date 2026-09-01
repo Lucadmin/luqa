@@ -10,6 +10,7 @@ import 'package:luqa/features/gym/presentation/gym_history_screen.dart';
 import 'package:luqa/features/gym/presentation/gym_locations_screen.dart';
 import 'package:luqa/features/gym/presentation/gym_screen.dart';
 import 'package:luqa/features/gym/presentation/workout_screen.dart';
+import 'package:luqa/features/habits/presentation/habits_screen.dart';
 import 'package:luqa/features/money/presentation/groups_screen.dart';
 import 'package:luqa/features/money/presentation/money_screen.dart';
 import 'package:luqa/features/money/presentation/money_people_screen.dart';
@@ -92,6 +93,11 @@ final luqaRouter = GoRouter(
       parentNavigatorKey: _rootNavigatorKey,
       path: '/profile',
       redirect: (context, state) => '/settings',
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootNavigatorKey,
+      path: '/habits',
+      builder: (context, state) => const HabitsScreen(),
     ),
     GoRoute(
       parentNavigatorKey: _rootNavigatorKey,

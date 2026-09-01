@@ -222,6 +222,8 @@ class ApiClient {
           return CreateGymLocationRequest.fromJson(value);
         case 'CreateGymSessionRequest':
           return CreateGymSessionRequest.fromJson(value);
+        case 'CreateHabitRequest':
+          return CreateHabitRequest.fromJson(value);
         case 'CreatePersonGiftRequest':
           return CreatePersonGiftRequest.fromJson(value);
         case 'CreatePersonNoteRequest':
@@ -304,6 +306,26 @@ class ApiClient {
           return GymSet.fromJson(value);
         case 'GymSetInput':
           return GymSetInput.fromJson(value);
+        case 'Habit':
+          return Habit.fromJson(value);
+        case 'HabitDelta':
+          return HabitDelta.fromJson(value);
+        case 'HabitGoalPeriod':
+          return HabitGoalPeriodTypeTransformer().decode(value);
+        case 'HabitGoalType':
+          return HabitGoalTypeTypeTransformer().decode(value);
+        case 'HabitListResponse':
+          return HabitListResponse.fromJson(value);
+        case 'HabitLog':
+          return HabitLog.fromJson(value);
+        case 'HabitLogDelta':
+          return HabitLogDelta.fromJson(value);
+        case 'HabitLogResponse':
+          return HabitLogResponse.fromJson(value);
+        case 'HabitResponse':
+          return HabitResponse.fromJson(value);
+        case 'HabitScheduleType':
+          return HabitScheduleTypeTypeTransformer().decode(value);
         case 'HealthMetricType':
           return HealthMetricTypeTypeTransformer().decode(value);
         case 'HealthSampleImport':
@@ -358,8 +380,12 @@ class ApiClient {
           return PersonPlace.fromJson(value);
         case 'PersonResponse':
           return PersonResponse.fromJson(value);
+        case 'PutHabitLogRequest':
+          return PutHabitLogRequest.fromJson(value);
         case 'RefreshSessionRequest':
           return RefreshSessionRequest.fromJson(value);
+        case 'ReorderHabitsRequest':
+          return ReorderHabitsRequest.fromJson(value);
         case 'SessionCredentials':
           return SessionCredentials.fromJson(value);
         case 'Settlement':
@@ -414,6 +440,8 @@ class ApiClient {
           return UpdateGymLocationRequest.fromJson(value);
         case 'UpdateGymSessionRequest':
           return UpdateGymSessionRequest.fromJson(value);
+        case 'UpdateHabitRequest':
+          return UpdateHabitRequest.fromJson(value);
         case 'UpdatePersonGiftRequest':
           return UpdatePersonGiftRequest.fromJson(value);
         case 'UpdatePersonNoteRequest':

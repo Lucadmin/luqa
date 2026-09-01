@@ -11,6 +11,8 @@ import 'package:luqa/features/health/data/health_connect_reader.dart';
 import 'package:luqa/features/gym/application/gym_overview_controller.dart';
 import 'package:luqa/features/gym/data/gym_providers.dart';
 import 'package:luqa/features/gym/data/gym_repository.dart';
+import 'package:luqa/features/habits/data/habits_providers.dart';
+import 'package:luqa/features/habits/data/habits_repository.dart';
 import 'package:luqa/features/money/application/money_controller.dart';
 import 'package:luqa/features/money/data/money_providers.dart';
 import 'package:luqa/features/money/data/money_repository.dart';
@@ -24,6 +26,7 @@ import 'package:luqa/features/today/presentation/widgets/timeline_view.dart';
 
 import 'fake_health.dart';
 import 'fake_gym_repository.dart';
+import 'fake_habits_repository.dart';
 import 'fake_money_repository.dart';
 import 'fake_people_repository.dart';
 import 'fake_timeline_repository.dart';
@@ -55,6 +58,7 @@ Future<FakeTimelineRepository> pumpLuqa(
   GymRepository? gymRepository,
   MoneyRepository? moneyRepository,
   PeopleRepository? peopleRepository,
+  HabitsRepository? habitsRepository,
   String initialLocation = '/',
 }) async {
   final repository = FakeTimelineRepository(today: fixedNow);
@@ -78,12 +82,19 @@ Future<FakeTimelineRepository> pumpLuqa(
         // HealthAutoSync, and the real stores want a platform channel.
         outboxProvider.overrideWithValue(const NullOutbox()),
         discardLogProvider.overrideWithValue(const NullDiscardLog()),
+        timelineLocalStoreProvider.overrideWithValue(null),
         gymOutboxProvider.overrideWithValue(const NullOutbox()),
         gymDiscardLogProvider.overrideWithValue(const NullDiscardLog()),
         gymLocalStoreProvider.overrideWithValue(null),
         moneyOutboxProvider.overrideWithValue(const NullOutbox()),
         moneyDiscardLogProvider.overrideWithValue(const NullDiscardLog()),
         moneyLocalStoreProvider.overrideWithValue(null),
+        habitsOutboxProvider.overrideWithValue(const NullOutbox()),
+        habitsDiscardLogProvider.overrideWithValue(const NullDiscardLog()),
+        habitsLocalStoreProvider.overrideWithValue(null),
+        habitsRepositoryProvider.overrideWithValue(
+          habitsRepository ?? FakeHabitsRepository.sample(now: fixedNow),
+        ),
         luqaApiProvider.overrideWithValue(FakeHealthApi()),
         gymRepositoryProvider.overrideWithValue(
           gymRepository ?? FakeGymRepository.sample(),

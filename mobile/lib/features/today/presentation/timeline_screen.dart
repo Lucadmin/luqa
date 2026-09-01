@@ -7,6 +7,7 @@ import 'package:luqa/app/top_level_header.dart';
 import 'package:luqa/design_system/discarded_writes_notice.dart';
 import 'package:luqa/design_system/luqa_sync_status.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
+import 'package:luqa/features/habits/presentation/widgets/habits_strip.dart';
 import 'package:luqa/features/today/application/people_names.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
@@ -289,6 +290,16 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
                 onLogRecent: _logRecent,
               ),
             ),
+          // Today's habits, between what is running now and the day itself:
+          // the check-ins belong in the flow of logging the day, not on a
+          // screen you have to remember to visit. Hidden while a block is
+          // being composed, for the same reason the timer bar is — the draft
+          // owns the screen until it is saved.
+          if (draft == null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: LuqaSpacing.md),
+              child: HabitsStrip(now: _now),
+            ),
           Divider(height: 1, color: LuqaPalette.of(context).border),
           Expanded(
             child: state.isLoading
@@ -521,24 +532,26 @@ class _TimelineSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = LuqaPalette.of(context);
+    // A list rather than a column: these are fixed heights standing in for the
+    // day's blocks, and on a short window they add up to more than the space
+    // left for them. Overflowing there would be a stripe of black-and-yellow
+    // where the timeline is about to appear.
     return ExcludeSemantics(
-      child: Padding(
+      child: ListView(
         padding: const EdgeInsets.fromLTRB(TimelineMetrics.gutter, 8, 16, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final height in [96.0, 52.0, 148.0, 68.0, 120.0]) ...[
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: palette.raised,
-                  borderRadius: BorderRadius.circular(LuqaRadii.control),
-                ),
-                child: SizedBox(height: height),
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          for (final height in [96.0, 52.0, 148.0, 68.0, 120.0]) ...[
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: palette.raised,
+                borderRadius: BorderRadius.circular(LuqaRadii.control),
               ),
-              const SizedBox(height: LuqaSpacing.md),
-            ],
+              child: SizedBox(height: height, width: double.infinity),
+            ),
+            const SizedBox(height: LuqaSpacing.md),
           ],
-        ),
+        ],
       ),
     );
   }

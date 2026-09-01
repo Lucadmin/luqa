@@ -14,27 +14,47 @@ class SyncSettings {
   /// Returns a new [SyncSettings] instance.
   SyncSettings({
     required this.currency,
+    required this.dayStartHour,
+    required this.weekStartsOn,
   });
 
   /// ISO 4217 code the amounts are in.
   final String currency;
 
+  /// The hour a logical day flips. Someone who logs a block at 01:00 means it for the day that has not ended yet, so the day a row belongs to is not the day its clock says.
+  ///
+  /// Minimum value: 0
+  /// Maximum value: 23
+  final int dayStartHour;
+
+  /// 0 = Sunday, 1 = Monday. Habit weeks are counted from here, so a device that guessed would put a \"3x per week\" quota in the wrong week for half the world.
+  ///
+  /// Minimum value: 0
+  /// Maximum value: 6
+  final int weekStartsOn;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SyncSettings && other.currency == currency;
+      other is SyncSettings &&
+          other.currency == currency &&
+          other.dayStartHour == dayStartHour &&
+          other.weekStartsOn == weekStartsOn;
 
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (currency.hashCode);
+      (currency.hashCode) + (dayStartHour.hashCode) + (weekStartsOn.hashCode);
 
   @override
-  String toString() => 'SyncSettings[currency=$currency]';
+  String toString() =>
+      'SyncSettings[currency=$currency, dayStartHour=$dayStartHour, weekStartsOn=$weekStartsOn]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'currency'] = this.currency;
+    json[r'dayStartHour'] = this.dayStartHour;
+    json[r'weekStartsOn'] = this.weekStartsOn;
     return json;
   }
 
@@ -42,9 +62,13 @@ class SyncSettings {
   /// properties have changed.
   SyncSettings copyWith({
     String? currency,
+    int? dayStartHour,
+    int? weekStartsOn,
   }) =>
       SyncSettings(
         currency: currency ?? this.currency,
+        dayStartHour: dayStartHour ?? this.dayStartHour,
+        weekStartsOn: weekStartsOn ?? this.weekStartsOn,
       );
 
   /// Returns a new [SyncSettings] instance and imports its values from
@@ -62,11 +86,21 @@ class SyncSettings {
             'Required key "SyncSettings[currency]" is missing from JSON.');
         assert(json[r'currency'] != null,
             'Required key "SyncSettings[currency]" has a null value in JSON.');
+        assert(json.containsKey(r'dayStartHour'),
+            'Required key "SyncSettings[dayStartHour]" is missing from JSON.');
+        assert(json[r'dayStartHour'] != null,
+            'Required key "SyncSettings[dayStartHour]" has a null value in JSON.');
+        assert(json.containsKey(r'weekStartsOn'),
+            'Required key "SyncSettings[weekStartsOn]" is missing from JSON.');
+        assert(json[r'weekStartsOn'] != null,
+            'Required key "SyncSettings[weekStartsOn]" has a null value in JSON.');
         return true;
       }());
 
       return SyncSettings(
         currency: mapValueOfType<String>(json, r'currency')!,
+        dayStartHour: mapValueOfType<int>(json, r'dayStartHour')!,
+        weekStartsOn: mapValueOfType<int>(json, r'weekStartsOn')!,
       );
     }
     return null;
@@ -124,5 +158,7 @@ class SyncSettings {
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
     'currency',
+    'dayStartHour',
+    'weekStartsOn',
   };
 }

@@ -18,11 +18,13 @@ class SyncCollections {
     this.groups = const Optional.absent(),
     this.gymLocations = const Optional.absent(),
     this.exercises = const Optional.absent(),
+    this.habits = const Optional.absent(),
     this.timeEntries = const Optional.absent(),
     this.sleepEntries = const Optional.absent(),
     this.expenses = const Optional.absent(),
     this.settlements = const Optional.absent(),
     this.gymSessions = const Optional.absent(),
+    this.habitLogs = const Optional.absent(),
   });
 
   ///
@@ -71,6 +73,14 @@ class SyncCollections {
   /// source code must fall back to having a nullable type.
   /// Consider adding a "default:" property in the specification file to hide this note.
   ///
+  final Optional<HabitDelta?> habits;
+
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
   final Optional<TimeEntryDelta?> timeEntries;
 
   ///
@@ -105,6 +115,14 @@ class SyncCollections {
   ///
   final Optional<GymSessionDelta?> gymSessions;
 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<HabitLogDelta?> habitLogs;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -114,11 +132,13 @@ class SyncCollections {
           other.groups == groups &&
           other.gymLocations == gymLocations &&
           other.exercises == exercises &&
+          other.habits == habits &&
           other.timeEntries == timeEntries &&
           other.sleepEntries == sleepEntries &&
           other.expenses == expenses &&
           other.settlements == settlements &&
-          other.gymSessions == gymSessions;
+          other.gymSessions == gymSessions &&
+          other.habitLogs == habitLogs;
 
   @override
   int get hashCode =>
@@ -128,15 +148,17 @@ class SyncCollections {
       (groups == null ? 0 : groups!.hashCode) +
       (gymLocations == null ? 0 : gymLocations!.hashCode) +
       (exercises == null ? 0 : exercises!.hashCode) +
+      (habits == null ? 0 : habits!.hashCode) +
       (timeEntries == null ? 0 : timeEntries!.hashCode) +
       (sleepEntries == null ? 0 : sleepEntries!.hashCode) +
       (expenses == null ? 0 : expenses!.hashCode) +
       (settlements == null ? 0 : settlements!.hashCode) +
-      (gymSessions == null ? 0 : gymSessions!.hashCode);
+      (gymSessions == null ? 0 : gymSessions!.hashCode) +
+      (habitLogs == null ? 0 : habitLogs!.hashCode);
 
   @override
   String toString() =>
-      'SyncCollections[categories=$categories, people=$people, groups=$groups, gymLocations=$gymLocations, exercises=$exercises, timeEntries=$timeEntries, sleepEntries=$sleepEntries, expenses=$expenses, settlements=$settlements, gymSessions=$gymSessions]';
+      'SyncCollections[categories=$categories, people=$people, groups=$groups, gymLocations=$gymLocations, exercises=$exercises, habits=$habits, timeEntries=$timeEntries, sleepEntries=$sleepEntries, expenses=$expenses, settlements=$settlements, gymSessions=$gymSessions, habitLogs=$habitLogs]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -160,6 +182,10 @@ class SyncCollections {
       final value = this.exercises.value;
       json[r'exercises'] = value;
     }
+    if (this.habits.isPresent) {
+      final value = this.habits.value;
+      json[r'habits'] = value;
+    }
     if (this.timeEntries.isPresent) {
       final value = this.timeEntries.value;
       json[r'timeEntries'] = value;
@@ -180,6 +206,10 @@ class SyncCollections {
       final value = this.gymSessions.value;
       json[r'gymSessions'] = value;
     }
+    if (this.habitLogs.isPresent) {
+      final value = this.habitLogs.value;
+      json[r'habitLogs'] = value;
+    }
     return json;
   }
 
@@ -191,11 +221,13 @@ class SyncCollections {
     Optional<PersonGroupDelta?>? groups,
     Optional<GymLocationDelta?>? gymLocations,
     Optional<GymExerciseDelta?>? exercises,
+    Optional<HabitDelta?>? habits,
     Optional<TimeEntryDelta?>? timeEntries,
     Optional<SleepEntryDelta?>? sleepEntries,
     Optional<ExpenseDelta?>? expenses,
     Optional<SettlementDelta?>? settlements,
     Optional<GymSessionDelta?>? gymSessions,
+    Optional<HabitLogDelta?>? habitLogs,
   }) =>
       SyncCollections(
         categories: categories ?? this.categories,
@@ -203,11 +235,13 @@ class SyncCollections {
         groups: groups ?? this.groups,
         gymLocations: gymLocations ?? this.gymLocations,
         exercises: exercises ?? this.exercises,
+        habits: habits ?? this.habits,
         timeEntries: timeEntries ?? this.timeEntries,
         sleepEntries: sleepEntries ?? this.sleepEntries,
         expenses: expenses ?? this.expenses,
         settlements: settlements ?? this.settlements,
         gymSessions: gymSessions ?? this.gymSessions,
+        habitLogs: habitLogs ?? this.habitLogs,
       );
 
   /// Returns a new [SyncCollections] instance and imports its values from
@@ -240,6 +274,9 @@ class SyncCollections {
         exercises: json.containsKey(r'exercises')
             ? Optional.present(GymExerciseDelta.fromJson(json[r'exercises']))
             : const Optional.absent(),
+        habits: json.containsKey(r'habits')
+            ? Optional.present(HabitDelta.fromJson(json[r'habits']))
+            : const Optional.absent(),
         timeEntries: json.containsKey(r'timeEntries')
             ? Optional.present(TimeEntryDelta.fromJson(json[r'timeEntries']))
             : const Optional.absent(),
@@ -254,6 +291,9 @@ class SyncCollections {
             : const Optional.absent(),
         gymSessions: json.containsKey(r'gymSessions')
             ? Optional.present(GymSessionDelta.fromJson(json[r'gymSessions']))
+            : const Optional.absent(),
+        habitLogs: json.containsKey(r'habitLogs')
+            ? Optional.present(HabitLogDelta.fromJson(json[r'habitLogs']))
             : const Optional.absent(),
       );
     }
