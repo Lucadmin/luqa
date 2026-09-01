@@ -16,6 +16,7 @@ import 'package:luqa/features/today/domain/time_entry.dart';
 import 'package:luqa/core/sync/outbox.dart';
 
 import 'sync_engine_harness.dart';
+import '../../helpers/test_store.dart';
 
 void main() {
   sqfliteFfiInit();
@@ -192,10 +193,7 @@ NewTimeEntry _draft(String description, {String? categoryId}) => NewTimeEntry(
 class _Harness {
   _Harness({Outbox<TimelineMutation>? outbox}) {
     final remote = RemoteTodayRepository(client: api);
-    store = LuqaStore(
-      factory: databaseFactoryFfi,
-      path: inMemoryDatabasePath,
-    );
+    store = openTestStore();
     local = TimelineLocalStore(namespace: 'user-a', store: store);
     container = ProviderContainer(
       overrides: [

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { profileUpdateData } from "../../src/lib/person-profile.ts";
+import { profileUpdateData, touchData } from "../../src/lib/person-profile.ts";
 import {
   personProfileSchema,
   updatePersonSchema,
@@ -119,4 +119,29 @@ test("one update carries identity and profile together", () => {
   assert.equal(parsed.success, true);
   assert.equal(parsed.data.nickname, "Jo");
   assert.equal(parsed.data.name, "Jonas Brehm");
+});
+
+// The invariant the whole People feature rests on. Places, notes and gift
+// ideas ride inside the person rather than syncing on their own, and the delta
+// feed finds changed rows by ordering on `updatedAt`. A child written without
+// a real bump to the parent is a change no second device ever hears about —
+// and nothing looks broken, because the write succeeds and every direct read
+// shows it.
+
+test("touching a person carries a timestamp, not an empty update", () => {
+  // This is the regression. `data: {}` reads like it would move `@updatedAt`
+  // and does not: Prisma treats an empty update as a no-op, so the row never
+  // enters the delta feed. The timestamp has to be written explicitly.
+  const data = touchData(new Date("2026-09-01T10:00:00.000Z"));
+
+  assert.equal(Object.keys(data).length > 0, true);
+  assert.ok(data.updatedAt instanceof Date);
+  assert.equal(data.updatedAt.toISOString(), "2026-09-01T10:00:00.000Z");
+});
+
+test("a touch moves the row forward", () => {
+  const before = new Date("2026-09-01T10:00:00.000Z");
+  const data = touchData(new Date("2026-09-01T10:00:01.000Z"));
+
+  assert.equal(data.updatedAt.getTime() > before.getTime(), true);
 });

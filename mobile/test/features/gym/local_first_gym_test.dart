@@ -11,6 +11,7 @@ import 'package:luqa/features/gym/domain/gym_models.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../helpers/fake_gym_repository.dart';
+import '../../helpers/test_store.dart';
 
 class _TestQueue implements MutationQueue<GymMutation> {
   List<GymMutation> _queue = const [];
@@ -74,7 +75,7 @@ void main() {
   late LocalFirstGymRepository repository;
 
   setUp(() {
-    store = LuqaStore(factory: databaseFactoryFfi, path: inMemoryDatabasePath);
+    store = openTestStore();
     addTearDown(store.close);
     local = GymLocalStore(namespace: 'user-a', store: store);
     queue = _TestQueue();

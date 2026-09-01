@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { geocodeKey, geocodeQuery, isStaleMiss } from "@/lib/geocode-query";
+import { touchPerson } from "@/lib/server/people";
 
 /**
  * Resolving a city to a point, once.
@@ -168,7 +169,7 @@ export async function geocodePendingPlaces(
       });
       // The place lives inside its person on the wire, so the person is what
       // has to look changed for any device to hear about the new pin.
-      await tx.person.update({ where: { id: place.personId }, data: {} });
+      await touchPerson(tx, place.personId);
     });
     resolved += 1;
   }

@@ -140,7 +140,21 @@ parent `Person.updatedAt` inside the same transaction. The delta feed orders by
 `updatedAt`; a note added without touching the parent is a note no phone ever
 hears about. This is the one rule that will silently break the feature if it is
 missed, so it lives behind a single `touchPerson(tx, id)` helper that every
-child write goes through, and it gets its own test.
+child write goes through.
+
+It broke exactly as predicted, on 2026-09-01. `touchPerson` was written as
+`person.update({ data: {} })`, on the assumption that any update moves an
+`@updatedAt` column. Prisma treats an empty update as a no-op: no SQL, no
+timestamp. Every place, note and gift written since the feature shipped reached
+the server and no second device, and nothing looked wrong — the writes
+succeeded, and every direct read showed them. It surfaced as a map with no pins
+on it, weeks of stranded rows later.
+
+Two things came out of that. The timestamp is now written explicitly through
+`touchData()`, which lives in `person-profile.ts` so a test with no database
+can assert the payload is not empty. And the lesson generalises: a "mark this
+changed" write has to be verified against a real database, because the failure
+mode of getting it wrong is silence.
 
 Time entries carry `personIds` for the same reason.
 

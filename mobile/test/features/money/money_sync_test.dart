@@ -15,10 +15,10 @@ import 'package:luqa/features/money/data/money_repository.dart';
 import 'package:luqa/features/money/domain/money_models.dart';
 import 'package:luqa/features/money/domain/money_split.dart';
 import 'package:luqa_api/api.dart' as api;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../helpers/fake_money_repository.dart';
 import '../../helpers/pump_luqa.dart';
+import '../../helpers/test_store.dart';
 
 /// A durable queue that round-trips through json, because that is what a real
 /// launch reads back.
@@ -79,7 +79,7 @@ class _Stack {
     this.outbox = outbox ?? _MemoryOutbox();
     this.store =
         store ??
-        LuqaStore(factory: databaseFactoryFfi, path: inMemoryDatabasePath);
+        openTestStore();
     this.discardLog = discardLog ?? _MemoryDiscardLog();
     local = MoneyLocalStore(namespace: 'user-a', store: this.store);
     container = ProviderContainer(

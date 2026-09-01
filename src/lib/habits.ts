@@ -4,7 +4,6 @@
 // the user's timezone. Parsing builds a local midnight Date and only ever reads
 // calendar fields (getFullYear/Month/Date/Day), so the math is timezone-stable.
 
-import { isoDateKey } from "./time";
 import type { HabitGoalPeriod, HabitGoalType, HabitScheduleType } from "./types";
 
 export type { HabitGoalPeriod, HabitGoalType, HabitScheduleType };
@@ -51,6 +50,25 @@ export interface HabitGoal {
 }
 
 // --- date-key helpers -------------------------------------------------------
+
+/**
+ * A date's key, from its local calendar fields.
+ *
+ * The same thing `isoDateKey` in `./time` does, kept here on purpose: this
+ * module is the rule both clients decide "is this habit due" from, and it
+ * earns that by importing nothing. A single stray import is what stops it
+ * being loadable — and therefore testable — outside a bundler, and the rule
+ * matters far more than five lines of date formatting.
+ *
+ * The Dart port keeps the same pair for the same reason, under the same names,
+ * so the two can be read side by side.
+ */
+function isoDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 export function parseDateKey(key: string): Date {
   const [y, m, d] = key.split("-").map(Number);

@@ -6,6 +6,7 @@ export { profileUpdateData } from "@/lib/person-profile";
 import {
   type PersonProfilePatch,
   profileUpdateData,
+  touchData,
 } from "@/lib/person-profile";
 import { claimMoneyId } from "@/lib/server/money";
 import { reviveDeletedPerson } from "@/lib/server/tombstones";
@@ -31,6 +32,11 @@ export const personInclude = {
 /**
  * Marks the parent person as changed.
  *
+ * The timestamp is written explicitly. `data: {}` looks like it would move
+ * `@updatedAt` and does not — Prisma treats an empty update as a no-op, so the
+ * row never enters the delta feed and the child write reaches no other device.
+ * See {@link touchData}.
+ *
  * **This is the invariant the whole feature rests on.** Places, notes, gifts
  * and channels are not sync collections of their own — they ride inside
  * `PersonDTO`, and the delta feed finds changed rows by ordering on
@@ -46,10 +52,7 @@ export async function touchPerson(
   tx: DbTransaction,
   personId: string,
 ): Promise<void> {
-  // `updatedAt` is @updatedAt, so an empty-data update is enough to move it —
-  // and is honest about the intent, which is "this row changed", not "this
-  // field changed".
-  await tx.person.update({ where: { id: personId }, data: {} });
+  await tx.person.update({ where: { id: personId }, data: touchData() });
 }
 
 /** Runs a child-row write and bumps the parent, atomically. The only

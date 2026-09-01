@@ -6,6 +6,23 @@
  * reasoned about, and tested, without a database anywhere near it.
  */
 
+/**
+ * What a "this row changed" write has to carry.
+ *
+ * An empty `data` is a no-op: Prisma issues nothing, and `@updatedAt` does not
+ * move. That is the failure the whole People feature rests on not happening —
+ * places, notes and gift ideas ride inside the person, and the delta feed finds
+ * changed rows by ordering on `updatedAt`, so a child written without a real
+ * bump is a change no device ever hears about. Nothing looks broken: the write
+ * succeeds, direct reads show it, and only the second device is wrong.
+ *
+ * So the timestamp is set explicitly rather than left to `@updatedAt`, and it
+ * lives here where a test can assert it is not empty without a database.
+ */
+export function touchData(now: Date = new Date()): { updatedAt: Date } {
+  return { updatedAt: now };
+}
+
 export interface PersonProfilePatch {
   nickname?: string | null;
   photoUrl?: string | null;

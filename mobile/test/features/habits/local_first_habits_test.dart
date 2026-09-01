@@ -10,6 +10,8 @@ import 'package:luqa/features/habits/data/local_first_habits_repository.dart';
 import 'package:luqa/features/habits/domain/habit.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../../helpers/test_store.dart';
+
 class _TestQueue implements MutationQueue<HabitMutation> {
   List<HabitMutation> _queue = const [];
 
@@ -79,10 +81,7 @@ void main() {
   var minted = 0;
 
   setUp(() {
-    store = LuqaStore(
-      factory: databaseFactoryFfi,
-      path: inMemoryDatabasePath,
-    );
+    store = openTestStore();
     addTearDown(store.close);
     local = HabitsLocalStore(namespace: 'user-1', store: store);
     queue = _TestQueue();

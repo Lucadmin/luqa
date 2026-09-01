@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:luqa/core/storage/luqa_store.dart';
 import 'package:luqa/features/today/data/timeline_local_store.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -16,6 +14,7 @@ import 'package:luqa/features/today/domain/time_entry.dart';
 
 import '../../helpers/pump_luqa.dart';
 import 'sync_engine_harness.dart';
+import '../../helpers/test_store.dart';
 
 /// The whole stack, minus the widget tree: a real controller over a real
 /// local-first repository over a real sync engine, with only the network faked.
@@ -24,10 +23,7 @@ class _Stack {
     api.entries.addAll(seed);
     api.offline = offline;
     final remote = RemoteTodayRepository(client: api);
-    store = LuqaStore(
-      factory: databaseFactoryFfi,
-      path: inMemoryDatabasePath,
-    );
+    store = openTestStore();
     local = TimelineLocalStore(namespace: 'user-a', store: store);
     // Seeded the way a completed sync would have left the device, since reads
     // come from here now rather than from the server.
@@ -58,16 +54,36 @@ class _Stack {
 
   TimelineState get state => container.read(timelineControllerProvider);
 
+  /// Waits for the controller to finish whatever it is doing.
+  ///
+  /// Deliberately a condition rather than a fixed number of turns of the event
+  /// loop. Eight turns happened to be enough on an idle machine and not enough
+  /// on a busy one, which is how a suite ends up with one test in five failing
+  /// for no reason anybody can reproduce.
   Future<void> settle() async {
     await _seeded;
-    for (var i = 0; i < 8; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
+    await pump(() => !state.isLoading && !state.isRefreshing);
   }
 
-  void dispose() {
+  /// Turns the event loop until [done], or gives up loudly.
+  ///
+  /// Giving up loudly matters: a silent timeout would turn "the controller
+  /// never finished" into whatever assertion happened to come next, which is
+  /// the hardest kind of failure to read.
+  Future<void> pump(bool Function() done, {int limit = 200}) async {
+    for (var turn = 0; turn < limit; turn++) {
+      if (done()) return;
+      await Future<void>.delayed(Duration.zero);
+    }
+    throw StateError('The timeline never settled after $limit turns');
+  }
+
+  /// Awaited rather than fired and forgotten: every stack opens the same
+  /// in-memory database, so a close still in flight when the next test opens
+  /// its own is the next test reading somebody else's rows.
+  Future<void> dispose() async {
     container.dispose();
-    unawaited(store.close());
+    await store.close();
   }
 }
 
@@ -120,6 +136,7 @@ void main() {
     await stack.controller.commitDraft();
 
     await stack.controller.refresh();
+    await stack.settle();
 
     expect(
       stack.state.entries.map((entry) => entry.description),
@@ -185,6 +202,7 @@ void main() {
       const EntryPatch(description: 'Editing'),
     );
     await stack.controller.refresh();
+    await stack.settle();
 
     expect(stack.state.entries.single.description, 'Editing');
     expect(stack.state.entries.single.pendingSync, isTrue);
@@ -200,6 +218,7 @@ void main() {
       const EntryPatch(description: 'Editing'),
     );
     await stack.controller.refresh();
+    await stack.settle();
 
     expect(stack.state.entries.single.description, 'Editing');
     expect(stack.state.entries.single.pendingSync, isFalse);
@@ -213,6 +232,7 @@ void main() {
 
     await stack.controller.addCategory('Admin');
     await stack.controller.refresh();
+    await stack.settle();
 
     expect(
       stack.state.categories.map((Category value) => value.name),

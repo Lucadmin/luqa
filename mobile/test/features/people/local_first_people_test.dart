@@ -12,6 +12,8 @@ import 'package:luqa/features/people/data/remote_people_repository.dart';
 import 'package:luqa/features/people/domain/person.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../../helpers/test_store.dart';
+
 /// Stands in for the sync engine's queue: folds like the real one, keeps what
 /// it is given, and never sends anything.
 class _TestQueue implements MutationQueue<MoneyMutation> {
@@ -50,7 +52,7 @@ void main() {
   late LocalFirstPeopleRepository repository;
 
   setUp(() {
-    store = LuqaStore(factory: databaseFactoryFfi, path: inMemoryDatabasePath);
+    store = openTestStore();
     addTearDown(store.close);
     local = MoneyLocalStore(namespace: 'user-a', store: store);
     queue = _TestQueue();
