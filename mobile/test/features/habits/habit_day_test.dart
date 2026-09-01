@@ -9,6 +9,9 @@ import 'habit_schedule_test.dart' show habit;
 Habit named(
   String id, {
   HabitScheduleType scheduleType = HabitScheduleType.daily,
+  int intervalDays = 2,
+  bool intervalFromLastDone = false,
+  String? anchorDate,
   HabitGoalType goalType = HabitGoalType.task,
   HabitGoalPeriod goalPeriod = HabitGoalPeriod.day,
   int targetCount = 1,
@@ -31,9 +34,10 @@ Habit named(
   scheduleType: scheduleType,
   weekdays: const [],
   weekInterval: 1,
-  intervalDays: 2,
+  intervalDays: intervalDays,
+  intervalFromLastDone: intervalFromLastDone,
   timesPerPeriod: timesPerPeriod,
-  anchorDate: null,
+  anchorDate: anchorDate,
   dates: const [],
   excludedDates: const [],
   archived: archived,
@@ -227,6 +231,106 @@ void main() {
 
       expect(day.isRunning, isTrue);
       expect(day.done, isTrue);
+    });
+  });
+
+  group('a rolling interval, through the resolver', () {
+    // Shave every second day, starting Monday the 9th.
+    Habit shave() => named(
+      'shave',
+      scheduleType: HabitScheduleType.interval,
+      intervalDays: 2,
+      intervalFromLastDone: true,
+      anchorDate: '2026-03-09',
+    );
+
+    List<String> dueOn(List<String> days, HabitDayFacts facts) => [
+      for (final day in days)
+        if (resolveHabitDay(
+          habits: [shave()],
+          dateKey: day,
+          facts: facts,
+        ).isNotEmpty)
+          day,
+    ];
+
+    const week = [
+      '2026-03-09',
+      '2026-03-10',
+      '2026-03-11',
+      '2026-03-12',
+      '2026-03-13',
+      '2026-03-14',
+    ];
+
+    test('keeping up leaves every other day due', () {
+      final facts = factsWith([
+        log('shave', '2026-03-09', count: 1),
+        log('shave', '2026-03-11', count: 1),
+        log('shave', '2026-03-13', count: 1),
+      ]);
+      expect(dueOn(week, facts), [
+        '2026-03-09',
+        '2026-03-11',
+        '2026-03-13',
+      ]);
+    });
+
+    test('missing a turn shifts every turn after it', () {
+      // Shaved Monday, missed Wednesday, shaved Thursday instead.
+      final facts = factsWith([
+        log('shave', '2026-03-09', count: 1),
+        log('shave', '2026-03-12', count: 1),
+      ]);
+      expect(dueOn(week, facts), [
+        '2026-03-09',
+        // Wednesday was due and went by, and Thursday still asked.
+        '2026-03-11',
+        '2026-03-12',
+        // From Thursday the cycle counts from Thursday: Friday off,
+        // Saturday due. The original odd days are gone.
+        '2026-03-14',
+      ]);
+    });
+
+    test('the day it was done still shows, with its tick', () {
+      final facts = factsWith([log('shave', '2026-03-12', count: 1)]);
+      final day = resolveHabitDay(
+        habits: [shave()],
+        dateKey: '2026-03-12',
+        facts: facts,
+      ).single;
+      expect(day.done, isTrue);
+    });
+
+    test('a streak survives the shift, and a missed turn breaks it', () {
+      final kept = resolveHabitStats(
+        habits: [shave()],
+        from: '2026-03-09',
+        to: '2026-03-13',
+        facts: factsWith([
+          log('shave', '2026-03-09', count: 1),
+          log('shave', '2026-03-11', count: 1),
+          log('shave', '2026-03-13', count: 1),
+        ]),
+      ).single;
+      expect(kept.scheduled, 3);
+      expect(kept.streak, 3);
+
+      final missed = resolveHabitStats(
+        habits: [shave()],
+        from: '2026-03-09',
+        to: '2026-03-14',
+        facts: factsWith([
+          log('shave', '2026-03-09', count: 1),
+          log('shave', '2026-03-12', count: 1),
+          log('shave', '2026-03-14', count: 1),
+        ]),
+      ).single;
+      // Wednesday counts as a day it asked and was not done.
+      expect(missed.scheduled, 4);
+      expect(missed.completed, 3);
+      expect(missed.streak, 2);
     });
   });
 

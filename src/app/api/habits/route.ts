@@ -70,6 +70,7 @@ export async function POST(request: Request) {
       weekdays: d.weekdays ?? [],
       weekInterval: d.weekInterval ?? 1,
       intervalDays: d.intervalDays ?? 2,
+      intervalFromLastDone: d.intervalFromLastDone ?? false,
       timesPerPeriod: d.timesPerPeriod ?? 3,
       anchorDate: d.anchorDate ?? null,
       dates: d.dates ?? [],

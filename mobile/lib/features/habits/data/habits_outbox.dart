@@ -367,6 +367,7 @@ Habit _reidentify(Habit habit, String id) => Habit(
   weekdays: habit.weekdays,
   weekInterval: habit.weekInterval,
   intervalDays: habit.intervalDays,
+  intervalFromLastDone: habit.intervalFromLastDone,
   timesPerPeriod: habit.timesPerPeriod,
   anchorDate: habit.anchorDate,
   dates: habit.dates,

@@ -55,6 +55,7 @@ class _HabitEditorSheetState extends ConsumerState<_HabitEditorSheet> {
   late List<int> _weekdays = [...?widget.habit?.weekdays];
   late int _weekInterval = widget.habit?.weekInterval ?? 1;
   late int _intervalDays = widget.habit?.intervalDays ?? 2;
+  late bool _intervalFromLastDone = widget.habit?.intervalFromLastDone ?? false;
   late int _timesPerPeriod = widget.habit?.timesPerPeriod ?? 3;
 
   bool _saving = false;
@@ -83,6 +84,7 @@ class _HabitEditorSheetState extends ConsumerState<_HabitEditorSheet> {
     weekdays: _weekdays,
     weekInterval: _weekInterval,
     intervalDays: _intervalDays,
+    intervalFromLastDone: _intervalFromLastDone,
     timesPerPeriod: _timesPerPeriod,
     anchorDate: widget.habit?.anchorDate,
     dates: widget.habit?.dates ?? const [],
@@ -124,6 +126,7 @@ class _HabitEditorSheetState extends ConsumerState<_HabitEditorSheet> {
           weekdays: preview.weekdays,
           weekInterval: preview.weekInterval,
           intervalDays: preview.intervalDays,
+          intervalFromLastDone: preview.intervalFromLastDone,
           timesPerPeriod: preview.timesPerPeriod,
           anchorDate: preview.anchorDate,
           dates: preview.dates,
@@ -159,6 +162,7 @@ class _HabitEditorSheetState extends ConsumerState<_HabitEditorSheet> {
         weekdays: preview.weekdays,
         weekInterval: preview.weekInterval,
         intervalDays: preview.intervalDays,
+        intervalFromLastDone: preview.intervalFromLastDone,
         timesPerPeriod: preview.timesPerPeriod,
       ),
     );
@@ -403,6 +407,27 @@ class _HabitEditorSheetState extends ConsumerState<_HabitEditorSheet> {
             max: 365,
             onChanged: (value) => setState(() => _intervalDays = value),
           ),
+          // Only a real choice once there is a gap to count: "every day" means
+          // the same thing whichever end it is counted from.
+          if (_intervalDays > 1) ...[
+            const SizedBox(height: LuqaSpacing.md),
+            HabitSegmented<bool>(
+              values: const [false, true],
+              selected: _intervalFromLastDone,
+              labelOf: (rolling) =>
+                  rolling ? 'From the last time' : 'Fixed days',
+              onChanged: (value) =>
+                  setState(() => _intervalFromLastDone = value),
+            ),
+            const SizedBox(height: LuqaSpacing.sm),
+            _Hint(
+              _intervalFromLastDone
+                  ? 'Due again $_intervalDays days after each time you do it. '
+                        'Miss one and the whole cycle shifts along.'
+                  : 'Every $_intervalDays days from the start date, whether '
+                        'or not you kept up.',
+            ),
+          ],
         ];
 
       case HabitScheduleType.timesPerWeek:
@@ -437,6 +462,25 @@ class _HabitEditorSheetState extends ConsumerState<_HabitEditorSheet> {
           ),
         ];
     }
+  }
+}
+
+/// A sentence explaining what the choice above it will do.
+class _Hint extends StatelessWidget {
+  const _Hint(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text(
+      text,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        fontSize: 12,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
   }
 }
 

@@ -69,3 +69,19 @@ test("a narrowed sync keeps dependency order, not the order asked for", () => {
     "expenses",
   ]);
 });
+
+test("habits land before the logs that point at them", () => {
+  assert.deepEqual(parseCollections("habitLogs,habits"), [
+    "habits",
+    "habitLogs",
+  ]);
+});
+
+test("a habit arrives after the category its progress may be read from", () => {
+  // A category-linked TIME habit is meaningless until the category is here.
+  const order = parseCollections(null);
+  assert.ok(order.indexOf("categories") < order.indexOf("habits"));
+  // And its progress is derived from time entries, which must also precede
+  // the logs that a day is reconciled against.
+  assert.ok(order.indexOf("timeEntries") < order.indexOf("habitLogs"));
+});

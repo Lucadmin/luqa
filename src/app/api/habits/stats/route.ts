@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { addDays, daysBetween, goalFraction, isScheduledOn } from "@/lib/habits";
+import {
+  addDays,
+  daysBetween,
+  goalFraction,
+  isScheduledOn,
+  rollingLookbackDays,
+} from "@/lib/habits";
 import { habitGoal, habitSchedule } from "@/lib/server/habit-day";
 import type { HabitStatDTO } from "@/lib/types";
 
@@ -47,9 +53,21 @@ export async function GET(request: Request) {
 
   if (habits.length === 0) return NextResponse.json({ stats: [] });
 
+  // A rolling interval decides a day from the days before it, so the first day
+  // in the range needs its own run-up. Bounded by the longest interval in play,
+  // which is the most any of them can look back.
+  const lookback = Math.max(
+    0,
+    ...habits.map((h) => rollingLookbackDays(habitSchedule(h))),
+  );
+  const logsFrom = lookback > 0 ? addDays(from, -lookback) : from;
+
   // Logs for the range, keyed habitId|date.
   const logs = await db.habitLog.findMany({
-    where: { habitId: { in: habits.map((h) => h.id) }, date: { gte: from, lte: to } },
+    where: {
+      habitId: { in: habits.map((h) => h.id) },
+      date: { gte: logsFrom, lte: to },
+    },
   });
   const logByKey = new Map(logs.map((l) => [`${l.habitId}|${l.date}`, l]));
 
@@ -63,7 +81,7 @@ export async function GET(request: Request) {
   ];
   const secByCatDay = new Map<string, number>();
   if (linkedCatIds.length > 0) {
-    const start = new Date(`${from}T00:00:00.000Z`);
+    const start = new Date(`${logsFrom}T00:00:00.000Z`);
     start.setUTCHours(dayStartHour, 0, 0, 0);
     const end = new Date(`${to}T00:00:00.000Z`);
     end.setUTCHours(dayStartHour + 24, 0, 0, 0);
@@ -99,6 +117,10 @@ export async function GET(request: Request) {
 
   const stats: HabitStatDTO[] = habits.map((h) => {
     const sched = habitSchedule(h);
+    // Whether a day counts as done is the same question the grid answers, and
+    // a rolling interval asks it about the days before the one being decided —
+    // including the run-up, which never appears in the grid itself.
+    const doneOn = (day: string) => fractionFor(h, day) >= 1;
     const fractions: Record<string, number> = {};
     let completed = 0;
     let scheduled = 0;
@@ -106,7 +128,7 @@ export async function GET(request: Request) {
     let run = 0;
 
     for (let day = from; day <= to; day = addDays(day, 1)) {
-      if (!isScheduledOn(sched, day, weekStartsOn)) continue;
+      if (!isScheduledOn(sched, day, weekStartsOn, doneOn)) continue;
       const f = fractionFor(h, day);
       fractions[day] = f;
       scheduled += 1;
@@ -123,7 +145,7 @@ export async function GET(request: Request) {
     let streak = 0;
     let allowPending = true;
     for (let day = to; day >= from; day = addDays(day, -1)) {
-      if (!isScheduledOn(sched, day, weekStartsOn)) continue;
+      if (!isScheduledOn(sched, day, weekStartsOn, doneOn)) continue;
       const done = (fractions[day] ?? 0) >= 1;
       if (done) {
         streak += 1;

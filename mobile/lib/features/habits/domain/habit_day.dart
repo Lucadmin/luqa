@@ -93,6 +93,15 @@ class HabitDay {
   bool isDoneAt(DateTime now) => isGoalMet(habit, liveProgress(now));
 }
 
+/// "Was this habit's goal met on this day", answered from the rows already
+/// loaded.
+///
+/// The same question [_completedInPeriod] asks of a quota, and the same one a
+/// rolling interval asks of the days before the one being decided — so it is
+/// asked in one place rather than three.
+DoneOn _doneOn(Habit habit, HabitDayFacts facts) =>
+    (dateKey) => isGoalMet(habit, _dayProgress(habit, dateKey, facts));
+
 /// The progress stored against one habit on one day, before any running timer
 /// is added to it.
 HabitProgress _dayProgress(Habit habit, String dateKey, HabitDayFacts facts) {
@@ -163,7 +172,7 @@ int _completedInPeriod(Habit habit, DateKeyRange range, HabitDayFacts facts) {
     // `completedAt`. A linked TIME habit has no log to carry that flag until
     // the server writes one, and a quota that only counted after a sync would
     // be wrong exactly when the phone is offline.
-    if (isGoalMet(habit, _dayProgress(habit, key, facts))) done++;
+    if (_doneOn(habit, facts)(key)) done++;
   }
   return done;
 }
@@ -182,7 +191,14 @@ List<HabitDay> resolveHabitDay({
 
   for (final habit in habits) {
     if (habit.archived) continue;
-    if (!isScheduledOn(habit, dateKey, weekStartsOn: weekStartsOn)) continue;
+    if (!isScheduledOn(
+      habit,
+      dateKey,
+      weekStartsOn: weekStartsOn,
+      doneOn: _doneOn(habit, facts),
+    )) {
+      continue;
+    }
 
     int count;
     int seconds;
@@ -289,6 +305,10 @@ List<HabitStat> resolveHabitStats({
     var scheduled = 0;
     var bestStreak = 0;
     var run = 0;
+    // A rolling interval decides a day from the days before it, including the
+    // ones before the window — which is why this reads the facts rather than
+    // the fractions being built up as the loop goes.
+    final doneOn = _doneOn(habit, facts);
 
     final days = <String>[];
     for (
@@ -296,7 +316,14 @@ List<HabitStat> resolveHabitStats({
       key.compareTo(to) <= 0;
       key = addDaysToKey(key, 1)
     ) {
-      if (!isScheduledOn(habit, key, weekStartsOn: weekStartsOn)) continue;
+      if (!isScheduledOn(
+        habit,
+        key,
+        weekStartsOn: weekStartsOn,
+        doneOn: doneOn,
+      )) {
+        continue;
+      }
       days.add(key);
       final fraction = goalFraction(habit, _dayProgress(habit, key, facts));
       fractions[key] = fraction;

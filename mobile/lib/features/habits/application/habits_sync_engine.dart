@@ -54,6 +54,7 @@ class HabitsSyncEngine extends Notifier<SyncState>
             weekdays: habit.weekdays,
             weekInterval: habit.weekInterval,
             intervalDays: habit.intervalDays,
+            intervalFromLastDone: habit.intervalFromLastDone,
             timesPerPeriod: habit.timesPerPeriod,
             anchorDate: habit.anchorDate,
             dates: habit.dates,

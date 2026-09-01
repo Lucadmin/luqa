@@ -108,6 +108,7 @@ export async function POST(request: Request) {
       weekdays: input.weekdays ?? [],
       weekInterval: input.weekInterval ?? 1,
       intervalDays: input.intervalDays ?? 2,
+      intervalFromLastDone: input.intervalFromLastDone ?? false,
       timesPerPeriod: input.timesPerPeriod ?? 3,
       anchorDate: input.anchorDate ?? null,
       dates: input.dates ?? [],

@@ -302,6 +302,7 @@ export const createHabitSchema = z.object({
   weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
   weekInterval: z.number().int().min(1).max(12).optional(),
   intervalDays: z.number().int().min(1).max(365).optional(),
+  intervalFromLastDone: z.boolean().optional(),
   timesPerPeriod: z.number().int().min(1).max(366).optional(),
   anchorDate: dateKey.nullish(),
   dates: z.array(dateKey).max(366).optional(),

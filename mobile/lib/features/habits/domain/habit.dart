@@ -56,6 +56,7 @@ class Habit {
     required this.weekdays,
     required this.weekInterval,
     required this.intervalDays,
+    required this.intervalFromLastDone,
     required this.timesPerPeriod,
     required this.anchorDate,
     required this.dates,
@@ -97,6 +98,15 @@ class Habit {
   /// For INTERVAL — every N days from the anchor.
   final int intervalDays;
 
+  /// For INTERVAL — count from the last day the goal was met, rather than from
+  /// the anchor.
+  ///
+  /// "Shave every second day" on a fixed grid keeps insisting on the original
+  /// odd days: miss Wednesday, do it Thursday, and Friday is still the day it
+  /// wants. Counting from the last time shifts the whole cycle instead, which
+  /// is what that phrase usually means.
+  final bool intervalFromLastDone;
+
   /// For TIMES_PER_* — the quota within each period.
   final int timesPerPeriod;
 
@@ -118,6 +128,19 @@ class Habit {
   bool get isCategoryLinked =>
       goalType == HabitGoalType.time && categoryId != null;
 
+  /// True when which days this habit is due on depends on when it was last
+  /// done, rather than only on the calendar.
+  bool get isRollingInterval =>
+      scheduleType == HabitScheduleType.interval && intervalFromLastDone;
+
+  /// How far back deciding one day can need to look.
+  ///
+  /// "Due unless it was done within the last N days" needs exactly those N
+  /// days, so loading history for a rolling habit never means loading more
+  /// than its own interval — even for one not done in a year.
+  int get rollingLookbackDays =>
+      isRollingInterval ? (intervalDays < 1 ? 1 : intervalDays) : 0;
+
   Habit copyWith({
     String? name,
     String? Function()? icon,
@@ -132,6 +155,7 @@ class Habit {
     List<int>? weekdays,
     int? weekInterval,
     int? intervalDays,
+    bool? intervalFromLastDone,
     int? timesPerPeriod,
     String? Function()? anchorDate,
     List<String>? dates,
@@ -152,6 +176,7 @@ class Habit {
     weekdays: weekdays ?? this.weekdays,
     weekInterval: weekInterval ?? this.weekInterval,
     intervalDays: intervalDays ?? this.intervalDays,
+    intervalFromLastDone: intervalFromLastDone ?? this.intervalFromLastDone,
     timesPerPeriod: timesPerPeriod ?? this.timesPerPeriod,
     anchorDate: anchorDate == null ? this.anchorDate : anchorDate(),
     dates: dates ?? this.dates,

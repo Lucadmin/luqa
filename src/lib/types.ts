@@ -184,6 +184,8 @@ export interface HabitDTO {
   weekdays: number[];
   weekInterval: number;
   intervalDays: number;
+  /** INTERVAL only: count from the last completion rather than the anchor. */
+  intervalFromLastDone: boolean;
   timesPerPeriod: number;
   anchorDate: string | null;
   dates: string[];

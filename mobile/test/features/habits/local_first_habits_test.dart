@@ -46,6 +46,9 @@ HabitDraft draft({
   int targetCount = 1,
   int targetSeconds = 0,
   String? categoryId,
+  HabitScheduleType scheduleType = HabitScheduleType.daily,
+  int intervalDays = 2,
+  bool intervalFromLastDone = false,
 }) => HabitDraft(
   name: name,
   icon: 'bookOpen',
@@ -55,10 +58,11 @@ HabitDraft draft({
   targetCount: targetCount,
   targetSeconds: targetSeconds,
   categoryId: categoryId,
-  scheduleType: HabitScheduleType.daily,
+  scheduleType: scheduleType,
   weekdays: const [],
   weekInterval: 1,
-  intervalDays: 2,
+  intervalDays: intervalDays,
+  intervalFromLastDone: intervalFromLastDone,
   timesPerPeriod: 3,
   anchorDate: null,
   dates: const [],
@@ -129,6 +133,24 @@ void main() {
     expect(stored.targetSeconds, 5400);
     expect(stored.categoryId, 'fitness');
     expect(stored.icon, 'bookOpen');
+  });
+
+  test('a rolling interval survives the round trip to disk', () async {
+    await repository.createHabit(
+      draft(
+        name: 'Shave',
+        scheduleType: HabitScheduleType.interval,
+        intervalDays: 2,
+        intervalFromLastDone: true,
+      ),
+    );
+
+    final stored = (await repository.loadHabits()).single;
+    expect(stored.scheduleType, HabitScheduleType.interval);
+    expect(stored.intervalDays, 2);
+    expect(stored.intervalFromLastDone, isTrue);
+    expect(stored.isRollingInterval, isTrue);
+    expect(stored.rollingLookbackDays, 2);
   });
 
   test('a category link is dropped when the goal is not a duration', () async {

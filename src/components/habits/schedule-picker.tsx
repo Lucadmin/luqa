@@ -10,6 +10,7 @@ export interface ScheduleValue {
   weekdays: number[];
   weekInterval: number;
   intervalDays: number;
+  intervalFromLastDone: boolean;
   timesPerPeriod: number;
   dates: string[];
   excludedDates: string[];
@@ -116,16 +117,49 @@ export function SchedulePicker({
       )}
 
       {value.scheduleType === "INTERVAL" && (
-        <Row label="Repeat every">
-          <Stepper
-            value={value.intervalDays}
-            min={1}
-            max={365}
-            onChange={(v) => onChange({ intervalDays: v })}
-            format={(v) => (v === 1 ? "day" : `${v} days`)}
-            width="w-16"
-          />
-        </Row>
+        <div className="flex flex-col gap-3 rounded-xl border border-border p-3">
+          <Row label="Repeat every">
+            <Stepper
+              value={value.intervalDays}
+              min={1}
+              max={365}
+              onChange={(v) => onChange({ intervalDays: v })}
+              format={(v) => (v === 1 ? "day" : `${v} days`)}
+              width="w-16"
+            />
+          </Row>
+          {value.intervalDays > 1 && (
+            <div className="flex flex-col gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { rolling: false, label: "Fixed days" },
+                  { rolling: true, label: "From the last time" },
+                ].map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() =>
+                      onChange({ intervalFromLastDone: option.rolling })
+                    }
+                    className={cn(
+                      "rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                      value.intervalFromLastDone === option.rolling
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted hover:bg-surface-2 hover:text-foreground",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-faint">
+                {value.intervalFromLastDone
+                  ? `Due again ${value.intervalDays} days after each time you do it. Miss one and the whole cycle shifts.`
+                  : `Every ${value.intervalDays} days from the start date, whether or not you kept up.`}
+              </p>
+            </div>
+          )}
+        </div>
       )}
 
       {(value.scheduleType === "TIMES_PER_WEEK" ||

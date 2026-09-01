@@ -47,6 +47,9 @@ class RemoteHabitsRepository implements HabitsRepository {
             weekdays: api.Optional.present(draft.weekdays),
             weekInterval: api.Optional.present(draft.weekInterval),
             intervalDays: api.Optional.present(draft.intervalDays),
+            intervalFromLastDone: api.Optional.present(
+              draft.intervalFromLastDone,
+            ),
             timesPerPeriod: api.Optional.present(draft.timesPerPeriod),
             anchorDate: api.Optional.present(draft.anchorDate),
             dates: api.Optional.present(draft.dates),
@@ -75,6 +78,7 @@ class RemoteHabitsRepository implements HabitsRepository {
         weekdays: api.Optional.present(habit.weekdays),
         weekInterval: api.Optional.present(habit.weekInterval),
         intervalDays: api.Optional.present(habit.intervalDays),
+        intervalFromLastDone: api.Optional.present(habit.intervalFromLastDone),
         timesPerPeriod: api.Optional.present(habit.timesPerPeriod),
         anchorDate: api.Optional.present(habit.anchorDate),
         dates: api.Optional.present(habit.dates),

@@ -38,6 +38,14 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
   @override
   void initState() {
     super.initState();
+    // The controller outlives this screen — the strip on Today is built from
+    // it — so a day browsed to last time would still be selected. Opening the
+    // screen means "how am I doing", and the answer to that starts today.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = ref.read(habitsControllerProvider);
+      unawaited(_controller.selectDate(state.todayDate));
+    });
     // One clock for the screen, so every running ring advances together
     // instead of each keeping its own.
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -66,7 +74,7 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(habitsControllerProvider);
     final theme = Theme.of(context);
-    final todayKey = logicalDateKey(_now, state.dayStartHour);
+    final todayKey = state.todayDate;
     final hasSyncStatus =
         state.pendingWrites > 0 || state.isOffline || state.isRefreshing;
 
@@ -244,11 +252,16 @@ class _DayList extends ConsumerWidget {
           day: day,
           now: now,
           onEdit: () => onEdit(day.habit),
-          onToggle: () => controller.toggle(day.id),
-          onIncrement: () => controller.increment(day.id),
-          onDecrement: () => controller.decrement(day.id),
-          onStart: () => controller.startTimer(day.id),
-          onStop: () => controller.stopTimer(day.id),
+          onToggle: () =>
+              controller.toggle(day.id, dateKey: state.selectedDate),
+          onIncrement: () =>
+              controller.increment(day.id, dateKey: state.selectedDate),
+          onDecrement: () =>
+              controller.decrement(day.id, dateKey: state.selectedDate),
+          onStart: () =>
+              controller.startTimer(day.id, dateKey: state.selectedDate),
+          onStop: () =>
+              controller.stopTimer(day.id, dateKey: state.selectedDate),
         );
       },
     );

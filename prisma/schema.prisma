@@ -406,6 +406,10 @@ model Habit {
   weekdays       Int[] // WEEKDAYS: 0=Sun … 6=Sat
   weekInterval   Int               @default(1) // WEEKDAYS: every N weeks
   intervalDays   Int               @default(2) // INTERVAL: every N days
+  // INTERVAL only. False counts from `anchorDate` on a fixed grid; true counts
+  // from the last day the goal was actually met, so missing a turn shifts every
+  // turn after it instead of leaving the habit permanently off its own cycle.
+  intervalFromLastDone Boolean @default(false)
   timesPerPeriod Int               @default(3) // TIMES_PER_*: quota per period
   anchorDate     String? // INTERVAL anchor, "YYYY-MM-DD"
   dates          String[] // DATES: explicit "YYYY-MM-DD" list

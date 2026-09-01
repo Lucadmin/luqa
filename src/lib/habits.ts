@@ -21,6 +21,8 @@ export interface HabitSchedule {
   weekdays: number[];
   weekInterval: number;
   intervalDays: number;
+  /** INTERVAL only: count from the last completion rather than the anchor. */
+  intervalFromLastDone: boolean;
   timesPerPeriod: number;
   anchorDate: string | null;
   dates: string[];
@@ -28,6 +30,16 @@ export interface HabitSchedule {
   /** ISO timestamp; used as the default anchor for interval/weekly math. */
   createdAt: string;
 }
+
+/**
+ * Whether the habit's goal was met on a given day.
+ *
+ * Only a rolling interval needs this — every other schedule is a rule about
+ * the calendar and can be answered without knowing anything about what was
+ * actually done. It is a lookup rather than a list because the caller holds
+ * that history in whatever shape it already had it.
+ */
+export type DoneOn = (dateKey: string) => boolean;
 
 /** The subset needed to decide whether a day's goal is met. */
 export interface HabitGoal {
@@ -69,11 +81,31 @@ function startOfWeek(d: Date, weekStartsOn: number): Date {
 
 // --- scheduling -------------------------------------------------------------
 
-/** Is the habit active (shown) on `dateKey`? */
+/**
+ * How far back a rolling interval has to look to decide one day.
+ *
+ * "Due unless it was done within the last N days" only needs those N days, so
+ * a caller loading history for this never has to load more than the interval
+ * itself — even for a habit that has not been done in a year.
+ */
+export function rollingLookbackDays(h: HabitSchedule): number {
+  if (h.scheduleType !== "INTERVAL" || !h.intervalFromLastDone) return 0;
+  return Math.max(1, h.intervalDays);
+}
+
+/**
+ * Is the habit active (shown) on `dateKey`?
+ *
+ * `doneOn` is only consulted by a rolling interval; every other schedule is
+ * decided by the calendar alone. Omitting it leaves a rolling habit looking
+ * like it has never been done, which shows it every day — wrong, but wrong in
+ * the direction that nags rather than the one that silently hides a habit.
+ */
 export function isScheduledOn(
   h: HabitSchedule,
   dateKey: string,
   weekStartsOn = 1,
+  doneOn?: DoneOn,
 ): boolean {
   if (h.excludedDates.includes(dateKey)) return false;
   const d = parseDateKey(dateKey);
@@ -99,7 +131,32 @@ export function isScheduledOn(
       const anchorKey = h.anchorDate ?? isoDateKey(new Date(h.createdAt));
       const diff = daysBetween(anchorKey, dateKey);
       if (diff < 0) return false;
-      return diff % Math.max(1, h.intervalDays) === 0;
+      if (!h.intervalFromLastDone) {
+        return diff % Math.max(1, h.intervalDays) === 0;
+      }
+
+      // Rolling: due unless it was done within the last `intervalDays` days.
+      //
+      // Shave every second day, shave on Monday: Tuesday is covered, Wednesday
+      // is due. Miss Wednesday and Thursday is still due — an overdue habit
+      // keeps asking rather than waiting for its next scheduled slot. Do it
+      // Thursday and the next turn is Saturday, which is the whole point: the
+      // cycle follows what actually happened instead of the day it was made.
+      const interval = Math.max(1, h.intervalDays);
+
+      // The day it was done still belongs to that day, or ticking a habit
+      // would make it vanish from the list it was ticked in.
+      if (doneOn?.(dateKey)) return true;
+
+      for (let back = 1; back < interval; back++) {
+        const day = addDays(dateKey, -back);
+        // Never look behind the anchor: days before the habit existed cannot
+        // have been done, and treating them as unknown would be the same
+        // answer for more work.
+        if (daysBetween(anchorKey, day) < 0) break;
+        if (doneOn?.(day)) return false;
+      }
+      return true;
     }
 
     case "TIMES_PER_WEEK":
@@ -196,8 +253,11 @@ export function scheduleSummary(h: HabitSchedule): string {
             : days.map((d) => WEEKDAY_SHORT[d]).join(", ");
       return h.weekInterval > 1 ? `${label} · every ${h.weekInterval}w` : label;
     }
-    case "INTERVAL":
-      return h.intervalDays === 1 ? "Every day" : `Every ${h.intervalDays} days`;
+    case "INTERVAL": {
+      if (h.intervalDays === 1) return "Every day";
+      const every = `Every ${h.intervalDays} days`;
+      return h.intervalFromLastDone ? `${every} · from the last` : every;
+    }
     case "TIMES_PER_WEEK":
       return `${h.timesPerPeriod}× per week`;
     case "TIMES_PER_MONTH":

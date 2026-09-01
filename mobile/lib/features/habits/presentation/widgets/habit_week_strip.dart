@@ -68,25 +68,23 @@ class HabitWeekStrip extends StatelessWidget {
 
   /// One mark per habit due that day, filled once its goal was met.
   ///
+  /// Resolved in one pass over all the habits rather than one per habit: which
+  /// days a rolling interval is due on depends on the days around it, so this
+  /// is the same work the day list does and there is no cheaper shortcut.
+  ///
   /// Capped at four: past that the dots stop being countable and start being
   /// texture, and the day cell has to stay a comfortable target.
   List<_Mark> _marksFor(String dateKey) {
-    final marks = <_Mark>[];
-    for (final habit in habits) {
-      if (!isScheduledOn(habit, dateKey, weekStartsOn: weekStartsOn)) continue;
-      final day = resolveHabitDay(
-        habits: [habit],
-        dateKey: dateKey,
-        facts: facts,
-        weekStartsOn: weekStartsOn,
-      );
-      if (day.isEmpty) continue;
-      marks.add(
-        _Mark(color: Color(habit.colorValue), done: day.single.done),
-      );
-      if (marks.length == 4) break;
-    }
-    return marks;
+    final due = resolveHabitDay(
+      habits: habits,
+      dateKey: dateKey,
+      facts: facts,
+      weekStartsOn: weekStartsOn,
+    );
+    return [
+      for (final day in due.take(4))
+        _Mark(color: Color(day.habit.colorValue), done: day.done),
+    ];
   }
 }
 

@@ -291,6 +291,7 @@ export function toHabitDTO(h: Habit): HabitDTO {
     weekdays: h.weekdays,
     weekInterval: h.weekInterval,
     intervalDays: h.intervalDays,
+    intervalFromLastDone: h.intervalFromLastDone,
     timesPerPeriod: h.timesPerPeriod,
     anchorDate: h.anchorDate,
     dates: h.dates,

@@ -33,7 +33,7 @@ class LuqaStore {
   /// providers build them eagerly and signed-out ones never read anything.
   static final LuqaStore shared = LuqaStore();
 
-  static const _version = 7;
+  static const _version = 8;
 
   final DatabaseFactory? _injectedFactory;
   final String? _path;
@@ -111,6 +111,7 @@ class LuqaStore {
         if (oldVersion < 6) _addEntryPeople(batch, oldVersion);
         if (oldVersion < 5) _createRemapTable(batch);
         if (oldVersion < 7) _createHabitTables(batch);
+        if (oldVersion < 8) _addRollingInterval(batch, oldVersion);
         await batch.commit();
       },
       // Going backwards means an older build opened a newer file. There is
@@ -549,6 +550,7 @@ class LuqaStore {
         weekdays TEXT NOT NULL DEFAULT '[]',
         week_interval INTEGER NOT NULL DEFAULT 1,
         interval_days INTEGER NOT NULL DEFAULT 2,
+        interval_from_last_done INTEGER NOT NULL DEFAULT 0,
         times_per_period INTEGER NOT NULL DEFAULT 3,
         anchor_date TEXT,
         dates TEXT NOT NULL DEFAULT '[]',
@@ -579,6 +581,18 @@ class LuqaStore {
       CREATE INDEX habit_log_by_date
         ON habit_log (namespace, date_key)
     ''');
+  }
+
+  /// An interval habit can now count from the last time it was done.
+  ///
+  /// Only for a database that already had the habit tables; one created at
+  /// version 8 or later has the column from the start.
+  static void _addRollingInterval(Batch batch, int oldVersion) {
+    if (oldVersion < 7) return;
+    batch.execute(
+      'ALTER TABLE habit ADD COLUMN interval_from_last_done '
+      'INTEGER NOT NULL DEFAULT 0',
+    );
   }
 
   /// Ids this device invented that the server replaced with its own.

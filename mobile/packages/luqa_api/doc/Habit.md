@@ -22,6 +22,7 @@ Name | Type | Description | Notes
 **weekdays** | **List<int>** | For WEEKDAYS — 0 is Sunday, 6 is Saturday. | [default to const []]
 **weekInterval** | **int** | For WEEKDAYS — every N weeks. |
 **intervalDays** | **int** | For INTERVAL — every N days from the anchor. |
+**intervalFromLastDone** | **bool** | For INTERVAL — count from the last day the goal was met rather than from the anchor. \"Shave every second day\" on a fixed grid keeps insisting on the original odd days; counting from the last completion shifts the whole cycle, which is what that phrase usually means. An overdue rolling habit stays due every day until it is done. |
 **timesPerPeriod** | **int** | For TIMES_PER_* — the quota within each period. |
 **anchorDate** | **String** | YYYY-MM-DD the interval counts from. Null falls back to the day the habit was created. |
 **dates** | **List<String>** | For DATES — the explicit YYYY-MM-DD days. | [default to const []]

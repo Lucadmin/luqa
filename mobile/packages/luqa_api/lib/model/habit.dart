@@ -27,6 +27,7 @@ class Habit {
     this.weekdays = const [],
     required this.weekInterval,
     required this.intervalDays,
+    required this.intervalFromLastDone,
     required this.timesPerPeriod,
     required this.anchorDate,
     this.dates = const [],
@@ -70,6 +71,9 @@ class Habit {
   /// For INTERVAL — every N days from the anchor.
   final int intervalDays;
 
+  /// For INTERVAL — count from the last day the goal was met rather than from the anchor. \"Shave every second day\" on a fixed grid keeps insisting on the original odd days; counting from the last completion shifts the whole cycle, which is what that phrase usually means. An overdue rolling habit stays due every day until it is done.
+  final bool intervalFromLastDone;
+
   /// For TIMES_PER_* — the quota within each period.
   final int timesPerPeriod;
 
@@ -105,6 +109,7 @@ class Habit {
           _deepEquality.equals(other.weekdays, weekdays) &&
           other.weekInterval == weekInterval &&
           other.intervalDays == intervalDays &&
+          other.intervalFromLastDone == intervalFromLastDone &&
           other.timesPerPeriod == timesPerPeriod &&
           other.anchorDate == anchorDate &&
           _deepEquality.equals(other.dates, dates) &&
@@ -129,6 +134,7 @@ class Habit {
       (weekdays.hashCode) +
       (weekInterval.hashCode) +
       (intervalDays.hashCode) +
+      (intervalFromLastDone.hashCode) +
       (timesPerPeriod.hashCode) +
       (anchorDate == null ? 0 : anchorDate!.hashCode) +
       (dates.hashCode) +
@@ -138,7 +144,7 @@ class Habit {
 
   @override
   String toString() =>
-      'Habit[id=$id, name=$name, icon=$icon, color=$color, order=$order, goalType=$goalType, goalPeriod=$goalPeriod, targetCount=$targetCount, targetSeconds=$targetSeconds, categoryId=$categoryId, scheduleType=$scheduleType, weekdays=$weekdays, weekInterval=$weekInterval, intervalDays=$intervalDays, timesPerPeriod=$timesPerPeriod, anchorDate=$anchorDate, dates=$dates, excludedDates=$excludedDates, archived=$archived, createdAt=$createdAt]';
+      'Habit[id=$id, name=$name, icon=$icon, color=$color, order=$order, goalType=$goalType, goalPeriod=$goalPeriod, targetCount=$targetCount, targetSeconds=$targetSeconds, categoryId=$categoryId, scheduleType=$scheduleType, weekdays=$weekdays, weekInterval=$weekInterval, intervalDays=$intervalDays, intervalFromLastDone=$intervalFromLastDone, timesPerPeriod=$timesPerPeriod, anchorDate=$anchorDate, dates=$dates, excludedDates=$excludedDates, archived=$archived, createdAt=$createdAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -164,6 +170,7 @@ class Habit {
     json[r'weekdays'] = this.weekdays;
     json[r'weekInterval'] = this.weekInterval;
     json[r'intervalDays'] = this.intervalDays;
+    json[r'intervalFromLastDone'] = this.intervalFromLastDone;
     json[r'timesPerPeriod'] = this.timesPerPeriod;
     if (this.anchorDate != null) {
       json[r'anchorDate'] = this.anchorDate;
@@ -196,6 +203,7 @@ class Habit {
     List<int>? weekdays,
     int? weekInterval,
     int? intervalDays,
+    bool? intervalFromLastDone,
     int? timesPerPeriod,
     String? anchorDate,
     bool anchorDateSetToNull = false,
@@ -219,6 +227,7 @@ class Habit {
         weekdays: weekdays ?? this.weekdays,
         weekInterval: weekInterval ?? this.weekInterval,
         intervalDays: intervalDays ?? this.intervalDays,
+        intervalFromLastDone: intervalFromLastDone ?? this.intervalFromLastDone,
         timesPerPeriod: timesPerPeriod ?? this.timesPerPeriod,
         anchorDate: anchorDateSetToNull ? null : anchorDate ?? this.anchorDate,
         dates: dates ?? this.dates,
@@ -290,6 +299,10 @@ class Habit {
             'Required key "Habit[intervalDays]" is missing from JSON.');
         assert(json[r'intervalDays'] != null,
             'Required key "Habit[intervalDays]" has a null value in JSON.');
+        assert(json.containsKey(r'intervalFromLastDone'),
+            'Required key "Habit[intervalFromLastDone]" is missing from JSON.');
+        assert(json[r'intervalFromLastDone'] != null,
+            'Required key "Habit[intervalFromLastDone]" has a null value in JSON.');
         assert(json.containsKey(r'timesPerPeriod'),
             'Required key "Habit[timesPerPeriod]" is missing from JSON.');
         assert(json[r'timesPerPeriod'] != null,
@@ -334,6 +347,8 @@ class Habit {
             : const [],
         weekInterval: mapValueOfType<int>(json, r'weekInterval')!,
         intervalDays: mapValueOfType<int>(json, r'intervalDays')!,
+        intervalFromLastDone:
+            mapValueOfType<bool>(json, r'intervalFromLastDone')!,
         timesPerPeriod: mapValueOfType<int>(json, r'timesPerPeriod')!,
         anchorDate: mapValueOfType<String>(json, r'anchorDate'),
         dates: json[r'dates'] is Iterable
@@ -418,6 +433,7 @@ class Habit {
     'weekdays',
     'weekInterval',
     'intervalDays',
+    'intervalFromLastDone',
     'timesPerPeriod',
     'anchorDate',
     'dates',

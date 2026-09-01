@@ -3983,6 +3983,7 @@ components:
         - weekdays
         - weekInterval
         - intervalDays
+        - intervalFromLastDone
         - timesPerPeriod
         - anchorDate
         - dates
@@ -4033,6 +4034,15 @@ components:
         intervalDays:
           type: integer
           description: For INTERVAL — every N days from the anchor.
+        intervalFromLastDone:
+          type: boolean
+          description: >-
+            For INTERVAL — count from the last day the goal was met rather than
+            from the anchor. "Shave every second day" on a fixed grid keeps
+            insisting on the original odd days; counting from the last
+            completion shifts the whole cycle, which is what that phrase
+            usually means. An overdue rolling habit stays due every day until
+            it is done.
         timesPerPeriod:
           type: integer
           description: For TIMES_PER_* — the quota within each period.
@@ -4146,6 +4156,8 @@ components:
           type: integer
           minimum: 1
           maximum: 365
+        intervalFromLastDone:
+          type: boolean
         timesPerPeriod:
           type: integer
           minimum: 1
@@ -4214,6 +4226,8 @@ components:
           type: integer
           minimum: 1
           maximum: 365
+        intervalFromLastDone:
+          type: boolean
         timesPerPeriod:
           type: integer
           minimum: 1

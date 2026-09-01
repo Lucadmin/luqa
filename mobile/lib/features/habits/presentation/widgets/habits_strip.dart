@@ -29,7 +29,7 @@ class HabitsStrip extends ConsumerWidget {
 
     // The height is held through the first load rather than collapsed, so the
     // timeline underneath does not jump down the moment the cache answers.
-    if (state.isLoading && state.day.isEmpty) {
+    if (state.isLoading && state.today.isEmpty) {
       return const SizedBox(height: height);
     }
 
@@ -44,20 +44,28 @@ class HabitsStrip extends ConsumerWidget {
                 left: LuqaSpacing.lg,
                 right: LuqaSpacing.sm,
               ),
-              itemCount: state.day.length,
+              itemCount: state.today.length,
               separatorBuilder: (_, _) =>
                   const SizedBox(width: LuqaSpacing.sm),
               itemBuilder: (context, index) {
-                final day = state.day[index];
+                final day = state.today[index];
                 return _HabitChip(
                   key: ValueKey('habit-chip-${day.id}'),
                   day: day,
                   now: now,
-                  onToggle: () => controller.toggle(day.id),
-                  onIncrement: () => controller.increment(day.id),
-                  onDecrement: () => controller.decrement(day.id),
-                  onStart: () => controller.startTimer(day.id),
-                  onStop: () => controller.stopTimer(day.id),
+                  // Always today, whatever day the habits screen was left
+                  // browsing: this line belongs to the day on screen behind
+                  // it, not to a selection made somewhere else.
+                  onToggle: () =>
+                      controller.toggle(day.id, dateKey: state.todayDate),
+                  onIncrement: () =>
+                      controller.increment(day.id, dateKey: state.todayDate),
+                  onDecrement: () =>
+                      controller.decrement(day.id, dateKey: state.todayDate),
+                  onStart: () =>
+                      controller.startTimer(day.id, dateKey: state.todayDate),
+                  onStop: () =>
+                      controller.stopTimer(day.id, dateKey: state.todayDate),
                 );
               },
             ),
@@ -70,7 +78,7 @@ class HabitsStrip extends ConsumerWidget {
             padding: const EdgeInsets.only(right: LuqaSpacing.lg),
             child: _AllHabitsChip(
               done: state.doneCount,
-              total: state.day.length,
+              total: state.today.length,
             ),
           ),
         ],

@@ -109,6 +109,7 @@ Habit habitFromApi(api.Habit value) => Habit(
   weekdays: List<int>.unmodifiable(value.weekdays),
   weekInterval: value.weekInterval,
   intervalDays: value.intervalDays,
+  intervalFromLastDone: value.intervalFromLastDone,
   timesPerPeriod: value.timesPerPeriod,
   anchorDate: value.anchorDate,
   dates: List<String>.unmodifiable(value.dates),
@@ -143,6 +144,7 @@ Map<String, Object?> habitToJson(Habit value) => {
   'weekdays': value.weekdays,
   'weekInterval': value.weekInterval,
   'intervalDays': value.intervalDays,
+  'intervalFromLastDone': value.intervalFromLastDone,
   'timesPerPeriod': value.timesPerPeriod,
   'anchorDate': value.anchorDate,
   'dates': value.dates,
@@ -166,6 +168,9 @@ Habit habitFromJson(Map<String, Object?> value) => Habit(
   weekdays: [for (final day in value['weekdays']! as List<Object?>) day! as int],
   weekInterval: value['weekInterval']! as int,
   intervalDays: value['intervalDays']! as int,
+  // Absent in anything queued or cached by a build from before rolling
+  // intervals existed, which means the fixed grid it was written with.
+  intervalFromLastDone: value['intervalFromLastDone'] as bool? ?? false,
   timesPerPeriod: value['timesPerPeriod']! as int,
   anchorDate: value['anchorDate'] as String?,
   dates: [for (final key in value['dates']! as List<Object?>) key! as String],

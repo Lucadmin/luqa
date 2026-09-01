@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luqa/features/habits/data/habits_outbox.dart';
 
+import 'package:luqa/features/habits/domain/habit.dart';
+
 import 'habit_day_test.dart' show named, log;
 
 final _at = DateTime(2026, 3, 11, 9);
@@ -134,6 +136,23 @@ void main() {
       expect((queue[0] as CreateHabit).habit.id, 'server');
       expect((queue[1] as WriteHabitLog).log.habitId, 'server');
       expect((queue[2] as ReorderHabits).ids, ['server', 'other']);
+    });
+
+    test('keeps the rest of the habit intact', () {
+      final rolling = named('local').copyWith(
+        scheduleType: HabitScheduleType.interval,
+        intervalDays: 3,
+        intervalFromLastDone: true,
+      );
+      final queue = remapHabitId(
+        fold([CreateHabit(habit: rolling, queuedAt: _at)]),
+        'local',
+        'server',
+      );
+      final habit = (queue.single as CreateHabit).habit;
+      expect(habit.id, 'server');
+      expect(habit.intervalDays, 3);
+      expect(habit.intervalFromLastDone, isTrue);
     });
 
     test('leaves everything else alone', () {

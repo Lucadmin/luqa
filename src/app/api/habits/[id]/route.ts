@@ -46,6 +46,9 @@ export async function PATCH(
   if (d.weekdays !== undefined) data.weekdays = d.weekdays;
   if (d.weekInterval !== undefined) data.weekInterval = d.weekInterval;
   if (d.intervalDays !== undefined) data.intervalDays = d.intervalDays;
+  if (d.intervalFromLastDone !== undefined) {
+    data.intervalFromLastDone = d.intervalFromLastDone;
+  }
   if (d.timesPerPeriod !== undefined) data.timesPerPeriod = d.timesPerPeriod;
   if (d.anchorDate !== undefined) data.anchorDate = d.anchorDate ?? null;
   if (d.dates !== undefined) data.dates = d.dates;

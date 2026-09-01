@@ -21,6 +21,7 @@ Name | Type | Description | Notes
 **weekdays** | **Optional<List<int>?>** |  | [optional] [default to const []]
 **weekInterval** | **Optional<int?>** |  | [optional]
 **intervalDays** | **Optional<int?>** |  | [optional]
+**intervalFromLastDone** | **Optional<bool?>** |  | [optional]
 **timesPerPeriod** | **Optional<int?>** |  | [optional]
 **anchorDate** | **Optional<String?>** |  | [optional]
 **dates** | **Optional<List<String>?>** |  | [optional] [default to const []]

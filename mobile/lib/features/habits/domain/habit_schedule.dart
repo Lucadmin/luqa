@@ -62,8 +62,26 @@ DateTime startOfWeek(DateTime date, int weekStartsOn) {
   return DateTime(day.year, day.month, day.day - diff);
 }
 
+/// Whether the habit's goal was met on a given day.
+///
+/// Only a rolling interval needs this — every other schedule is a rule about
+/// the calendar and can be answered without knowing anything about what was
+/// actually done. A lookup rather than a list, because the caller already
+/// holds that history in whatever shape it had it.
+typedef DoneOn = bool Function(String dateKey);
+
 /// Is [habit] active — shown at all — on [dateKey]?
-bool isScheduledOn(Habit habit, String dateKey, {int weekStartsOn = 1}) {
+///
+/// [doneOn] is consulted only by a rolling interval. Leaving it out makes such
+/// a habit look like it has never been done, which shows it every day: wrong,
+/// but wrong in the direction that nags rather than the one that silently
+/// hides a habit someone is relying on.
+bool isScheduledOn(
+  Habit habit,
+  String dateKey, {
+  int weekStartsOn = 1,
+  DoneOn? doneOn,
+}) {
   if (habit.excludedDates.contains(dateKey)) return false;
   final date = parseDateKey(dateKey);
 
@@ -87,7 +105,30 @@ bool isScheduledOn(Habit habit, String dateKey, {int weekStartsOn = 1}) {
       final anchorKey = habit.anchorDate ?? dateKeyOf(habit.createdAt);
       final diff = daysBetweenKeys(anchorKey, dateKey);
       if (diff < 0) return false;
-      return diff % (habit.intervalDays < 1 ? 1 : habit.intervalDays) == 0;
+      final interval = habit.intervalDays < 1 ? 1 : habit.intervalDays;
+      if (!habit.intervalFromLastDone) return diff % interval == 0;
+
+      // Rolling: due unless it was done within the last [interval] days.
+      //
+      // Shave every second day, shave on Monday: Tuesday is covered, Wednesday
+      // is due. Miss Wednesday and Thursday is still due — an overdue habit
+      // keeps asking rather than waiting for its next slot. Do it Thursday and
+      // the next turn is Saturday, which is the whole point: the cycle follows
+      // what actually happened rather than the day the habit was made.
+
+      // The day it was done belongs to that day, or ticking a habit would make
+      // it vanish out of the list it was ticked in.
+      if (doneOn != null && doneOn(dateKey)) return true;
+
+      for (var back = 1; back < interval; back++) {
+        final day = addDaysToKey(dateKey, -back);
+        // Never look behind the anchor: days before the habit existed cannot
+        // have been done, and treating them as unknown is the same answer for
+        // more work.
+        if (daysBetweenKeys(anchorKey, day) < 0) break;
+        if (doneOn != null && doneOn(day)) return false;
+      }
+      return true;
 
     case HabitScheduleType.timesPerWeek:
     case HabitScheduleType.timesPerMonth:
@@ -209,9 +250,9 @@ String scheduleSummary(Habit habit) {
           ? '$label · every ${habit.weekInterval}w'
           : label;
     case HabitScheduleType.interval:
-      return habit.intervalDays == 1
-          ? 'Every day'
-          : 'Every ${habit.intervalDays} days';
+      if (habit.intervalDays == 1) return 'Every day';
+      final every = 'Every ${habit.intervalDays} days';
+      return habit.intervalFromLastDone ? '$every · from the last' : every;
     case HabitScheduleType.timesPerWeek:
       return '${habit.timesPerPeriod}× per week';
     case HabitScheduleType.timesPerMonth:

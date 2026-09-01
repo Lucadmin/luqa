@@ -15,6 +15,7 @@ class HabitDraft {
     required this.weekdays,
     required this.weekInterval,
     required this.intervalDays,
+    required this.intervalFromLastDone,
     required this.timesPerPeriod,
     required this.anchorDate,
     required this.dates,
@@ -33,6 +34,7 @@ class HabitDraft {
   final List<int> weekdays;
   final int weekInterval;
   final int intervalDays;
+  final bool intervalFromLastDone;
   final int timesPerPeriod;
   final String? anchorDate;
   final List<String> dates;
@@ -62,6 +64,7 @@ class HabitDraft {
     weekdays: weekdays,
     weekInterval: weekInterval,
     intervalDays: intervalDays,
+    intervalFromLastDone: intervalFromLastDone,
     timesPerPeriod: timesPerPeriod,
     anchorDate: anchorDate,
     dates: dates,

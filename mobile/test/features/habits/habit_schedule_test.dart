@@ -7,6 +7,7 @@ Habit habit({
   List<int> weekdays = const [],
   int weekInterval = 1,
   int intervalDays = 2,
+  bool intervalFromLastDone = false,
   int timesPerPeriod = 3,
   String? anchorDate,
   List<String> dates = const [],
@@ -32,6 +33,7 @@ Habit habit({
   weekdays: weekdays,
   weekInterval: weekInterval,
   intervalDays: intervalDays,
+  intervalFromLastDone: intervalFromLastDone,
   timesPerPeriod: timesPerPeriod,
   anchorDate: anchorDate,
   dates: dates,
@@ -121,6 +123,127 @@ void main() {
       expect(isScheduledOn(every2, '2026-03-07'), isTrue);
       expect(isScheduledOn(every2, '2026-03-08'), isFalse);
       expect(isScheduledOn(every2, '2026-03-09'), isTrue);
+    });
+
+    test('a fixed interval keeps its grid however it actually went', () {
+      final shave = habit(
+        scheduleType: HabitScheduleType.interval,
+        intervalDays: 2,
+        anchorDate: '2026-03-09',
+      );
+      // Done on the 9th and the 12th; the grid does not care.
+      done(String key) => key == '2026-03-09' || key == '2026-03-12';
+
+      expect(isScheduledOn(shave, '2026-03-11', doneOn: done), isTrue);
+      // The day after doing it, the fixed grid still says yes — which is the
+      // behaviour a rolling interval exists to replace.
+      expect(isScheduledOn(shave, '2026-03-13', doneOn: done), isTrue);
+    });
+
+    group('a rolling interval', () {
+      final shave = habit(
+        scheduleType: HabitScheduleType.interval,
+        intervalDays: 2,
+        intervalFromLastDone: true,
+        anchorDate: '2026-03-09',
+      );
+
+      test('is due from the anchor when it has never been done', () {
+        bool never(String key) => false;
+        expect(isScheduledOn(shave, '2026-03-08', doneOn: never), isFalse);
+        expect(isScheduledOn(shave, '2026-03-09', doneOn: never), isTrue);
+        // Overdue means due again tomorrow, not due again in two days.
+        expect(isScheduledOn(shave, '2026-03-10', doneOn: never), isTrue);
+      });
+
+      test('rests the day after it was done, and comes back the next', () {
+        done(String key) => key == '2026-03-09';
+        expect(isScheduledOn(shave, '2026-03-09', doneOn: done), isTrue);
+        expect(isScheduledOn(shave, '2026-03-10', doneOn: done), isFalse);
+        expect(isScheduledOn(shave, '2026-03-11', doneOn: done), isTrue);
+      });
+
+      test('shifts the whole cycle when a turn is missed', () {
+        // Shaved Monday the 9th, missed Wednesday, shaved Thursday the 12th.
+        done(String key) => key == '2026-03-09' || key == '2026-03-12';
+
+        // Wednesday was due and went by.
+        expect(isScheduledOn(shave, '2026-03-11', doneOn: done), isTrue);
+        // Thursday was still due — an overdue habit keeps asking.
+        expect(isScheduledOn(shave, '2026-03-12', doneOn: done), isTrue);
+        // And from there the cycle counts from Thursday, not from Monday.
+        expect(isScheduledOn(shave, '2026-03-13', doneOn: done), isFalse);
+        expect(isScheduledOn(shave, '2026-03-14', doneOn: done), isTrue);
+      });
+
+      test('still shows on the day it was done', () {
+        // Otherwise ticking a habit would make it vanish out of the list it
+        // was ticked in.
+        done(String key) => key == '2026-03-10';
+        expect(isScheduledOn(shave, '2026-03-10', doneOn: done), isTrue);
+      });
+
+      test('looks back the whole interval, not just one day', () {
+        final weekly = habit(
+          scheduleType: HabitScheduleType.interval,
+          intervalDays: 4,
+          intervalFromLastDone: true,
+          anchorDate: '2026-03-09',
+        );
+        done(String key) => key == '2026-03-10';
+        expect(isScheduledOn(weekly, '2026-03-11', doneOn: done), isFalse);
+        expect(isScheduledOn(weekly, '2026-03-12', doneOn: done), isFalse);
+        expect(isScheduledOn(weekly, '2026-03-13', doneOn: done), isFalse);
+        expect(isScheduledOn(weekly, '2026-03-14', doneOn: done), isTrue);
+      });
+
+      test('never looks behind the anchor', () {
+        final monthly = habit(
+          scheduleType: HabitScheduleType.interval,
+          intervalDays: 30,
+          intervalFromLastDone: true,
+          anchorDate: '2026-03-09',
+        );
+        var asked = <String>[];
+        bool record(String key) {
+          asked.add(key);
+          return false;
+        }
+
+        expect(isScheduledOn(monthly, '2026-03-11', doneOn: record), isTrue);
+        // The day itself, then back only as far as the anchor.
+        expect(asked, ['2026-03-11', '2026-03-10', '2026-03-09']);
+      });
+
+      test('an excluded date still wins', () {
+        final skipped = habit(
+          scheduleType: HabitScheduleType.interval,
+          intervalDays: 2,
+          intervalFromLastDone: true,
+          anchorDate: '2026-03-09',
+          excludedDates: const ['2026-03-11'],
+        );
+        bool never(String key) => false;
+        expect(isScheduledOn(skipped, '2026-03-11', doneOn: never), isFalse);
+      });
+
+      test('with no history it nags rather than hiding', () {
+        // A caller that cannot answer "was it done" gets the habit shown, not
+        // silently dropped from a day it may well be due on.
+        expect(isScheduledOn(shave, '2026-03-13'), isTrue);
+      });
+
+      test('reports how far back deciding a day can need to look', () {
+        expect(shave.rollingLookbackDays, 2);
+        expect(
+          habit(
+            scheduleType: HabitScheduleType.interval,
+            intervalDays: 2,
+          ).rollingLookbackDays,
+          0,
+        );
+        expect(habit().rollingLookbackDays, 0);
+      });
     });
 
     test('a quota schedule is available every day', () {
@@ -253,6 +376,36 @@ void main() {
           ),
         ),
         'Mon · every 2w',
+      );
+    });
+
+    test('says which end an interval is counted from', () {
+      expect(
+        scheduleSummary(
+          habit(scheduleType: HabitScheduleType.interval, intervalDays: 2),
+        ),
+        'Every 2 days',
+      );
+      expect(
+        scheduleSummary(
+          habit(
+            scheduleType: HabitScheduleType.interval,
+            intervalDays: 2,
+            intervalFromLastDone: true,
+          ),
+        ),
+        'Every 2 days · from the last',
+      );
+      // Counted from either end, every day is every day.
+      expect(
+        scheduleSummary(
+          habit(
+            scheduleType: HabitScheduleType.interval,
+            intervalDays: 1,
+            intervalFromLastDone: true,
+          ),
+        ),
+        'Every day',
       );
     });
 

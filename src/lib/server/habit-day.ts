@@ -9,6 +9,7 @@
 import type { Habit, HabitLog } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import {
+  addDays,
   type DayProgress,
   type HabitGoal,
   type HabitSchedule,
@@ -17,6 +18,7 @@ import {
   isPeriodSchedule,
   isScheduledOn,
   periodRange,
+  rollingLookbackDays,
 } from "@/lib/habits";
 import type { HabitGoalPeriod } from "@/lib/types";
 import { toHabitDTO } from "@/lib/serializers";
@@ -28,6 +30,7 @@ export function habitSchedule(h: Habit): HabitSchedule {
     weekdays: h.weekdays,
     weekInterval: h.weekInterval,
     intervalDays: h.intervalDays,
+    intervalFromLastDone: h.intervalFromLastDone,
     timesPerPeriod: h.timesPerPeriod,
     anchorDate: h.anchorDate,
     dates: h.dates,
@@ -181,6 +184,42 @@ function rawProgress(
   };
 }
 
+/**
+ * "Was this habit's goal met on this day", for the habits that need to know.
+ *
+ * Only a rolling interval does, and only for the days inside its own interval
+ * — so this loads that window and nothing more. A habit not done in a year
+ * costs the same query as one done yesterday.
+ */
+async function rollingHistory(
+  habits: Habit[],
+  dateKey: string,
+): Promise<Map<string, Set<string>>> {
+  const rolling = habits.filter((h) => rollingLookbackDays(habitSchedule(h)) > 0);
+  const byHabit = new Map<string, Set<string>>();
+  if (rolling.length === 0) return byHabit;
+
+  const lookback = Math.max(
+    ...rolling.map((h) => rollingLookbackDays(habitSchedule(h))),
+  );
+  const from = addDays(dateKey, -lookback);
+
+  const logs = await db.habitLog.findMany({
+    where: {
+      habitId: { in: rolling.map((h) => h.id) },
+      date: { gte: from, lte: dateKey },
+      completedAt: { not: null },
+    },
+    select: { habitId: true, date: true },
+  });
+  for (const log of logs) {
+    const days = byHabit.get(log.habitId) ?? new Set<string>();
+    days.add(log.date);
+    byHabit.set(log.habitId, days);
+  }
+  return byHabit;
+}
+
 /** All habits scheduled on `dateKey`, with resolved progress for that day. */
 export async function resolveHabitDay(
   userId: string,
@@ -193,8 +232,13 @@ export async function resolveHabitDay(
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });
 
+  // A rolling interval is defined by when it was last done, so what it has
+  // done has to be known before it can be asked whether it is due.
+  const history = await rollingHistory(habits, dateKey);
   const scheduled = habits.filter((h) =>
-    isScheduledOn(habitSchedule(h), dateKey, weekStartsOn),
+    isScheduledOn(habitSchedule(h), dateKey, weekStartsOn, (day) =>
+      history.get(h.id)?.has(day) ?? false,
+    ),
   );
   if (scheduled.length === 0) return [];
 

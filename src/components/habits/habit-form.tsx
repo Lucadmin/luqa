@@ -28,6 +28,7 @@ interface Draft {
   weekdays: number[];
   weekInterval: number;
   intervalDays: number;
+  intervalFromLastDone: boolean;
   timesPerPeriod: number;
   dates: string[];
   excludedDates: string[];
@@ -48,6 +49,7 @@ function draftFrom(habit: HabitDTO | null, defaultDate: string): Draft {
       weekdays: habit.weekdays.length ? habit.weekdays : [1, 2, 3, 4, 5],
       weekInterval: habit.weekInterval,
       intervalDays: habit.intervalDays,
+      intervalFromLastDone: habit.intervalFromLastDone,
       timesPerPeriod: habit.timesPerPeriod,
       dates: habit.dates.length ? habit.dates : [defaultDate],
       excludedDates: habit.excludedDates,
@@ -66,6 +68,7 @@ function draftFrom(habit: HabitDTO | null, defaultDate: string): Draft {
     weekdays: [1, 2, 3, 4, 5],
     weekInterval: 1,
     intervalDays: 2,
+    intervalFromLastDone: false,
     timesPerPeriod: 3,
     dates: [defaultDate],
     excludedDates: [],
@@ -132,6 +135,7 @@ export function HabitForm({
         weekdays: draft.weekdays,
         weekInterval: draft.weekInterval,
         intervalDays: draft.intervalDays,
+        intervalFromLastDone: draft.intervalFromLastDone,
         timesPerPeriod: draft.timesPerPeriod,
         dates: draft.dates,
         excludedDates: draft.excludedDates,

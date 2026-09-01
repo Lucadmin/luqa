@@ -163,6 +163,7 @@ Habit _habit(
   weekdays: weekdays,
   weekInterval: 1,
   intervalDays: 2,
+  intervalFromLastDone: false,
   timesPerPeriod: 3,
   anchorDate: null,
   dates: const [],

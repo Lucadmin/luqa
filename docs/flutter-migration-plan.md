@@ -281,6 +281,13 @@ perform a core action, restart offline, and still see the correct state.
 - Timeline editing and running timers.
 - Sleep display and manual editing.
 - Habit day actions, full habit management, schedules, and insights.
+  Implemented: `/api/v1/habits` plus `habits`/`habitLogs` in the delta feed,
+  a `habits` feature in `mobile/lib/features/habits/`, the check-in strip on
+  Today, and the `/habits` route behind it. Which habits a day holds, and
+  whether each is done, is resolved on the device from the synced habits,
+  logs, and time entries, so the strip is correct with no network. Progress is
+  written as the day's resolved state rather than as an action to replay,
+  which is what makes a queued check-in safe to retry.
 - Calendar integration migration and background refresh behavior.
 
 Exit condition: Flutter can replace the web app for daily use.
@@ -353,7 +360,7 @@ Verified on 2026-08-27:
   platform still needs to be downloaded through Xcode Settings > Components.
 - `mobile/` contains the Android/iOS Flutter scaffold, Riverpod repository
   boundary, go_router app shell, design system, component gallery, Today screen,
-  Log time flow, interaction tests, and light/dark goldens.
+  Log time flow, habits, interaction tests, and light/dark goldens.
 - The web checkout has extensive uncommitted changes. They must be preserved
   and resolved before any repository-wide move or restructure.
 

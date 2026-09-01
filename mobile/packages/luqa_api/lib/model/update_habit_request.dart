@@ -26,6 +26,7 @@ class UpdateHabitRequest {
     this.weekdays = const Optional.present(const []),
     this.weekInterval = const Optional.absent(),
     this.intervalDays = const Optional.absent(),
+    this.intervalFromLastDone = const Optional.absent(),
     this.timesPerPeriod = const Optional.absent(),
     this.anchorDate = const Optional.absent(),
     this.dates = const Optional.present(const []),
@@ -140,6 +141,14 @@ class UpdateHabitRequest {
   ///
   final Optional<int?> intervalDays;
 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<bool?> intervalFromLastDone;
+
   /// Minimum value: 1
   /// Maximum value: 366
   ///
@@ -187,6 +196,7 @@ class UpdateHabitRequest {
           _deepEquality.equals(other.weekdays, weekdays) &&
           other.weekInterval == weekInterval &&
           other.intervalDays == intervalDays &&
+          other.intervalFromLastDone == intervalFromLastDone &&
           other.timesPerPeriod == timesPerPeriod &&
           other.anchorDate == anchorDate &&
           _deepEquality.equals(other.dates, dates) &&
@@ -209,6 +219,7 @@ class UpdateHabitRequest {
       (weekdays.hashCode) +
       (weekInterval == null ? 0 : weekInterval!.hashCode) +
       (intervalDays == null ? 0 : intervalDays!.hashCode) +
+      (intervalFromLastDone == null ? 0 : intervalFromLastDone!.hashCode) +
       (timesPerPeriod == null ? 0 : timesPerPeriod!.hashCode) +
       (anchorDate == null ? 0 : anchorDate!.hashCode) +
       (dates.hashCode) +
@@ -217,7 +228,7 @@ class UpdateHabitRequest {
 
   @override
   String toString() =>
-      'UpdateHabitRequest[name=$name, icon=$icon, color=$color, order=$order, goalType=$goalType, goalPeriod=$goalPeriod, targetCount=$targetCount, targetSeconds=$targetSeconds, categoryId=$categoryId, scheduleType=$scheduleType, weekdays=$weekdays, weekInterval=$weekInterval, intervalDays=$intervalDays, timesPerPeriod=$timesPerPeriod, anchorDate=$anchorDate, dates=$dates, excludedDates=$excludedDates, archived=$archived]';
+      'UpdateHabitRequest[name=$name, icon=$icon, color=$color, order=$order, goalType=$goalType, goalPeriod=$goalPeriod, targetCount=$targetCount, targetSeconds=$targetSeconds, categoryId=$categoryId, scheduleType=$scheduleType, weekdays=$weekdays, weekInterval=$weekInterval, intervalDays=$intervalDays, intervalFromLastDone=$intervalFromLastDone, timesPerPeriod=$timesPerPeriod, anchorDate=$anchorDate, dates=$dates, excludedDates=$excludedDates, archived=$archived]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -273,6 +284,10 @@ class UpdateHabitRequest {
       final value = this.intervalDays.value;
       json[r'intervalDays'] = value;
     }
+    if (this.intervalFromLastDone.isPresent) {
+      final value = this.intervalFromLastDone.value;
+      json[r'intervalFromLastDone'] = value;
+    }
     if (this.timesPerPeriod.isPresent) {
       final value = this.timesPerPeriod.value;
       json[r'timesPerPeriod'] = value;
@@ -312,6 +327,7 @@ class UpdateHabitRequest {
     Optional<List<int>?>? weekdays,
     Optional<int?>? weekInterval,
     Optional<int?>? intervalDays,
+    Optional<bool?>? intervalFromLastDone,
     Optional<int?>? timesPerPeriod,
     Optional<String?>? anchorDate,
     Optional<List<String>?>? dates,
@@ -332,6 +348,7 @@ class UpdateHabitRequest {
         weekdays: weekdays ?? this.weekdays,
         weekInterval: weekInterval ?? this.weekInterval,
         intervalDays: intervalDays ?? this.intervalDays,
+        intervalFromLastDone: intervalFromLastDone ?? this.intervalFromLastDone,
         timesPerPeriod: timesPerPeriod ?? this.timesPerPeriod,
         anchorDate: anchorDate ?? this.anchorDate,
         dates: dates ?? this.dates,
@@ -406,6 +423,10 @@ class UpdateHabitRequest {
             ? Optional.present(json[r'intervalDays'] == null
                 ? null
                 : int.parse('${json[r'intervalDays']}'))
+            : const Optional.absent(),
+        intervalFromLastDone: json.containsKey(r'intervalFromLastDone')
+            ? Optional.present(
+                mapValueOfType<bool>(json, r'intervalFromLastDone'))
             : const Optional.absent(),
         timesPerPeriod: json.containsKey(r'timesPerPeriod')
             ? Optional.present(json[r'timesPerPeriod'] == null

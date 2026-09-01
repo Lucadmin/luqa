@@ -22,8 +22,10 @@ final habitsControllerProvider =
 class HabitsState {
   const HabitsState({
     required this.selectedDate,
+    required this.todayDate,
     this.habits = const [],
     this.day = const [],
+    this.today = const [],
     this.facts = const HabitDayFacts(),
     this.dayStartHour = 3,
     this.weekStartsOn = 1,
@@ -35,8 +37,11 @@ class HabitsState {
     this.error,
   });
 
-  /// The logical day being shown, as a date key.
+  /// The logical day the habits screen is showing, as a date key.
   final String selectedDate;
+
+  /// Today, whatever day the habits screen has been left on.
+  final String todayDate;
 
   /// Every live habit, in the order they are shown. Archived ones are not
   /// here; nothing on these screens acts on one.
@@ -44,6 +49,11 @@ class HabitsState {
 
   /// The habits [selectedDate] actually holds, with their progress resolved.
   final List<HabitDay> day;
+
+  /// The same for today, kept apart from [day] so browsing back through the
+  /// week on the habits screen cannot leave the strip on Today showing last
+  /// Monday's check-ins.
+  final List<HabitDay> today;
 
   /// The rows the day was resolved from, kept so a week strip or an insights
   /// grid can resolve their own days without another round of queries.
@@ -72,13 +82,15 @@ class HabitsState {
     return null;
   }
 
-  /// How many of the day's habits are done, for the strip's summary.
-  int get doneCount => day.where((entry) => entry.done).length;
+  /// How many of today's habits are done, for the strip's summary.
+  int get doneCount => today.where((entry) => entry.done).length;
 
   HabitsState copyWith({
     String? selectedDate,
+    String? todayDate,
     List<Habit>? habits,
     List<HabitDay>? day,
+    List<HabitDay>? today,
     HabitDayFacts? facts,
     int? dayStartHour,
     int? weekStartsOn,
@@ -91,8 +103,10 @@ class HabitsState {
     bool clearError = false,
   }) => HabitsState(
     selectedDate: selectedDate ?? this.selectedDate,
+    todayDate: todayDate ?? this.todayDate,
     habits: habits ?? this.habits,
     day: day ?? this.day,
+    today: today ?? this.today,
     facts: facts ?? this.facts,
     dayStartHour: dayStartHour ?? this.dayStartHour,
     weekStartsOn: weekStartsOn ?? this.weekStartsOn,
@@ -114,6 +128,10 @@ class HabitsState {
 class HabitsController extends Notifier<HabitsState> {
   late HabitsRepository _repository;
 
+  /// Today, as a date key. Held here as well as in the state because the
+  /// first load starts before `build` has returned a state to read it from.
+  late String _today;
+
   /// The window of logs currently loaded, as date keys.
   String? _loadedFrom;
   String? _loadedTo;
@@ -132,19 +150,25 @@ class HabitsController extends Notifier<HabitsState> {
     ref.listen(habitsSyncEngineProvider, (previous, next) {
       // A drain that reached the server may have been answered with rows this
       // device does not have — a habit created here under an id the server
-      // replaced, most of all — so the cache is re-read once it lands.
-      if (previous?.rounds != next.rounds) unawaited(_reload());
+      // replaced, most of all — so the whole window is re-read once it lands,
+      // logs included: a remap moves those too.
+      if (previous?.rounds != next.rounds) {
+        unawaited(_load(state.selectedDate, force: true));
+      }
       state = state.copyWith(
         pendingWrites: next.pending,
         discarded: next.discarded,
       );
     });
 
-    final today = dateKeyOf(ref.watch(currentTimeProvider));
-    unawaited(_initialise(today));
+    // Three in the morning is the server's default day start, and the right
+    // guess until a sync reports what this account actually uses.
+    _today = logicalDateKey(ref.watch(currentTimeProvider), 3);
+    unawaited(_initialise(_today));
 
     return HabitsState(
-      selectedDate: today,
+      selectedDate: _today,
+      todayDate: _today,
       pendingWrites: sync.pending,
       discarded: sync.discarded,
     );
@@ -162,20 +186,63 @@ class HabitsController extends Notifier<HabitsState> {
     await refresh();
   }
 
-  /// The window a day needs before it can be resolved.
+  /// The window the loaded habits need before a day can be resolved.
   ///
-  /// Wider than the day itself because almost nothing about a habit is about
-  /// one day: a yearly quota counts across its year, a monthly duration goal
-  /// across its month, and the insights grid across the last four weeks. One
+  /// Wider than the day itself, because almost nothing about a habit is about
+  /// one day: a monthly duration goal counts across its month, the insights
+  /// grid across the last four weeks, and the week strip across its week. One
   /// range covering the worst of those is cheaper than four queries that each
   /// cover their own.
-  static ({String from, String to}) _windowFor(String dateKey) {
+  ///
+  /// Today is always inside it, whatever day is being browsed, because the
+  /// strip on Today is resolved from the same rows.
+  ///
+  /// A yearly quota is the one thing that needs a year, so it is the one thing
+  /// that gets one. Loading twelve months of history for an account whose
+  /// habits are all daily would be paying a rare case's price on every screen.
+  static ({String from, String to}) _windowFor(
+    String dateKey,
+    String today,
+    List<Habit> habits,
+  ) {
     final date = parseDateKey(dateKey);
-    return (
-      from: dateKeyOf(DateTime(date.year, 1, 1)),
+    final now = parseDateKey(today);
+
+    final starts = [
+      dateKeyOf(DateTime(date.year, date.month, 1)),
+      // Far enough back for the insights grid, which counts four weeks from
+      // today rather than from whatever day is on screen.
+      addDaysToKey(today, -35),
+    ];
+    final ends = [
       // Through the end of the month, so moving a day forward inside it never
       // needs the window reloaded.
-      to: dateKeyOf(DateTime(date.year, date.month + 1, 0)),
+      dateKeyOf(DateTime(date.year, date.month + 1, 0)),
+      dateKeyOf(DateTime(now.year, now.month + 1, 0)),
+    ];
+
+    if (habits.any(
+      (habit) => habit.scheduleType == HabitScheduleType.timesPerYear,
+    )) {
+      starts.add(dateKeyOf(DateTime(date.year, 1, 1)));
+      starts.add(dateKeyOf(DateTime(now.year, 1, 1)));
+      ends.add(dateKeyOf(DateTime(date.year, 12, 31)));
+    }
+
+    starts.sort();
+    ends.sort();
+
+    // A rolling interval decides its first day from the days before it, so the
+    // window needs a run-up of its own — bounded by the longest interval in
+    // play, which is the most any of them can look back.
+    final lookback = habits.fold(
+      0,
+      (widest, habit) =>
+          habit.rollingLookbackDays > widest ? habit.rollingLookbackDays : widest,
+    );
+    return (
+      from: lookback == 0 ? starts.first : addDaysToKey(starts.first, -lookback),
+      to: ends.last,
     );
   }
 
@@ -187,14 +254,15 @@ class HabitsController extends Notifier<HabitsState> {
 
   Future<void> _load(String dateKey, {bool force = false}) async {
     final generation = ++_generation;
-    final window = _windowFor(dateKey);
-    final needsWindow = force || !_covers(window.from, window.to);
 
     try {
+      // The habits decide how far back the window has to reach, so they are
+      // read before it is worked out rather than alongside it.
       final habits = await _repository.loadHabits();
       if (!ref.mounted || generation != _generation) return;
 
-      if (needsWindow) {
+      final window = _windowFor(dateKey, _today, habits);
+      if (force || !_covers(window.from, window.to)) {
         final logs = await _repository.loadLogs(
           from: window.from,
           to: window.to,
@@ -250,16 +318,28 @@ class HabitsController extends Notifier<HabitsState> {
       dayStartHour: dayStartHour,
     );
 
+    List<HabitDay> resolve(String key) => resolveHabitDay(
+      habits: live,
+      dateKey: key,
+      facts: facts,
+      weekStartsOn: weekStartsOn,
+    );
+
+    // Recomputed rather than fixed at build: the account's own day start
+    // arrives with the first sync, and three in the morning is only the guess
+    // made before it. Read through the shared clock, so a test that pins the
+    // date gets the day it pinned.
+    _today = logicalDateKey(ref.read(currentTimeProvider), dayStartHour);
+    final todayDate = _today;
+    final day = resolve(dateKey);
+
     state = state.copyWith(
       selectedDate: dateKey,
+      todayDate: todayDate,
       habits: live,
       facts: facts,
-      day: resolveHabitDay(
-        habits: live,
-        dateKey: dateKey,
-        facts: facts,
-        weekStartsOn: weekStartsOn,
-      ),
+      day: day,
+      today: dateKey == todayDate ? day : resolve(todayDate),
       dayStartHour: dayStartHour,
       weekStartsOn: weekStartsOn,
       isLoading: false,
@@ -346,34 +426,32 @@ class HabitsController extends Notifier<HabitsState> {
   }
 
   // ------------------------------------------------------------- check-ins
+  //
+  // Every one of these names the day it acts on. The strip on Today and the
+  // habits screen are looking at different days whenever the screen has been
+  // browsed back through the week, and a tap has to land on the day the person
+  // tapping it can see — not on whichever was selected last.
 
   /// Marks a TASK done, or takes it back.
-  Future<void> toggle(String habitId) =>
-      _amend(habitId, (habit, log) => log.copyWith(count: log.count >= 1 ? 0 : 1));
-
-  /// Adds one to a COUNT, stopping at the target.
-  Future<void> increment(String habitId) => _amend(habitId, (habit, log) {
-    final target = habit.targetCount < 1 ? 1 : habit.targetCount;
-    return log.copyWith(count: log.count + 1 > target ? target : log.count + 1);
-  });
-
-  Future<void> decrement(String habitId) => _amend(
+  Future<void> toggle(String habitId, {required String dateKey}) => _amend(
     habitId,
-    (habit, log) => log.copyWith(count: log.count < 1 ? 0 : log.count - 1),
+    dateKey,
+    (habit, log) => log.copyWith(count: log.count >= 1 ? 0 : 1),
   );
 
-  Future<void> setCount(String habitId, int value) =>
-      _amend(habitId, (habit, log) {
+  /// Adds one to a COUNT, stopping at the target.
+  Future<void> increment(String habitId, {required String dateKey}) =>
+      _amend(habitId, dateKey, (habit, log) {
         final target = habit.targetCount < 1 ? 1 : habit.targetCount;
-        return log.copyWith(count: value.clamp(0, target));
+        return log.copyWith(
+          count: log.count + 1 > target ? target : log.count + 1,
+        );
       });
 
-  Future<void> addSeconds(String habitId, int seconds) => _amend(
+  Future<void> decrement(String habitId, {required String dateKey}) => _amend(
     habitId,
-    (habit, log) {
-      final total = log.seconds + seconds;
-      return log.copyWith(seconds: total < 0 ? 0 : total);
-    },
+    dateKey,
+    (habit, log) => log.copyWith(count: log.count < 1 ? 0 : log.count - 1),
   );
 
   /// Starts the timer behind a habit.
@@ -381,7 +459,7 @@ class HabitsController extends Notifier<HabitsState> {
   /// A habit linked to a category has no timer of its own: its progress is the
   /// time tracked on that category, so starting it starts a real block on the
   /// timeline. Anything else banks its seconds against the day's log.
-  Future<void> startTimer(String habitId) async {
+  Future<void> startTimer(String habitId, {required String dateKey}) async {
     final habit = _habitById(habitId);
     if (habit == null) return;
     if (habit.isCategoryLinked) {
@@ -390,20 +468,21 @@ class HabitsController extends Notifier<HabitsState> {
     }
     await _amend(
       habitId,
+      dateKey,
       (habit, log) => log.isRunning
           ? log
           : log.copyWith(runningSince: () => DateTime.now()),
     );
   }
 
-  Future<void> stopTimer(String habitId) async {
+  Future<void> stopTimer(String habitId, {required String dateKey}) async {
     final habit = _habitById(habitId);
     if (habit == null) return;
     if (habit.isCategoryLinked) {
       await _stopTracking();
       return;
     }
-    await _amend(habitId, (habit, log) {
+    await _amend(habitId, dateKey, (habit, log) {
       final since = log.runningSince;
       if (since == null) return log;
       final elapsed = DateTime.now().difference(since).inSeconds;
@@ -421,11 +500,11 @@ class HabitsController extends Notifier<HabitsState> {
   /// replayed land on the same numbers.
   Future<void> _amend(
     String habitId,
+    String dateKey,
     HabitLog Function(Habit habit, HabitLog log) amend,
   ) async {
     final habit = _habitById(habitId);
     if (habit == null) return;
-    final dateKey = state.selectedDate;
     final existing =
         state.facts.logFor(habitId, dateKey) ??
         HabitLog.empty(habitId, dateKey);

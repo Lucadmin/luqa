@@ -126,6 +126,48 @@ void main() {
     expect(find.byKey(const ValueKey('habit-row-stretch')), findsOneWidget);
   });
 
+  testWidgets('browsing back a day does not move the strip off today', (
+    tester,
+  ) async {
+    final habits = FakeHabitsRepository.sample(now: fixedNow);
+    await pumpLuqa(tester, habitsRepository: habits);
+    await openHabits(tester);
+
+    // Monday the 24th, three days before the pinned Thursday.
+    await tester.tap(find.text('24'));
+    await tester.pumpAndSettle();
+    await tester.tap(controlFor('read'));
+    await tester.pumpAndSettle();
+    expect(habits.written.single.date, '2026-08-24');
+
+    // Back on Today, the strip is showing today — not the day the habits
+    // screen was left on — and a tap lands on today.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tapOnStrip(tester, 'read');
+    expect(habits.written.last.date, '2026-08-27');
+    expect(find.text('1/3'), findsOneWidget);
+  });
+
+  testWidgets('reopening the habits screen starts on today again', (
+    tester,
+  ) async {
+    await pumpLuqa(tester);
+    await openHabits(tester);
+
+    await tester.tap(find.text('24'));
+    await tester.pumpAndSettle();
+    expect(find.text('Today'), findsNothing);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await openHabits(tester);
+
+    // The controller outlives the screen, so the day it was left on would
+    // otherwise still be selected.
+    expect(find.text('Today'), findsOneWidget);
+  });
+
   testWidgets('a day with nothing due says so rather than looking broken', (
     tester,
   ) async {
@@ -149,6 +191,7 @@ void main() {
             weekdays: const [1],
             weekInterval: 1,
             intervalDays: 2,
+            intervalFromLastDone: false,
             timesPerPeriod: 3,
             anchorDate: null,
             dates: const [],
@@ -190,6 +233,54 @@ void main() {
     expect(await habits.loadHabits(), hasLength(1));
     expect((await habits.loadHabits()).single.name, 'Walk');
     expect(find.text('Walk'), findsOneWidget);
+  });
+
+  testWidgets('an every-few-days habit can be set to count from the last time', (
+    tester,
+  ) async {
+    final habits = FakeHabitsRepository(now: fixedNow);
+    await pumpLuqa(tester, habitsRepository: habits);
+    await openHabits(tester);
+
+    await tester.tap(find.byKey(const ValueKey('habits-new')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('habit-name')), 'Shave');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Every N'));
+    await tester.pumpAndSettle();
+    // The default interval is two days, so the choice is offered.
+    await tester.tap(find.text('From the last time'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Miss one and the whole cycle shifts along.'),
+      findsOneWidget,
+    );
+    expect(find.text('Every 2 days · from the last'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('habit-save')));
+    await tester.pumpAndSettle();
+
+    final saved = (await habits.loadHabits()).single;
+    expect(saved.scheduleType, HabitScheduleType.interval);
+    expect(saved.intervalFromLastDone, isTrue);
+  });
+
+  testWidgets('a one-day interval is not offered the choice', (tester) async {
+    await pumpLuqa(tester, habitsRepository: FakeHabitsRepository());
+    await openHabits(tester);
+
+    await tester.tap(find.byKey(const ValueKey('habits-new')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Every N'));
+    await tester.pumpAndSettle();
+    expect(find.text('From the last time'), findsOneWidget);
+
+    // Counted from either end, every day is every day.
+    await tester.tap(find.byTooltip('Fewer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Every day'), findsWidgets);
+    expect(find.text('From the last time'), findsNothing);
   });
 
   testWidgets('a habit with no name cannot be saved', (tester) async {
