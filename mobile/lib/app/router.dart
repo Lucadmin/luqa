@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:luqa/app/app_shell.dart';
-import 'package:luqa/app/destination_placeholder.dart';
 import 'package:luqa/app/settings_screen.dart';
 import 'package:luqa/design_system/component_gallery_screen.dart';
 import 'package:luqa/features/gym/presentation/exercise_history_screen.dart';
@@ -11,6 +10,7 @@ import 'package:luqa/features/gym/presentation/gym_locations_screen.dart';
 import 'package:luqa/features/gym/presentation/gym_screen.dart';
 import 'package:luqa/features/gym/presentation/workout_screen.dart';
 import 'package:luqa/features/habits/presentation/habits_screen.dart';
+import 'package:luqa/features/insights/presentation/insights_screen.dart';
 import 'package:luqa/features/money/presentation/groups_screen.dart';
 import 'package:luqa/features/money/presentation/money_screen.dart';
 import 'package:luqa/features/money/presentation/money_people_screen.dart';
@@ -71,14 +71,8 @@ final luqaRouter = GoRouter(
           routes: <RouteBase>[
             GoRoute(
               path: '/insights',
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: DestinationPlaceholder(
-                  title: 'Insights',
-                  icon: Icons.bar_chart_rounded,
-                  description:
-                      'Reports and the life-in-weeks view will converge here.',
-                ),
-              ),
+              pageBuilder: (context, state) =>
+                  const NoTransitionPage(child: InsightsScreen()),
             ),
           ],
         ),

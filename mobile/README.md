@@ -9,7 +9,8 @@ future versioned API host.
 - Material 3 light and dark themes derived from `../DESIGN.md`.
 - Semantic Luqa colors, spacing, radii, typography, motion, and identity colors.
 - Compact `NavigationBar` and expanded `NavigationRail` with five persistent
-  go_router branches: Today, Gym, Money, People, and Insights.
+  go_router branches: Today, Gym, Money, People, and Insights — every one of
+  them a real destination rather than a placeholder.
 - Separate Settings, Profile, and component-gallery routes.
 - Native device sign-in with short-lived access tokens, rotating refresh tokens,
   and Android Keystore / iOS Keychain storage.
@@ -67,6 +68,47 @@ The grid has fixed geometry, so block text is capped at 1.2x scaling and every
 block is drawn at least 26 dp high. The full text always reaches a screen
 reader through the block's semantics label, and the editor sheet scales without
 limit.
+
+### Insights
+
+Insights answers "how did that go" without becoming a dashboard. One focal
+object carries the tab — the **rhythm wall** — and everything else is support.
+
+- The wall is one column per day, each running from the day start hour to the
+  day start hour, on the same vertical time axis the Today timeline uses. Blocks
+  are painted in their category colour at the position they actually happened;
+  sleep sits behind them in the shell's own ink, because it is measured rather
+  than logged and has no business borrowing an identity colour.
+- Totals say how much. The wall says *when*, which is the thing no total can:
+  that the working middle of the day has moved, that the evenings went missing
+  in March, that the nights drift after a Friday and come back on Monday.
+- **Tap a column** and the display number above it moves onto that day, taking
+  the breakdown underneath with it; a second tap gives the whole span back. The
+  same screen answers "how was this quarter" and "what happened on the ninth".
+- Spans are a week, four weeks and twelve weeks, always whole weeks starting on
+  a week boundary so the columns line up under the same weekday. Twelve weeks is
+  the floor at which a column is still wider than a hairline. The chevrons step
+  by whole spans and stop at the one containing today.
+- **Where it went** ranks the categories with a bar and a period-over-period
+  delta, rather than a ring. A dozen slices of a circle cannot be compared by
+  eye, cannot carry their own labels, and leave nowhere to put the number that
+  actually matters — whether this is more or less than last time.
+- **Patterns** says in words what the wall only implies: the typical shape of a
+  day, the average night and its midpoint, how much later that midpoint lands
+  after a Friday, the longest unbroken stretch, the fullest hour of the clock,
+  the heaviest weekday, days spent with someone, and how much of the elapsed
+  span is accounted for at all. Each reading appears only when the data supports
+  it — a weekend difference needs a weekday to be different from.
+- **Habits** closes the tab with completion against what each schedule actually
+  asked for, so a habit due on Mondays is never charged with missing a Tuesday.
+
+Nothing here asks the network a question of its own. The whole tab is a reading
+of rows the device already holds, so switching spans is instant and a year of
+history reads the same on a train as it does on wifi. Sleep midpoints are
+averaged around the evening rather than around midnight — a plain mean of 23:30
+and 00:30 comes out at noon — and a day's shape is measured from the blocks that
+*began* on it, so a session running past the boundary is not reported as an
+early morning.
 
 ## Toolchain
 
@@ -189,6 +231,11 @@ lib/
       data/             remote repository and app-private read cache
       domain/           entry/sleep/category models, grid geometry and layout
       presentation/     timeline screen, day panes, draft layer, editors
+    insights/
+      application/      span/offset controller, habit consistency provider
+      data/             none — it reads the timeline's own rows
+      domain/           span ranges, the rhythm wall's geometry, derived facts
+      presentation/     rhythm wall, category ranking, readings, habit strip
     auth/                native session state, secure credentials, sign-in UI
   core/network/          generated-client adapter and token rotation
 packages/luqa_api/       generated OpenAPI Dart client

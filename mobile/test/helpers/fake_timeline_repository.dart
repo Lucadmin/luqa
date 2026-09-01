@@ -6,7 +6,9 @@ import 'package:luqa/features/today/domain/time_entry.dart';
 /// Deterministic stand-in for the network, seeded around a fixed day so
 /// widget tests and goldens see the same timeline every run.
 class FakeTimelineRepository implements TodayRepository {
-  FakeTimelineRepository({required this.today});
+  FakeTimelineRepository({required this.today, int historyDays = 0}) {
+    if (historyDays > 0) _seedHistory(historyDays);
+  }
 
   final DateTime today;
 
@@ -117,6 +119,127 @@ class FakeTimelineRepository implements TodayRepository {
 
   DateTime _at(int hour, int minute) =>
       DateTime(today.year, today.month, today.day, hour, minute);
+
+  /// A plausible few weeks behind today, for the screens that read history
+  /// rather than a day.
+  ///
+  /// Shaped rather than random: weekdays have a working middle, the gym lands
+  /// on the same three evenings, and the nights run later after a Friday. A
+  /// uniform scatter would make every pattern-finding screen look correct
+  /// while proving nothing about whether it can find a pattern.
+  void _seedHistory(int days) {
+    var seed = 20260827;
+    int jitter(int span) {
+      seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF;
+      return seed % span;
+    }
+
+    for (var back = days; back >= 1; back--) {
+      final day = DateTime(today.year, today.month, today.day - back);
+      final weekend =
+          day.weekday == DateTime.saturday || day.weekday == DateTime.sunday;
+      DateTime at(int hour, int minute) =>
+          DateTime(day.year, day.month, day.day, hour, minute);
+
+      void log(
+        String description,
+        String categoryId,
+        DateTime start,
+        int minutes, {
+        List<String> personIds = const [],
+      }) {
+        entries.add(
+          TimeEntry(
+            id: 'seed-${entries.length}',
+            description: description,
+            categoryId: categoryId,
+            start: start,
+            end: start.add(Duration(minutes: minutes)),
+            personIds: personIds,
+          ),
+        );
+      }
+
+      log(
+        'Breakfast',
+        'food',
+        at(weekend ? 9 : 8, 5 + jitter(25)),
+        25 + jitter(20),
+      );
+
+      if (weekend) {
+        log('Errands', 'personal', at(11, jitter(45)), 80 + jitter(50));
+        log(
+          'Lunch',
+          'food',
+          at(13, jitter(30)),
+          45 + jitter(25),
+          personIds: const ['mara'],
+        );
+        log('Reading', 'personal', at(15, 30 + jitter(40)), 90 + jitter(60));
+      } else {
+        log(
+          'Writing thesis',
+          'master-thesis',
+          at(9, jitter(35)),
+          150 + jitter(70),
+        );
+        log('Lunch', 'food', at(12, 30 + jitter(25)), 35 + jitter(20));
+        log(
+          'Writing thesis',
+          'master-thesis',
+          at(14, jitter(30)),
+          160 + jitter(80),
+        );
+      }
+
+      if (day.weekday == DateTime.tuesday ||
+          day.weekday == DateTime.thursday ||
+          day.weekday == DateTime.saturday) {
+        log('Gym', 'training', at(18, jitter(40)), 70 + jitter(25));
+      }
+
+      log(
+        weekend ? 'Dinner out' : 'Dinner',
+        'food',
+        at(20, jitter(35)),
+        45 + jitter(35),
+        personIds: weekend ? const ['mara', 'jonas'] : const [],
+      );
+      log('Evening', 'personal', at(21, 30 + jitter(30)), 60 + jitter(70));
+
+      // The night that begins on this day. Later after a Friday or Saturday,
+      // which is the drift the Insights readings are there to notice.
+      final lateNight =
+          day.weekday == DateTime.friday || day.weekday == DateTime.saturday;
+      final bed = at(23, jitter(40)).add(Duration(minutes: lateNight ? 75 : 0));
+      final wake = DateTime(
+        day.year,
+        day.month,
+        day.day + 1,
+        7,
+        jitter(35),
+      ).add(Duration(minutes: lateNight ? 55 : 0));
+      final awake = 14 + jitter(20);
+      sleep.add(
+        SleepEntry(
+          id: 'seed-sleep-$back',
+          source: 'HEALTH_CONNECT',
+          sourceApp: 'Pixel Watch',
+          title: null,
+          start: bed,
+          end: wake,
+          sleepMinutes: wake.difference(bed).inMinutes - awake,
+          awakeMinutes: awake,
+          lightMinutes: null,
+          deepMinutes: null,
+          remMinutes: null,
+          isNap: false,
+          midpoint: bed.add(wake.difference(bed) ~/ 2),
+        ),
+      );
+    }
+  }
 
   @override
   Future<List<Category>?> loadCachedCategories() async => null;

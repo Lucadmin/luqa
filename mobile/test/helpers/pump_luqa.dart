@@ -60,8 +60,12 @@ Future<FakeTimelineRepository> pumpLuqa(
   PeopleRepository? peopleRepository,
   HabitsRepository? habitsRepository,
   String initialLocation = '/',
+  int historyDays = 0,
 }) async {
-  final repository = FakeTimelineRepository(today: fixedNow);
+  final repository = FakeTimelineRepository(
+    today: fixedNow,
+    historyDays: historyDays,
+  );
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
   addTearDown(tester.view.resetPhysicalSize);
