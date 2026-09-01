@@ -324,11 +324,11 @@ class _ExerciseLibraryScreenState extends ConsumerState<ExerciseLibraryScreen> {
                                         onSelected: (value) => switch (value) {
                                           'rename' => _renameExercise(
                                             exercise,
-                                            exercises,
+                                            library,
                                           ),
                                           'merge' => _mergeExercise(
                                             exercise,
-                                            exercises,
+                                            library,
                                           ),
                                           'delete' => _deleteExercise(exercise),
                                           _ => null,
@@ -343,7 +343,7 @@ class _ExerciseLibraryScreenState extends ConsumerState<ExerciseLibraryScreen> {
                                           ),
                                           // Nothing to merge into when this is
                                           // the only exercise there is.
-                                          if (exercises.length > 1)
+                                          if (library.length > 1)
                                             const PopupMenuItem(
                                               value: 'merge',
                                               child: _MenuItem(

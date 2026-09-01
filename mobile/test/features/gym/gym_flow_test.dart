@@ -185,6 +185,12 @@ void main() {
     await tester.tap(find.text('Exercises'));
     await tester.pumpAndSettle();
 
+    // Searching hides the exercise being clashed with. A name is taken
+    // whether or not the current search happens to show it.
+    await tester.enterText(find.byType(TextField), 'row');
+    await tester.pumpAndSettle();
+    expect(find.text('Lat pulldown'), findsNothing);
+
     await tester.tap(find.byKey(const ValueKey('exercise-menu-row')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Rename…'));
