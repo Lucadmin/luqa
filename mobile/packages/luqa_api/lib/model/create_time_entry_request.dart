@@ -18,6 +18,7 @@ class CreateTimeEntryRequest {
     this.categoryId = const Optional.absent(),
     required this.startTime,
     this.endTime = const Optional.absent(),
+    this.personIds = const Optional.present(const []),
   });
 
   /// Client-minted identity for the row, so a device can name a block before the server has seen it. Supplying it makes the create idempotent: repeating the request returns the row it already made.
@@ -49,6 +50,9 @@ class CreateTimeEntryRequest {
   ///
   final Optional<DateTime?> endTime;
 
+  /// Who was there. Ids that are not this account's are dropped rather than rejected: a phone replaying a queued write may name somebody deleted since, and refusing the whole entry over a tag would lose a block of time to protect it.
+  final Optional<List<String>?> personIds;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -57,7 +61,8 @@ class CreateTimeEntryRequest {
           other.description == description &&
           other.categoryId == categoryId &&
           other.startTime == startTime &&
-          other.endTime == endTime;
+          other.endTime == endTime &&
+          _deepEquality.equals(other.personIds, personIds);
 
   @override
   int get hashCode =>
@@ -66,11 +71,12 @@ class CreateTimeEntryRequest {
       (description.hashCode) +
       (categoryId == null ? 0 : categoryId!.hashCode) +
       (startTime.hashCode) +
-      (endTime == null ? 0 : endTime!.hashCode);
+      (endTime == null ? 0 : endTime!.hashCode) +
+      (personIds.hashCode);
 
   @override
   String toString() =>
-      'CreateTimeEntryRequest[id=$id, description=$description, categoryId=$categoryId, startTime=$startTime, endTime=$endTime]';
+      'CreateTimeEntryRequest[id=$id, description=$description, categoryId=$categoryId, startTime=$startTime, endTime=$endTime, personIds=$personIds]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -91,6 +97,10 @@ class CreateTimeEntryRequest {
       final value = this.endTime.value;
       json[r'endTime'] = value == null ? null : value.toUtc().toIso8601String();
     }
+    if (this.personIds.isPresent) {
+      final value = this.personIds.value;
+      json[r'personIds'] = value;
+    }
     return json;
   }
 
@@ -102,6 +112,7 @@ class CreateTimeEntryRequest {
     Optional<String?>? categoryId,
     DateTime? startTime,
     Optional<DateTime?>? endTime,
+    Optional<List<String>?>? personIds,
   }) =>
       CreateTimeEntryRequest(
         id: id ?? this.id,
@@ -109,6 +120,7 @@ class CreateTimeEntryRequest {
         categoryId: categoryId ?? this.categoryId,
         startTime: startTime ?? this.startTime,
         endTime: endTime ?? this.endTime,
+        personIds: personIds ?? this.personIds,
       );
 
   /// Returns a new [CreateTimeEntryRequest] instance and imports its values from
@@ -142,6 +154,13 @@ class CreateTimeEntryRequest {
         startTime: mapDateTime(json, r'startTime', r'')!,
         endTime: json.containsKey(r'endTime')
             ? Optional.present(mapDateTime(json, r'endTime', r''))
+            : const Optional.absent(),
+        personIds: json.containsKey(r'personIds')
+            ? Optional.present(json[r'personIds'] is Iterable
+                ? (json[r'personIds'] as Iterable)
+                    .cast<String>()
+                    .toList(growable: false)
+                : const [])
             : const Optional.absent(),
       );
     }

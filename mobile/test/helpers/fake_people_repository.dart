@@ -156,3 +156,58 @@ InMemoryPeopleRepository fakePeopleRepository({DateTime? now}) {
     ],
   );
 }
+
+/// The same roster with no city ever geocoded — a contact book on its first
+/// run, or one whose geocoder has never been reachable.
+InMemoryPeopleRepository unpinnedPeopleRepository({DateTime? now}) {
+  final seeded = fakePeopleRepository(now: now);
+  return InMemoryPeopleRepository(
+    seed: [
+      for (final person in seeded.seedPeople)
+        person.copyWith(
+          places: [
+            for (final place in person.places)
+              PersonPlace(
+                id: place.id,
+                label: place.label,
+                city: place.city,
+                country: place.country,
+                isPrimary: place.isPrimary,
+              ),
+          ],
+        ),
+    ],
+  );
+}
+
+/// The roster with one city deliberately unresolved.
+///
+/// The realistic middle state: a geocoder is rate-limited and resolves a few
+/// cities per call, so a contact book spends its first runs with some cities
+/// pinned and some not.
+InMemoryPeopleRepository partlyPinnedPeopleRepository({
+  DateTime? now,
+  String unpinnedCity = 'Berlin',
+}) {
+  final seeded = fakePeopleRepository(now: now);
+  return InMemoryPeopleRepository(
+    seed: [
+      for (final person in seeded.seedPeople)
+        person.copyWith(
+          places: [
+            for (final place in person.places)
+              if (place.city == unpinnedCity)
+                PersonPlace(
+                  id: place.id,
+                  label: place.label,
+                  city: place.city,
+                  country: place.country,
+                  isPrimary: place.isPrimary,
+                )
+              else
+                place,
+          ],
+        ),
+    ],
+  );
+}

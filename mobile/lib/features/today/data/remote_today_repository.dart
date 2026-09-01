@@ -71,6 +71,7 @@ class RemoteTodayRepository implements TodayRepository {
       categoryId: draft.categoryId,
       start: draft.start,
       end: draft.end,
+      personIds: draft.personIds,
     ),
   );
 
@@ -98,6 +99,11 @@ class RemoteTodayRepository implements TodayRepository {
           endTime: patch.end == null
               ? const api.Optional.absent()
               : api.Optional.present(patch.end!.toUtc()),
+          // Absent leaves the tags alone; an empty list clears them, so the
+          // list itself has to travel whenever it was decided.
+          personIds: patch.personIds == null
+              ? const api.Optional.absent()
+              : api.Optional.present(patch.personIds!),
         ),
       ),
     );
@@ -131,6 +137,7 @@ TimeEntry entryFromApi(api.TimeEntry value) => TimeEntry(
   categoryId: value.categoryId,
   start: value.startTime.toLocal(),
   end: value.endTime?.toLocal(),
+  personIds: value.personIds.toList(growable: false),
 );
 
 SleepEntry sleepFromApi(api.SleepEntry value) => SleepEntry(

@@ -76,18 +76,49 @@ List<UpcomingBirthday> upcomingBirthdays(
   return found;
 }
 
+/// When somebody was actually last seen, from everything the app knows.
+///
+/// The manual date is only one of the sources, and usually the worst one:
+/// dinner logged on Tuesday already says Tuesday, and a bill split with them
+/// says the same thing. Asking the user to also tick a box on the contact card
+/// is asking twice for one fact.
+///
+/// [taggedAt] and [sharedAt] are the newest timeline entry and the newest
+/// shared bill, which the caller reads from data the device already holds — so
+/// this stays correct offline.
+DateTime? effectiveLastSeen(
+  Person person, {
+  DateTime? taggedAt,
+  DateTime? sharedAt,
+}) {
+  DateTime? newest;
+  for (final candidate in [person.lastSeenAt, taggedAt, sharedAt]) {
+    if (candidate == null) continue;
+    if (newest == null || candidate.isAfter(newest)) newest = candidate;
+  }
+  return newest;
+}
+
 /// People whose cadence has elapsed, most overdue first.
 ///
 /// Someone with a cadence and nothing on record counts from nothing rather
 /// than from the epoch: setting a cadence must not instantly declare a person
 /// neglected for fifty years.
-List<OverdueContact> overdueContacts(Iterable<Person> people, DateTime from) {
+/// [lastSeen] resolves a person to when they were really last seen, so a
+/// dinner logged on the timeline counts without anybody recording it twice.
+/// It defaults to the date on the person alone.
+List<OverdueContact> overdueContacts(
+  Iterable<Person> people,
+  DateTime from, {
+  DateTime? Function(Person person)? lastSeen,
+}) {
+  final resolve = lastSeen ?? (person) => person.lastSeenAt;
   final found = <OverdueContact>[];
   for (final person in people) {
     if (person.archived) continue;
     final cadence = person.cadenceDays;
     if (cadence == null || cadence <= 0) continue;
-    final seen = person.lastSeenAt;
+    final seen = resolve(person);
     if (seen == null) continue;
     final days = _wholeDaysBetween(seen, from);
     if (days <= cadence) continue;
@@ -133,10 +164,11 @@ PeopleFocus peopleFocus(
   List<Person> people,
   DateTime from, {
   int birthdayWindow = 30,
+  DateTime? Function(Person person)? lastSeen,
 }) {
   final birthdays = upcomingBirthdays(people, from, within: birthdayWindow);
   if (birthdays.isNotEmpty) return BirthdayFocus(birthdays.first);
-  final overdue = overdueContacts(people, from);
+  final overdue = overdueContacts(people, from, lastSeen: lastSeen);
   if (overdue.isNotEmpty) return ReconnectFocus(overdue.first);
   return QuietFocus(people.where((person) => !person.archived).length);
 }

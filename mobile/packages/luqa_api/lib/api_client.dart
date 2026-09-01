@@ -258,6 +258,8 @@ class ApiClient {
           return ExpenseResponse.fromJson(value);
         case 'ExpenseShare':
           return ExpenseShare.fromJson(value);
+        case 'GeocodeResponse':
+          return GeocodeResponse.fromJson(value);
         case 'GroupListResponse':
           return GroupListResponse.fromJson(value);
         case 'GroupResponse':

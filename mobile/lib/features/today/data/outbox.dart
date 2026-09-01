@@ -209,6 +209,9 @@ TimeEntry applyPatch(TimeEntry entry, EntryPatch patch) => entry.copyWith(
   clearCategory: patch.clearCategory,
   start: patch.start,
   end: patch.end,
+  // Null leaves the tags alone; the empty list clears them, and `copyWith`
+  // already treats null as "unchanged", so this needs no separate flag.
+  personIds: patch.personIds,
 );
 
 /// Lays the queue over a server snapshot, so what the user sees is what they
@@ -283,6 +286,7 @@ Map<String, Object?> _entryToJson(TimeEntry value) => {
   'categoryId': value.categoryId,
   'start': value.start.toUtc().toIso8601String(),
   'end': value.end?.toUtc().toIso8601String(),
+  'personIds': value.personIds,
 };
 
 TimeEntry _entryFromJson(Map<String, Object?> value) => TimeEntry(
@@ -294,6 +298,7 @@ TimeEntry _entryFromJson(Map<String, Object?> value) => TimeEntry(
       ? null
       : DateTime.parse(value['end']! as String).toLocal(),
   pendingSync: true,
+  personIds: _idsFromJson(value['personIds']) ?? const [],
 );
 
 Map<String, Object?> _patchToJson(EntryPatch value) => {
@@ -302,6 +307,17 @@ Map<String, Object?> _patchToJson(EntryPatch value) => {
   'clearCategory': value.clearCategory,
   'start': value.start?.toUtc().toIso8601String(),
   'end': value.end?.toUtc().toIso8601String(),
+  'personIds': value.personIds,
+};
+
+/// Null and the empty list mean different things here — leave the tags alone,
+/// versus clear them — so the absence has to survive the round trip.
+List<String>? _idsFromJson(Object? value) => switch (value) {
+  final List<Object?> raw => [
+    for (final id in raw)
+      if (id is String) id,
+  ],
+  _ => null,
 };
 
 EntryPatch _patchFromJson(Map<String, Object?> value) => EntryPatch(
@@ -314,6 +330,7 @@ EntryPatch _patchFromJson(Map<String, Object?> value) => EntryPatch(
   end: value['end'] == null
       ? null
       : DateTime.parse(value['end']! as String).toLocal(),
+  personIds: _idsFromJson(value['personIds']),
 );
 
 Map<String, Object?> _categoryToJson(Category value) => {

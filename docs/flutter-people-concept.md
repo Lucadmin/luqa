@@ -1,6 +1,6 @@
 # Flutter People concept
 
-Status: plan v1 — phase 3 implemented
+Status: plan v1 — phases 1–6 implemented; Google Contacts outstanding
 Date: 2026-08-31
 Design system: [DESIGN.md](../DESIGN.md)
 Related: [flutter-today-concept.md](flutter-today-concept.md),
@@ -148,18 +148,41 @@ Time entries carry `personIds` for the same reason.
 
 Store version 5:
 
-- `money_person` → `person`, with the profile columns added. The rename is the
-  point: the table is not money's any more. Money's `_people()` query reads the
-  same identity columns from the new name.
-- New `person_place`, `person_channel`, `person_note`, `person_gift`, each
-  keyed `(namespace, id)` and carrying the same `pending` / `removed` sync-state
-  columns as every other local table.
-- New `time_entry_person`.
+- `money_person` → `person`, with the profile columns added. A **rename**, not
+  a drop-and-refetch: a phone that has been offline is holding rows the server
+  has never seen, and discarding them to save a schema step would be deleting
+  the user's work. The `pending` flag survives with them, which is what stops
+  an incoming delta from reverting an unsent edit.
+- New `person_place`, `person_channel`, `person_note`, `person_gift`, keyed
+  `(namespace, id)` with a `person_id`.
+- New `time_entry_person` (phase 6).
 
-`features/people/data/people_repository.dart` becomes the only writer of people.
-Money's `person_editor_sheet.dart` delegates to it rather than keeping its own
-path, so a person renamed in Money and a person renamed in People are the same
-write with the same outbox entry and the same conflict behaviour.
+The children are written **whole** rather than merged: the server sends a person
+as one row with its record inside, so applying a delta replaces that person's
+children outright. Merging would need a per-child tombstone to know that a note
+deleted on another device is gone; replacing gets that for free.
+
+### One queue, shared with Money
+
+**This is the decision that differs from the original plan.** People writes do
+not get their own outbox — they ride in Money's, as `MoneyMutation` cases.
+
+Two things force it, and both are ways a user loses work:
+
+- A bill references a person by an id this device may have invented. A person
+  create and an expense create therefore have to replay in the order they
+  happened, and two queues have no order between them. The expense losing that
+  race is sent naming somebody the server has never heard of, refused, and
+  reported to the user as a lost bill.
+- When the server answers a create with a *different* id — because it matched
+  somebody by name — everything queued behind it has to be repointed, and a
+  queue can only rewrite itself. A note written against the invented id would
+  otherwise be orphaned the same way.
+
+So `person`, its children, and the expenses that reference them share one store
+and one queue. `LocalFirstPeopleRepository` is the People-shaped face of it.
+The seam worth revisiting later is the name: `MoneyLocalStore` and
+`MoneyMutation` now carry more than money.
 
 ### API
 
@@ -309,6 +332,17 @@ Built screens-first, against a repository the device holds in memory, so the
 design could be argued with before a migration was committed to — the same way
 `FakeTodayRepository` and `FakeGymRepository` were used.
 
+1. **Server foundation** — ✅ done. Migration `20260831160000_person_profile`;
+   `src/lib/server/people.ts` with `touchPerson`/`writeChild`; `/v1/people`
+   with nested notes, gifts, places and `seen`; the `people` delta feed now
+   includes the children. The create and delete rules live in the service and
+   are shared with `/v1/money/people`, so the two contracts cannot drift. The
+   pure birthday arithmetic sits in `src/lib/person-profile.ts` — apart from
+   the queries, like `sync-cursor.ts` — with its own tests.
+2. **Mobile data layer** — ✅ done. Store v5 (rename + children, with a
+   migration test); `PeopleSyncService`; `RemotePeopleRepository`;
+   `LocalFirstPeopleRepository` over the shared store and queue; nine new
+   mutation types with json round-trip, folding, and id-remap coverage.
 3. **People screen and person detail** — ✅ done. `Person` moved into
    `features/people/domain/person.dart` and extended in place, re-exported from
    `money_models.dart` so no money caller changed. Roster with the single focal
@@ -316,23 +350,45 @@ design could be argued with before a migration was committed to — the same way
    notes, gift ideas, places and the linked money balance, the birthday year,
    and the city-grouped "where everyone is". `InMemoryPeopleRepository` is the
    whole write surface rather than a stub, so swapping in the local-first
-   repository is a provider change. **It does not persist.**
-1. **Server foundation** — migration, `touchPerson` helper and its test,
-   extended `PersonDTO`, `/v1/people` CRUD, delta feed carrying the new shape.
-2. **Mobile data layer** — store v5 and its migration, local-first repository,
-   outbox mutations, providers, unit tests. Money's person writes move onto it,
-   and `InMemoryPeopleRepository` stays as the test fixture.
-4. **Google Contacts** — OAuth connection, pull sync, additive write-back,
-   settings tile, conflict surface.
-5. **Map layer** — `flutter_map` over the existing city grouping, plus
-   server-side geocoding into `GeocodeCache`.
-6. **Timeline tagging** — person picker on the entry editor, so last-seen stops
-   being typed by hand.
+   repository was a provider change. `InMemoryPeopleRepository` now lives in
+   `test/helpers/` as the widget and golden fixture.
+5. **Map layer** — ✅ done. `flutter_map` + `latlong2`, OSM raster tiles
+   desaturated through a `TileBuilder` so the markers carry the only colour on
+   screen, one pin per city with a count. Geocoding is **pull, not push**:
+   `POST /v1/people/places/geocode` resolves a bounded batch through Nominatim
+   into a shared `GeocodeCache`, and the client asks when it opens the map.
+   Adding a city stays instant and the pin catches up, because geocoding on the
+   write path would make typing a city name wait on a rate-limited third party
+   and a serverless request cannot finish background work after replying.
+   Misses are cached too, so a misspelt city is not retried for ever.
+6. **Timeline tagging** — ✅ done. `TimeEntryPerson`, `personIds` inside the
+   entry DTO and the delta feed, a `With` row on the entry editor opening a
+   multi-select picker, names on the timeline's existing second line, and a
+   `Together` section on the person screen. `lastSeenProvider` derives when
+   somebody was really last seen from the newest of: the typed date, a tagged
+   block of time, and a shared bill — all from data the device already holds,
+   so it is correct offline.
+4. **Google Contacts** — the remaining phase. OAuth connection, pull sync,
+   additive write-back, settings tile, conflict surface.
 
 Each phase carries the quality bar from the migration plan: domain and
 repository tests, contract and authorisation tests, widget tests for every
 state above, goldens for the design-critical surfaces, and an accessibility
 pass for semantics, contrast, text scaling, and touch targets.
+
+## Known limits
+
+- **OSM tile servers.** The map uses the public OpenStreetMap tiles, which
+  `flutter_map` warns about on every launch. Their usage policy is written
+  against bulk consumers; a single-owner app rendering a few dozen tiles is
+  well inside it. If Luqa ever has more than one owner, this needs a tile
+  provider with a contract behind it.
+- **Nominatim.** Same shape of dependency: free, no key, one request a second,
+  and a request that everyone caches. The `GeocodeCache` is what makes it
+  viable — after the first pass, a city costs a database read.
+- **`MoneyLocalStore` and `MoneyMutation` now carry more than money.** The
+  shared store and queue are correct (see above); the names are not. Worth
+  renaming when something else touches them.
 
 ## Deliberately out of scope for v1
 

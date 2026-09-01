@@ -8,6 +8,7 @@ import 'package:luqa/features/money/data/money_outbox.dart';
 import 'package:luqa/features/people/data/local_first_people_repository.dart';
 import 'package:luqa/features/people/data/people_repository.dart';
 import 'package:luqa/features/people/data/people_sync_service.dart';
+import 'package:luqa/features/people/data/remote_people_repository.dart';
 import 'package:luqa/features/people/domain/person.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -56,6 +57,7 @@ void main() {
     repository = LocalFirstPeopleRepository(
       store: local,
       sync: PeopleSyncService(client: _UnreachableApi(), store: local),
+      remote: RemotePeopleRepository(_UnreachableApi()),
       queue: queue,
       now: () => _now,
     );

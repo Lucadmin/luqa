@@ -230,4 +230,63 @@ void main() {
       expect(describeElapsed(1100), '3 years');
     });
   });
+
+  group('effectiveLastSeen', () {
+    test('takes the newest of everything the app knows', () {
+      // A dinner logged on the timeline is more recent than the date typed on
+      // the contact card, so it wins — which is the point of tagging it.
+      final seen = effectiveLastSeen(
+        person('mira', lastSeenAt: DateTime(2026, 3, 1)),
+        taggedAt: DateTime(2026, 8, 20),
+        sharedAt: DateTime(2026, 6, 1),
+      );
+      expect(seen, DateTime(2026, 8, 20));
+    });
+
+    test('a shared bill counts as having seen them', () {
+      // Money already knows you had dinner together; asking the owner to tick
+      // a box as well is asking twice for one fact.
+      final seen = effectiveLastSeen(
+        person('mira'),
+        sharedAt: DateTime(2026, 8, 26),
+      );
+      expect(seen, DateTime(2026, 8, 26));
+    });
+
+    test('a typed date still wins when it is the newest', () {
+      // Seeing somebody without logging it or splitting a bill is normal, and
+      // the manual record has to be able to say so.
+      final seen = effectiveLastSeen(
+        person('mira', lastSeenAt: DateTime(2026, 8, 27)),
+        taggedAt: DateTime(2026, 1, 4),
+      );
+      expect(seen, DateTime(2026, 8, 27));
+    });
+
+    test('nothing on record stays nothing', () {
+      expect(effectiveLastSeen(person('mira')), isNull);
+    });
+  });
+
+  test('a tagged block of time keeps somebody off the overdue list', () {
+    final now = DateTime(2026, 8, 27);
+    final jonas = person(
+      'jonas',
+      cadenceDays: 30,
+      lastSeenAt: DateTime(2026, 1, 1),
+    );
+
+    // By the contact card alone he is eight months overdue.
+    expect(overdueContacts([jonas], now).map((c) => c.person.id), ['jonas']);
+
+    // With the timeline consulted, he was seen last week.
+    expect(
+      overdueContacts(
+        [jonas],
+        now,
+        lastSeen: (_) => DateTime(2026, 8, 20),
+      ),
+      isEmpty,
+    );
+  });
 }

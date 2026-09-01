@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { type DbTransaction, db } from "@/lib/db";
 import {
   pushEntryCreate,
   pushEntryDelete,
@@ -103,6 +103,10 @@ export async function createCategory(
   return { category: toCategoryDTO(category), created: true };
 }
 
+/// Who was there rides inside the entry, so every read that produces a DTO
+/// includes them.
+export const entryInclude = { people: { select: { personId: true } } } as const;
+
 export async function listTimeEntries(userId: string, window: EntryWindow) {
   const entries = await db.timeEntry.findMany({
     where: {
@@ -112,8 +116,41 @@ export async function listTimeEntries(userId: string, window: EntryWindow) {
       OR: [{ endTime: null }, { endTime: { gt: window.from } }],
     },
     orderBy: { startTime: "asc" },
+    include: entryInclude,
   });
   return entries.map(toEntryDTO);
+}
+
+/**
+ * Replaces who was on an entry.
+ *
+ * Wholesale rather than merged, because the picker hands back the complete
+ * set — the same argument as a person's children. Ids that are not this
+ * user's are dropped rather than rejected: a phone replaying a write from its
+ * queue may name somebody deleted since, and refusing the whole entry over it
+ * would lose a block of time to protect a tag.
+ */
+async function writeEntryPeople(
+  tx: DbTransaction,
+  userId: string,
+  entryId: string,
+  personIds: string[] | undefined,
+): Promise<void> {
+  if (personIds === undefined) return;
+
+  const owned = await tx.person.findMany({
+    where: { id: { in: personIds }, userId, deletedAt: null },
+    select: { id: true },
+  });
+
+  await tx.timeEntryPerson.deleteMany({ where: { timeEntryId: entryId } });
+  if (owned.length === 0) return;
+  await tx.timeEntryPerson.createMany({
+    data: owned.map((person) => ({
+      timeEntryId: entryId,
+      personId: person.id,
+    })),
+  });
 }
 
 export class EntryIdConflictError extends Error {
@@ -156,7 +193,7 @@ export async function createTimeEntry(
           data: { endTime: start },
         });
       }
-      return tx.timeEntry.create({
+      const created = await tx.timeEntry.create({
         data: {
           ...(input.id ? { id: input.id } : {}),
           userId,
@@ -166,6 +203,11 @@ export async function createTimeEntry(
           endTime: input.endTime ? new Date(input.endTime) : null,
           source: "APP",
         },
+      });
+      await writeEntryPeople(tx, userId, created.id, input.personIds);
+      return tx.timeEntry.findUniqueOrThrow({
+        where: { id: created.id },
+        include: entryInclude,
       });
     });
   } catch (error) {
@@ -198,7 +240,10 @@ export async function createTimeEntry(
  * would undo a deletion the user has already made.
  */
 async function findReplayedEntry(userId: string, id: string) {
-  const existing = await db.timeEntry.findUnique({ where: { id } });
+  const existing = await db.timeEntry.findUnique({
+    where: { id },
+    include: entryInclude,
+  });
   if (!existing) return null;
   if (existing.userId !== userId) throw new EntryIdConflictError();
   return toEntryDTO(existing);
@@ -266,14 +311,21 @@ export async function updateTimeEntry(
         : new Date(endTime);
   if (nextEnd && nextEnd <= nextStart) throw new EntryRangeError();
 
-  const updated = await db.timeEntry.update({
-    where: { id },
-    data: {
-      ...(description !== undefined ? { description } : {}),
-      ...(categoryId !== undefined ? { categoryId } : {}),
-      ...(startTime !== undefined ? { startTime: nextStart } : {}),
-      ...(endTime !== undefined ? { endTime: nextEnd } : {}),
-    },
+  const updated = await db.$transaction(async (tx) => {
+    await tx.timeEntry.update({
+      where: { id },
+      data: {
+        ...(description !== undefined ? { description } : {}),
+        ...(categoryId !== undefined ? { categoryId } : {}),
+        ...(startTime !== undefined ? { startTime: nextStart } : {}),
+        ...(endTime !== undefined ? { endTime: nextEnd } : {}),
+      },
+    });
+    await writeEntryPeople(tx, userId, id, input.personIds);
+    return tx.timeEntry.findUniqueOrThrow({
+      where: { id },
+      include: entryInclude,
+    });
   });
 
   // Push to Google Calendar (swallows its own errors).

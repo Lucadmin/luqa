@@ -18,6 +18,7 @@ class TimelineDayPane extends StatelessWidget {
     required this.entries,
     required this.sleep,
     required this.categories,
+    required this.names,
     required this.now,
     required this.hiddenEntryId,
     required this.onOpenEntry,
@@ -33,6 +34,12 @@ class TimelineDayPane extends StatelessWidget {
   final List<TimeEntry> entries;
   final List<SleepEntry> sleep;
   final Map<String, Category> categories;
+
+  /// Turns the ids on a block into the names it shows. Passed in rather than
+  /// read here so the pane stays a pure function of what it is given — the
+  /// same reason categories are.
+  final String Function(List<String> personIds) names;
+
   final DateTime now;
 
   /// The entry currently floating in the draft layer, so it is not drawn twice.
@@ -87,6 +94,7 @@ class TimelineDayPane extends StatelessWidget {
                 item: item,
                 metrics: metrics,
                 category: categories[item.entry.categoryId],
+                names: names,
                 onTap: () => onOpenEntry(item.entry),
                 onLongPress: item.running
                     ? null
@@ -415,6 +423,7 @@ class _EntryBlock extends StatelessWidget {
     required this.item,
     required this.metrics,
     required this.category,
+    required this.names,
     required this.onTap,
     required this.onLongPress,
   });
@@ -422,6 +431,7 @@ class _EntryBlock extends StatelessWidget {
   final LaidOutEntry item;
   final TimelineMetrics metrics;
   final Category? category;
+  final String Function(List<String> personIds) names;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -452,6 +462,7 @@ class _EntryBlock extends StatelessWidget {
               height: height,
               child: TimelineEntrySurface(
                 title: item.entry.description,
+                people: names(item.entry.personIds),
                 category: category,
                 start: item.entry.start,
                 end: item.entry.end,
@@ -480,6 +491,7 @@ class TimelineEntrySurface extends StatelessWidget {
     required this.end,
     required this.running,
     required this.height,
+    this.people = '',
     this.clippedTop = false,
     this.clippedBottom = false,
     this.selected = false,
@@ -489,6 +501,10 @@ class TimelineEntrySurface extends StatelessWidget {
   });
 
   final String title;
+
+  /// Who was there, already turned into names. Empty when nobody was tagged,
+  /// which is most blocks.
+  final String people;
   final Category? category;
   final DateTime start;
   final DateTime? end;
@@ -520,7 +536,9 @@ class TimelineEntrySurface extends StatelessWidget {
 
     return Semantics(
       button: onTap != null,
-      label: '$label, ${category?.name ?? 'no category'}, $range',
+      label: people.isEmpty
+          ? '$label, ${category?.name ?? 'no category'}, $range'
+          : '$label with $people, ${category?.name ?? 'no category'}, $range',
       child: Material(
         color: identity.withValues(
           alpha: selected ? (isDark ? 0.30 : 0.16) : (isDark ? 0.22 : 0.13),
@@ -585,8 +603,16 @@ class TimelineEntrySurface extends StatelessWidget {
                         ],
                         Flexible(
                           child: Text(
-                            '${clock(start)}–'
-                            '${end == null ? 'now' : clock(end!)}',
+                            // No new colour and no avatars: the timeline's
+                            // focal object stays the day, and who was there is
+                            // supporting detail on the line that already
+                            // carries the times.
+                            people.isEmpty
+                                ? '${clock(start)}–'
+                                      '${end == null ? 'now' : clock(end!)}'
+                                : '${clock(start)}–'
+                                      '${end == null ? 'now' : clock(end!)}'
+                                      ' · $people',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.labelSmall?.copyWith(

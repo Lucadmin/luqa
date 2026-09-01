@@ -180,6 +180,7 @@ class FakeLuqaApi implements LuqaApi {
     required String? categoryId,
     required DateTime start,
     required DateTime? end,
+    List<String> personIds = const [],
   }) async => api.TimeEntry(
     id: id ?? 'entry-2',
     description: description,

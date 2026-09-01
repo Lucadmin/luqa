@@ -6,6 +6,7 @@ class TimeEntry {
     required this.start,
     required this.end,
     this.pendingSync = false,
+    this.personIds = const [],
   });
 
   final String id;
@@ -15,7 +16,16 @@ class TimeEntry {
   final DateTime? end;
   final bool pendingSync;
 
+  /// Who was there.
+  ///
+  /// Dinner logged on Tuesday is the record that Tuesday is when you last saw
+  /// them. Asking for that here means never asking for it again on their own
+  /// screen — "last seen" becomes something the app already knows.
+  final List<String> personIds;
+
   bool get isRunning => end == null;
+
+  bool get hasPeople => personIds.isNotEmpty;
 
   /// A null field leaves that value untouched; `clearCategory` is how the
   /// category is removed, since null already means "unchanged".
@@ -26,6 +36,7 @@ class TimeEntry {
     DateTime? start,
     DateTime? end,
     bool? pendingSync,
+    List<String>? personIds,
   }) => TimeEntry(
     id: id,
     description: description ?? this.description,
@@ -33,6 +44,7 @@ class TimeEntry {
     start: start ?? this.start,
     end: end ?? this.end,
     pendingSync: pendingSync ?? this.pendingSync,
+    personIds: personIds ?? this.personIds,
   );
 
   DateTime endOrNow([DateTime? now]) => end ?? now ?? DateTime.now();
@@ -47,6 +59,7 @@ class NewTimeEntry {
     required this.start,
     required this.end,
     this.id,
+    this.personIds = const [],
   });
 
   /// The identity the device already gave this block. Sending it makes the
@@ -59,6 +72,9 @@ class NewTimeEntry {
 
   /// Null starts a running timer rather than a completed block.
   final DateTime? end;
+
+  /// Who was there.
+  final List<String> personIds;
 }
 
 class RecentActivity {

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:luqa/core/storage/luqa_store.dart';
 import 'package:luqa/features/money/data/money_local_store.dart';
 import 'package:luqa/features/people/domain/person.dart';
+import 'package:luqa/features/today/data/timeline_local_store.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// Upgrading to the People release must not lose anybody.
@@ -14,8 +15,11 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   sqfliteFfiInit();
 
-  /// A database as version 4 left it: `money_person` with the money columns
-  /// only, and a row on it this device had not managed to send.
+  /// A database as version 4 left it.
+  ///
+  /// Only the tables the migrations under test touch, so this stays readable —
+  /// which means any future migration that alters a table has to add it here
+  /// too, or it fails against this fixture rather than against a real phone.
   Future<void> seedVersion4(String path) async {
     // A real file, not :memory:, because the point is reopening it. Cleared
     // first so a leftover from the last run cannot make this pass or fail for
@@ -41,6 +45,31 @@ void main() {
               PRIMARY KEY (namespace, id)
             )
           ''');
+          // Version 4 created this without `person_ids`; adding that column
+          // is the other half of the upgrade being tested.
+          await db.execute('''
+            CREATE TABLE timeline_entry (
+              namespace TEXT NOT NULL,
+              id TEXT NOT NULL,
+              description TEXT NOT NULL DEFAULT '',
+              category_id TEXT,
+              start_ms INTEGER NOT NULL,
+              end_ms INTEGER,
+              pending INTEGER NOT NULL DEFAULT 0,
+              removed INTEGER NOT NULL DEFAULT 0,
+              PRIMARY KEY (namespace, id)
+            )
+          ''');
+          await db.insert('timeline_entry', {
+            'namespace': 'user-a',
+            'id': 'dinner',
+            'description': 'Dinner',
+            'category_id': null,
+            'start_ms': DateTime(2026, 8, 27, 19).millisecondsSinceEpoch,
+            'end_ms': DateTime(2026, 8, 27, 21).millisecondsSinceEpoch,
+            'pending': 0,
+            'removed': 0,
+          });
           await db.insert('money_person', {
             'namespace': 'user-a',
             'id': 'mira',
@@ -123,5 +152,22 @@ void main() {
     );
 
     expect((await local.people()).single.notes.single.body, 'Ceramics course');
+  });
+
+  test('blocks of time logged before tagging existed keep no tags', () async {
+    final path = 'person_migration_d.db';
+    await seedVersion4(path);
+
+    final store = LuqaStore(factory: databaseFactoryFfi, path: path);
+    addTearDown(store.close);
+    final timeline = TimelineLocalStore(namespace: 'user-a', store: store);
+
+    // Defaulted rather than backfilled: an entry logged before anyone could be
+    // tagged genuinely has nobody on it, and inventing names would be worse
+    // than the empty truth.
+    final entry = await timeline.entryById('dinner');
+    expect(entry, isNotNull);
+    expect(entry!.description, 'Dinner');
+    expect(entry.personIds, isEmpty);
   });
 }

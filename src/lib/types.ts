@@ -23,6 +23,10 @@ export interface TimeEntryDTO {
   /** ISO UTC, or null while running. */
   endTime: string | null;
   source: EntrySource;
+  /** Who was there. Rides inside the entry rather than syncing on its own, the
+   *  same way a person's notes ride inside them: one row is one whole block of
+   *  time. This is what makes "last seen" a fact the app already knows. */
+  personIds: string[];
 }
 
 export interface SleepStageDTO {

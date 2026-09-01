@@ -17,6 +17,7 @@ class UpdateTimeEntryRequest {
     this.categoryId = const Optional.absent(),
     this.startTime = const Optional.absent(),
     this.endTime = const Optional.absent(),
+    this.personIds = const Optional.present(const []),
   });
 
   ///
@@ -51,6 +52,9 @@ class UpdateTimeEntryRequest {
   ///
   final Optional<DateTime?> endTime;
 
+  /// Who was there. Absent leaves the tags alone; an empty array clears them. Ids that are not this account's are dropped rather than rejected: a phone replaying a queued write may name somebody deleted since, and refusing the whole entry over a tag would lose a block of time to protect it.
+  final Optional<List<String>?> personIds;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -58,7 +62,8 @@ class UpdateTimeEntryRequest {
           other.description == description &&
           other.categoryId == categoryId &&
           other.startTime == startTime &&
-          other.endTime == endTime;
+          other.endTime == endTime &&
+          _deepEquality.equals(other.personIds, personIds);
 
   @override
   int get hashCode =>
@@ -66,11 +71,12 @@ class UpdateTimeEntryRequest {
       (description == null ? 0 : description!.hashCode) +
       (categoryId == null ? 0 : categoryId!.hashCode) +
       (startTime == null ? 0 : startTime!.hashCode) +
-      (endTime == null ? 0 : endTime!.hashCode);
+      (endTime == null ? 0 : endTime!.hashCode) +
+      (personIds.hashCode);
 
   @override
   String toString() =>
-      'UpdateTimeEntryRequest[description=$description, categoryId=$categoryId, startTime=$startTime, endTime=$endTime]';
+      'UpdateTimeEntryRequest[description=$description, categoryId=$categoryId, startTime=$startTime, endTime=$endTime, personIds=$personIds]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -91,6 +97,10 @@ class UpdateTimeEntryRequest {
       final value = this.endTime.value;
       json[r'endTime'] = value == null ? null : value.toUtc().toIso8601String();
     }
+    if (this.personIds.isPresent) {
+      final value = this.personIds.value;
+      json[r'personIds'] = value;
+    }
     return json;
   }
 
@@ -101,12 +111,14 @@ class UpdateTimeEntryRequest {
     Optional<String?>? categoryId,
     Optional<DateTime?>? startTime,
     Optional<DateTime?>? endTime,
+    Optional<List<String>?>? personIds,
   }) =>
       UpdateTimeEntryRequest(
         description: description ?? this.description,
         categoryId: categoryId ?? this.categoryId,
         startTime: startTime ?? this.startTime,
         endTime: endTime ?? this.endTime,
+        personIds: personIds ?? this.personIds,
       );
 
   /// Returns a new [UpdateTimeEntryRequest] instance and imports its values from
@@ -135,6 +147,13 @@ class UpdateTimeEntryRequest {
             : const Optional.absent(),
         endTime: json.containsKey(r'endTime')
             ? Optional.present(mapDateTime(json, r'endTime', r''))
+            : const Optional.absent(),
+        personIds: json.containsKey(r'personIds')
+            ? Optional.present(json[r'personIds'] is Iterable
+                ? (json[r'personIds'] as Iterable)
+                    .cast<String>()
+                    .toList(growable: false)
+                : const [])
             : const Optional.absent(),
       );
     }

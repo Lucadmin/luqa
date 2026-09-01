@@ -153,6 +153,7 @@ class FakeTimelineRepository implements TodayRepository {
       categoryId: draft.categoryId,
       start: draft.start,
       end: draft.end,
+      personIds: draft.personIds,
     );
     entries.add(entry);
     return entry;
@@ -169,6 +170,7 @@ class FakeTimelineRepository implements TodayRepository {
       clearCategory: patch.clearCategory,
       start: patch.start,
       end: patch.end,
+      personIds: patch.personIds,
     );
     entries[index] = updated;
     return updated;

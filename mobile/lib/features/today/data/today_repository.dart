@@ -35,6 +35,7 @@ class EntryPatch {
     this.clearCategory = false,
     this.start,
     this.end,
+    this.personIds,
   });
 
   final String? description;
@@ -43,12 +44,18 @@ class EntryPatch {
   final DateTime? start;
   final DateTime? end;
 
+  /// Who was there, complete. Null leaves the tags alone; an empty list clears
+  /// them — the picker always hands back the whole set, so there is nothing to
+  /// merge and no separate "remove" to get wrong.
+  final List<String>? personIds;
+
   bool get isEmpty =>
       description == null &&
       categoryId == null &&
       !clearCategory &&
       start == null &&
-      end == null;
+      end == null &&
+      personIds == null;
 }
 
 abstract interface class TodayRepository {

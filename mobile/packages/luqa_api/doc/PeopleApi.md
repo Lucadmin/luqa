@@ -17,6 +17,7 @@ Method | HTTP request | Description
 [**deletePersonNote**](PeopleApi.md#deletepersonnote) | **DELETE** /people/{id}/notes/{noteId} | Remove a note
 [**deletePersonPlace**](PeopleApi.md#deletepersonplace) | **DELETE** /people/{id}/places/{placeId} | Drop a city
 [**deletePersonProfile**](PeopleApi.md#deletepersonprofile) | **DELETE** /people/{id} | Remove someone, as far as it is safe to
+[**geocodePendingPlaces**](PeopleApi.md#geocodependingplaces) | **POST** /people/places/geocode | Put points on the cities that have none yet
 [**getPersonProfile**](PeopleApi.md#getpersonprofile) | **GET** /people/{id} | One person, whole profile
 [**listPeopleProfiles**](PeopleApi.md#listpeopleprofiles) | **GET** /people | Everyone, archived included, each with their whole profile
 [**markPersonSeen**](PeopleApi.md#markpersonseen) | **POST** /people/{id}/seen | Record that they were actually seen
@@ -411,6 +412,51 @@ Name | Type | Description  | Notes
 ### Return type
 
 [**DeletePersonResponse**](DeletePersonResponse.md)
+
+### Authorization
+
+[mobileBearer](../README.md#mobileBearer)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **geocodePendingPlaces**
+> GeocodeResponse geocodePendingPlaces()
+
+Put points on the cities that have none yet
+
+Pull rather than push. Adding a city answers instantly and the pin catches up: geocoding on the write path would make typing a city name wait on a rate-limited third party, and a serverless request cannot promise to finish background work after replying.  Only the city is ever sent to the geocoder, and only its centroid is stored. The map answers \"who is in this city\", which a centroid answers exactly as well as a street address would — without turning a record of friends' addresses into a map of their front doors.  Call it when opening the map, and again while `remaining` is above zero.
+
+### Example
+```dart
+import 'package:luqa_api/api.dart';
+// TODO Configure HTTP Bearer authorization: mobileBearer
+// Case 1. Use String Token
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken('YOUR_ACCESS_TOKEN');
+// Case 2. Use Function which generate token.
+// String yourTokenGeneratorFunction() { ... }
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken(yourTokenGeneratorFunction);
+
+final api_instance = PeopleApi();
+
+try {
+    final result = api_instance.geocodePendingPlaces();
+    print(result);
+} catch (e) {
+    print('Exception when calling PeopleApi->geocodePendingPlaces: $e\n');
+}
+```
+
+### Parameters
+This endpoint does not need any parameter.
+
+### Return type
+
+[**GeocodeResponse**](GeocodeResponse.md)
 
 ### Authorization
 

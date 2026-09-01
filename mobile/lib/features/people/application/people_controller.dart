@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/core/network/network_failure.dart';
+import 'package:luqa/features/people/application/shared_time_provider.dart';
 import 'package:luqa/features/people/data/people_providers.dart';
 import 'package:luqa/features/people/data/people_repository.dart';
 import 'package:luqa/features/people/domain/people_math.dart';
@@ -256,6 +257,20 @@ class PeopleController extends Notifier<PeopleState> {
         _apply(await _repository.removePlace(personId, placeId));
       });
 
+  /// Asks for points on the cities that have none, then re-reads.
+  ///
+  /// Bounded per call, so it loops while there are more — a first sync of a
+  /// contact book with twenty cities in it needs a few passes, and each one
+  /// costs a second per city against a rate-limited geocoder.
+  Future<void> geocodePlaces({int maxRounds = 4}) async {
+    for (var round = 0; round < maxRounds; round++) {
+      final more = await _repository.geocodePendingPlaces();
+      if (!ref.mounted) return;
+      await _fetch(refreshing: true);
+      if (!more) return;
+    }
+  }
+
   /// Slots an updated person back into the list in place, so a screen never
   /// flickers through an empty state to show a changed name.
   void _apply(Person person) {
@@ -290,12 +305,22 @@ class PeopleController extends Notifier<PeopleState> {
 /// the day actually change.
 final peopleFocusProvider = Provider<PeopleFocus>((ref) {
   final people = ref.watch(peopleControllerProvider).listed;
-  return peopleFocus(people, ref.watch(peopleNowProvider));
+  return peopleFocus(
+    people,
+    ref.watch(peopleNowProvider),
+    lastSeen: ref.watch(lastSeenProvider),
+  );
 });
 
 final overdueContactsProvider = Provider<List<OverdueContact>>((ref) {
   final people = ref.watch(peopleControllerProvider).listed;
-  return overdueContacts(people, ref.watch(peopleNowProvider));
+  return overdueContacts(
+    people,
+    ref.watch(peopleNowProvider),
+    // A dinner logged on the timeline counts as having seen them, which is the
+    // whole point of tagging it.
+    lastSeen: ref.watch(lastSeenProvider),
+  );
 });
 
 final upcomingBirthdaysProvider = Provider<List<UpcomingBirthday>>((ref) {

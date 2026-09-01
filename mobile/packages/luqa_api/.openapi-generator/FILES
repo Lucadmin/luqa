@@ -30,6 +30,7 @@ doc/ExpenseListResponse.md
 doc/ExpenseParticipantInput.md
 doc/ExpenseResponse.md
 doc/ExpenseShare.md
+doc/GeocodeResponse.md
 doc/GroupListResponse.md
 doc/GroupResponse.md
 doc/GymApi.md
@@ -164,6 +165,7 @@ lib/model/expense_list_response.dart
 lib/model/expense_participant_input.dart
 lib/model/expense_response.dart
 lib/model/expense_share.dart
+lib/model/geocode_response.dart
 lib/model/group_list_response.dart
 lib/model/group_response.dart
 lib/model/gym_exercise.dart

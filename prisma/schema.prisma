@@ -160,11 +160,30 @@ model TimeEntry {
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  people   TimeEntryPerson[]
 
   @@unique([userId, googleEventId])
   @@index([userId, startTime])
   @@index([userId, endTime])
   @@map("time_entries")
+}
+
+// Who was there.
+//
+// The point of tagging a block of time with people is that "last seen" stops
+// being something anyone has to type. Dinner logged on Tuesday is the record
+// that Tuesday is when you last saw them; asking the user to also tick a box
+// on their contact card is asking twice for one fact.
+model TimeEntryPerson {
+  timeEntryId String
+  personId    String
+
+  entry  TimeEntry @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+  person Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([timeEntryId, personId])
+  @@index([personId])
+  @@map("time_entry_people")
 }
 
 // A sleep session imported from a health provider. It is intentionally separate
@@ -510,6 +529,7 @@ model Person {
   channels     PersonChannel[]
   notes        PersonNote[]
   gifts        PersonGiftIdea[]
+  timeEntries  TimeEntryPerson[]
 
   @@unique([userId, name])
   @@unique([userId, googleResourceName])
@@ -541,6 +561,33 @@ enum ChannelKind {
 // `updatedAt`, so a note added without touching the parent is a note no phone
 // ever hears about. `touchPerson` in src/lib/server/people.ts is the only
 // sanctioned way to write these, and it has its own test.
+
+// A city name already resolved to a point, so it is only ever looked up once.
+//
+// Not per user: "Munich, DE" is the same place for everybody, and the cache is
+// what keeps a rate-limited public geocoder viable at all. Nothing in here is
+// personal — it is a city name and its centroid, which is also why sending it
+// to a third-party geocoder is acceptable when sending a friend's street
+// address would not be.
+model GeocodeCache {
+  // The normalised query, e.g. "munich|de". The primary key, because the whole
+  // point is that one lookup answers every future one.
+  query String @id
+
+  latitude  Float?
+  longitude Float?
+
+  // The canonical names the geocoder gave back, which are usually tidier than
+  // what was typed.
+  city    String?
+  country String?
+
+  // A lookup that found nothing is cached too, with null coordinates. Without
+  // this a misspelt city is retried on every sync for ever.
+  resolvedAt DateTime @default(now())
+
+  @@map("geocode_cache")
+}
 
 // Somewhere a person can be found.
 //

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
 import 'package:luqa/features/today/domain/category.dart';
+import 'package:luqa/features/today/application/people_names.dart';
 import 'package:luqa/features/today/presentation/category_picker_sheet.dart';
+import 'package:luqa/features/today/presentation/person_picker_sheet.dart';
 import 'package:luqa/features/today/presentation/today_formatters.dart';
 
 /// What the sheet hands back. `delete` is the only outcome that is not a save.
@@ -13,6 +15,7 @@ class EntryEdit {
     required this.categoryId,
     required this.start,
     required this.end,
+    this.personIds = const [],
     this.delete = false,
   });
 
@@ -21,12 +24,17 @@ class EntryEdit {
       categoryId = null,
       start = null,
       end = null,
+      personIds = const [],
       delete = true;
 
   final String description;
   final String? categoryId;
   final DateTime? start;
   final DateTime? end;
+
+  /// Who was there, complete. The write replaces the tags wholesale.
+  final List<String> personIds;
+
   final bool delete;
 }
 
@@ -38,6 +46,7 @@ Future<EntryEdit?> showEntryEditorSheet(
   required DateTime start,
   required DateTime end,
   required bool canDelete,
+  List<String> personIds = const [],
 }) {
   return showModalBottomSheet<EntryEdit>(
     context: context,
@@ -53,6 +62,7 @@ Future<EntryEdit?> showEntryEditorSheet(
         start: start,
         end: end,
         canDelete: canDelete,
+        personIds: personIds,
       ),
     ),
   );
@@ -66,6 +76,7 @@ class _EntryEditorSheet extends ConsumerStatefulWidget {
     required this.start,
     required this.end,
     required this.canDelete,
+    required this.personIds,
   });
 
   final String title;
@@ -74,6 +85,7 @@ class _EntryEditorSheet extends ConsumerStatefulWidget {
   final DateTime start;
   final DateTime end;
   final bool canDelete;
+  final List<String> personIds;
 
   @override
   ConsumerState<_EntryEditorSheet> createState() => _EntryEditorSheetState();
@@ -86,6 +98,7 @@ class _EntryEditorSheetState extends ConsumerState<_EntryEditorSheet> {
   late DateTime _start = widget.start;
   late DateTime _end = widget.end;
   late String? _categoryId = widget.categoryId;
+  late List<String> _personIds = [...widget.personIds];
 
   @override
   void dispose() {
@@ -94,6 +107,11 @@ class _EntryEditorSheetState extends ConsumerState<_EntryEditorSheet> {
   }
 
   Duration get _duration => _end.difference(_start);
+
+  String _peopleLabel(WidgetRef ref) {
+    if (_personIds.isEmpty) return 'Nobody tagged';
+    return ref.read(personNamesProvider)(_personIds);
+  }
 
   bool get _crossesMidnight => _end.day != _start.day;
 
@@ -144,6 +162,15 @@ class _EntryEditorSheetState extends ConsumerState<_EntryEditorSheet> {
     setState(() => _categoryId = selection.categoryId);
   }
 
+  Future<void> _pickPeople() async {
+    final chosen = await showPersonPickerSheet(
+      context,
+      selectedIds: _personIds,
+    );
+    if (!mounted || chosen == null) return;
+    setState(() => _personIds = chosen);
+  }
+
   void _save() {
     Navigator.of(context).pop(
       EntryEdit(
@@ -151,6 +178,7 @@ class _EntryEditorSheetState extends ConsumerState<_EntryEditorSheet> {
         categoryId: _categoryId,
         start: _start,
         end: _end,
+        personIds: _personIds,
       ),
     );
   }
@@ -220,6 +248,20 @@ class _EntryEditorSheetState extends ConsumerState<_EntryEditorSheet> {
               onTap: _pickCategory,
             ),
             const SizedBox(height: LuqaSpacing.md),
+            _FieldRow(
+              key: const ValueKey('editor-people'),
+              label: 'With',
+              // Named rather than counted: "Mira, Jonas" is the thing being
+              // recorded, and "2 people" would make the row a lookup.
+              value: _peopleLabel(ref),
+              leading: Icon(
+                Icons.group_outlined,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              onTap: _pickPeople,
+            ),
+            const SizedBox(height: LuqaSpacing.md),
             Row(
               children: [
                 Expanded(
@@ -270,6 +312,7 @@ class _FieldRow extends StatelessWidget {
     required this.onTap,
     this.leading,
     this.hint,
+    super.key,
   });
 
   final String label;

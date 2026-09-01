@@ -26,6 +26,7 @@ class LocalFirstPeopleRepository implements PeopleRepository {
   LocalFirstPeopleRepository({
     required this.store,
     required this.sync,
+    required this.remote,
     required this.queue,
     String Function()? mintId,
     DateTime Function()? now,
@@ -34,6 +35,11 @@ class LocalFirstPeopleRepository implements PeopleRepository {
 
   final MoneyLocalStore store;
   final PeopleSyncService sync;
+
+  /// For the one operation that has no offline meaning: asking a third-party
+  /// geocoder where a city is.
+  final PeopleRepository remote;
+
   final MutationQueue<MoneyMutation> queue;
 
   final String Function() _mintId;
@@ -435,6 +441,18 @@ class LocalFirstPeopleRepository implements PeopleRepository {
     longitude: place.longitude,
     source: place.source,
   );
+
+  @override
+  Future<bool> geocodePendingPlaces() async {
+    // Online-only, and deliberately so: there is nothing to queue. A city with
+    // no point is not a failed write, it is a place that lists but does not
+    // pin — a state the map already shows honestly.
+    final more = await remote.geocodePendingPlaces();
+    // The points landed on the server's copy of the people, so the pins only
+    // appear here once the delta carrying them has been pulled.
+    await sync.pull();
+    return more;
+  }
 
   @override
   Future<Person> removePlace(String personId, String placeId) => _edit(

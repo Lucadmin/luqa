@@ -30,6 +30,7 @@ class TimelineDraft {
     this.entryId,
     this.description = '',
     this.categoryId,
+    this.personIds = const [],
   });
 
   /// Set while an existing entry is being reshaped in place.
@@ -38,6 +39,9 @@ class TimelineDraft {
   final DateTime end;
   final String description;
   final String? categoryId;
+
+  /// Who was there, complete.
+  final List<String> personIds;
 
   bool get isNew => entryId == null;
 
@@ -49,11 +53,13 @@ class TimelineDraft {
     String? description,
     String? categoryId,
     bool clearCategory = false,
+    List<String>? personIds,
   }) => TimelineDraft(
     entryId: entryId,
     start: start ?? this.start,
     end: end ?? this.end,
     description: description ?? this.description,
+    personIds: personIds ?? this.personIds,
     categoryId: clearCategory ? null : categoryId ?? this.categoryId,
   );
 }
@@ -404,6 +410,13 @@ class TimelineController extends Notifier<TimelineState> {
     );
   }
 
+  /// Records who was there on the draft. The complete set, not a diff.
+  void tagDraft(List<String> personIds) {
+    final draft = state.draft;
+    if (draft == null) return;
+    state = state.copyWith(draft: draft.copyWith(personIds: personIds));
+  }
+
   void cancelDraft() {
     state = state.copyWith(clearDraft: true, clearError: true);
   }
@@ -429,6 +442,7 @@ class TimelineController extends Notifier<TimelineState> {
             categoryId: draft.categoryId,
             start: draft.start,
             end: draft.end,
+            personIds: draft.personIds,
           ),
         );
         if (!ref.mounted) return false;
@@ -448,6 +462,7 @@ class TimelineController extends Notifier<TimelineState> {
             clearCategory: draft.categoryId == null,
             start: draft.start,
             end: draft.end,
+            personIds: draft.personIds,
           ),
         );
         if (!ref.mounted) return false;

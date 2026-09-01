@@ -43,7 +43,14 @@ import type {
 } from "@/lib/types";
 import { toDateKey } from "@/lib/life";
 
-export function toEntryDTO(e: TimeEntry): TimeEntryDTO {
+/** `TimeEntryWithPeople` rather than `TimeEntry`: who was there is part of the
+ *  row on the wire, so a caller that forgets to include them fails to compile
+ *  rather than quietly serving a block of time with nobody in it. */
+export type TimeEntryWithPeople = TimeEntry & {
+  people?: { personId: string }[];
+};
+
+export function toEntryDTO(e: TimeEntryWithPeople): TimeEntryDTO {
   return {
     id: e.id,
     description: e.description,
@@ -51,6 +58,7 @@ export function toEntryDTO(e: TimeEntry): TimeEntryDTO {
     startTime: e.startTime.toISOString(),
     endTime: e.endTime ? e.endTime.toISOString() : null,
     source: e.source,
+    personIds: (e.people ?? []).map((row) => row.personId),
   };
 }
 

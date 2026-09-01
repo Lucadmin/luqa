@@ -33,7 +33,7 @@ class LuqaStore {
   /// providers build them eagerly and signed-out ones never read anything.
   static final LuqaStore shared = LuqaStore();
 
-  static const _version = 5;
+  static const _version = 6;
 
   final DatabaseFactory? _injectedFactory;
   final String? _path;
@@ -107,6 +107,7 @@ class LuqaStore {
         if (oldVersion < 3) _createGymTables(batch);
         if (oldVersion < 4) _createTimelineTables(batch);
         if (oldVersion < 5) _promotePersonTable(batch, oldVersion);
+        if (oldVersion < 6) _addEntryPeople(batch, oldVersion);
         if (oldVersion < 5) _createRemapTable(batch);
         await batch.commit();
       },
@@ -264,6 +265,19 @@ class LuqaStore {
       batch.execute('ALTER TABLE person ADD COLUMN $column');
     }
     _createPersonChildTables(batch);
+  }
+
+  /// Adds who-was-there to blocks of time already on the device.
+  ///
+  /// Defaulted rather than backfilled: an entry logged before tagging existed
+  /// genuinely has nobody recorded on it, and inventing tags would be worse
+  /// than the empty truth.
+  static void _addEntryPeople(Batch batch, int oldVersion) {
+    // A database this new was created with the column already present.
+    if (oldVersion < 4) return;
+    batch.execute(
+      "ALTER TABLE timeline_entry ADD COLUMN person_ids TEXT NOT NULL DEFAULT '[]'",
+    );
   }
 
   static void _createMoneyTables(Batch batch) {
@@ -470,6 +484,10 @@ class LuqaStore {
         start_ms INTEGER NOT NULL,
         -- Null is a running timer, not a missing value.
         end_ms INTEGER,
+        -- Who was there, as a json array of person ids. A column rather than a
+        -- join table: it is read only ever with its entry, it is a handful of
+        -- ids, and the server sends it inside the row anyway.
+        person_ids TEXT NOT NULL DEFAULT '[]',
         pending INTEGER NOT NULL DEFAULT 0,
         removed INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (namespace, id)

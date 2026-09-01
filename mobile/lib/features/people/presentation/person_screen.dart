@@ -6,6 +6,7 @@ import 'package:luqa/features/money/application/money_controller.dart';
 import 'package:luqa/features/money/presentation/money_formatters.dart';
 import 'package:luqa/features/money/presentation/widgets/person_avatar.dart';
 import 'package:luqa/features/people/application/people_controller.dart';
+import 'package:luqa/features/people/application/shared_time_provider.dart';
 import 'package:luqa/features/people/domain/people_math.dart';
 import 'package:luqa/features/people/domain/person.dart';
 import 'package:luqa/features/people/presentation/people_screen.dart'
@@ -68,7 +69,11 @@ class PersonScreen extends ConsumerWidget {
         children: [
           _Identity(person: person),
           const SizedBox(height: LuqaSpacing.xl),
-          _Focus(person: person, now: now),
+          _Focus(
+            person: person,
+            now: now,
+            lastSeen: ref.watch(lastSeenProvider)(person),
+          ),
           const SizedBox(height: LuqaSpacing.xl),
           _SeenAction(
             person: person,
@@ -76,6 +81,8 @@ class PersonScreen extends ConsumerWidget {
             onSeen: () => controller.markSeen(person.id, now),
           ),
           _Balance(personId: person.id),
+          const SizedBox(height: LuqaSpacing.section),
+          _Together(person: person, now: now),
           const SizedBox(height: LuqaSpacing.section),
           _Notes(person: person),
           const SizedBox(height: LuqaSpacing.section),
@@ -148,10 +155,13 @@ class _Identity extends StatelessWidget {
 /// The one line at display size: the birthday when it is close, otherwise how
 /// long it has been.
 class _Focus extends StatelessWidget {
-  const _Focus({required this.person, required this.now});
+  const _Focus({required this.person, required this.now, required this.lastSeen});
 
   final Person person;
   final DateTime now;
+
+  /// The newest of the typed date, a tagged block of time, and a shared bill.
+  final DateTime? lastSeen;
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +180,7 @@ class _Focus extends StatelessWidget {
       );
     }
 
-    final seen = person.lastSeenAt;
+    final seen = lastSeen;
     if (seen != null) {
       final elapsed = DateTime(
         now.year,
@@ -241,7 +251,7 @@ class _FocusLine extends StatelessWidget {
 
 /// The write this screen makes most often, and the one that keeps every
 /// overdue list honest.
-class _SeenAction extends StatelessWidget {
+class _SeenAction extends ConsumerWidget {
   const _SeenAction({
     required this.person,
     required this.now,
@@ -253,8 +263,11 @@ class _SeenAction extends StatelessWidget {
   final VoidCallback onSeen;
 
   @override
-  Widget build(BuildContext context) {
-    final seen = person.lastSeenAt;
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Anything that already counts as seeing them — a tagged dinner, a shared
+    // bill — disables the button, because pressing it would record a fact the
+    // app already has.
+    final seen = ref.watch(lastSeenProvider)(person);
     final seenToday =
         seen != null &&
         seen.year == now.year &&
@@ -322,6 +335,86 @@ class _Balance extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The time actually spent together, from the timeline.
+///
+/// The point of tagging a block of time is that this list builds itself. It
+/// only appears once there is something in it, because an empty "Together" on
+/// every contact would be a reproach rather than a record.
+class _Together extends ConsumerWidget {
+  const _Together({required this.person, required this.now});
+
+  final Person person;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final entries = ref.watch(sharedEntriesProvider)(person.id);
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    final thisYear = entries.where((entry) => entry.start.year == now.year);
+    final hours = thisYear.fold<Duration>(
+      Duration.zero,
+      (total, entry) => total + entry.duration,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeading(title: 'Together'),
+        if (hours > Duration.zero)
+          Text(
+            '${_hours(hours)} in ${now.year}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        const SizedBox(height: LuqaSpacing.sm),
+        // A handful, newest first. The whole history belongs on the timeline,
+        // which is where it already is.
+        for (final entry in entries.take(6))
+          Padding(
+            key: ValueKey('together-${entry.id}'),
+            padding: const EdgeInsets.symmetric(vertical: LuqaSpacing.xs),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    entry.description.trim().isEmpty
+                        ? 'Untitled'
+                        : entry.description.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyLarge,
+                  ),
+                ),
+                const SizedBox(width: LuqaSpacing.md),
+                Text(
+                  _day(entry.start),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _hours(Duration total) {
+    final hours = total.inMinutes / 60;
+    return hours < 10
+        ? '${hours.toStringAsFixed(1)} hours'
+        : '${hours.round()} hours';
+  }
+
+  String _day(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}.'
+      '${value.month.toString().padLeft(2, '0')}.';
 }
 
 class _Notes extends ConsumerStatefulWidget {

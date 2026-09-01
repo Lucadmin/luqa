@@ -32,6 +32,7 @@ class TimelineView extends StatefulWidget {
     required this.entries,
     required this.sleep,
     required this.categories,
+    required this.names,
     required this.draft,
     required this.now,
     required this.openedAt,
@@ -50,6 +51,10 @@ class TimelineView extends StatefulWidget {
   final List<TimeEntry> entries;
   final List<SleepEntry> sleep;
   final List<Category> categories;
+
+  /// Turns the person ids on a block into the names it shows.
+  final String Function(List<String> personIds) names;
+
   final TimelineDraft? draft;
 
   /// Ticks about once a minute; drives the now-line and running blocks.
@@ -398,6 +403,7 @@ class TimelineViewState extends State<TimelineView> {
                       entries: byDay[key]?.entries ?? const [],
                       sleep: byDay[key]?.sleep ?? const [],
                       categories: categoryById,
+                      names: widget.names,
                       now: widget.now,
                       hiddenEntryId: widget.draft?.entryId,
                       onOpenEntry: widget.onOpenEntry,

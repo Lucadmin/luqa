@@ -106,4 +106,13 @@ abstract interface class PeopleRepository {
   });
 
   Future<Person> removePlace(String personId, String placeId);
+
+  /// Asks the server to put points on the cities that have none.
+  ///
+  /// Its own call rather than part of a read: it is bounded, it costs a second
+  /// of wall clock per city against a rate-limited geocoder, and the map is
+  /// perfectly usable — as a list — before it has run.
+  ///
+  /// Returns true while cities are still waiting, so a caller can ask again.
+  Future<bool> geocodePendingPlaces();
 }

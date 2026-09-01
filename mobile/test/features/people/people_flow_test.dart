@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:luqa/features/people/presentation/widgets/people_map.dart';
+import 'package:luqa/features/today/presentation/widgets/timeline_view.dart';
+
 import '../../helpers/fake_people_repository.dart';
 import '../../helpers/pump_luqa.dart';
 
@@ -52,12 +55,60 @@ void main() {
     await pumpLuqa(tester);
     await openPeople(tester);
 
-    expect(find.byKey(const ValueKey('overdue-jonas')), findsOneWidget);
     expect(find.byKey(const ValueKey('overdue-tessa')), findsOneWidget);
     // Piet has a rhythm and is keeping it, so he is in the roster and not
     // in the overdue list. Somebody with no cadence is never here at all.
     expect(find.byKey(const ValueKey('overdue-piet')), findsNothing);
     expect(find.byKey(const ValueKey('overdue-alina')), findsNothing);
+  });
+
+  testWidgets('a shared bill counts as having seen them', (tester) async {
+    // Jonas's contact card says five months, but he was on a bill yesterday.
+    // Money already knew they had dinner; asking the owner to also tick a box
+    // on his card would be asking twice for one fact — so he is not overdue,
+    // whatever the typed date says.
+    await pumpLuqa(tester);
+    await openPeople(tester);
+
+    expect(find.byKey(const ValueKey('overdue-jonas')), findsNothing);
+    expect(find.byKey(const ValueKey('person-jonas')), findsOneWidget);
+  });
+
+  testWidgets('tagging a block of time is how you record seeing someone', (
+    tester,
+  ) async {
+    // The other half of the same rule, end to end: putting Tessa on a block
+    // of time is the record that today is when you last saw her, so her
+    // contact card needs no second answer to the same question.
+    await pumpLuqa(tester);
+    await openPeople(tester);
+    expect(find.byKey(const ValueKey('overdue-tessa')), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.home_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(TimelineView),
+        matching: find.text('Gym'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('editor-people')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('person-option-tessa')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('person-picker-done')));
+    await tester.pumpAndSettle();
+
+    // The editor names her rather than counting her.
+    expect(find.text('Tessa Lund'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('editor-save-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.group_outlined));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('overdue-tessa')), findsNothing);
   });
 
   testWidgets('shows the nickname, keeping the real name underneath', (
@@ -132,16 +183,16 @@ void main() {
   ) async {
     await pumpLuqa(tester);
     await openPeople(tester);
-    expect(find.byKey(const ValueKey('overdue-jonas')), findsOneWidget);
+    expect(find.byKey(const ValueKey('overdue-tessa')), findsOneWidget);
 
-    await openPerson(tester, 'jonas');
+    await openPerson(tester, 'tessa');
     await tester.tap(find.byKey(const ValueKey('person-mark-seen')));
     await tester.pumpAndSettle();
 
     expect(find.text('Seen today'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('overdue-jonas')), findsNothing);
+    expect(find.byKey(const ValueKey('overdue-tessa')), findsNothing);
   });
 
   testWidgets('a gift idea marked given stays on the list', (tester) async {
@@ -217,5 +268,86 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ida Weber'), findsWidgets);
+  });
+
+  testWidgets('the map pins cities, not people', (tester) async {
+    await pumpLuqa(tester);
+    await openPeople(tester);
+    await tester.tap(find.byKey(const ValueKey('people-places')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('places-view-toggle')));
+    await tester.pumpAndSettle();
+
+    // Two friends in Hamburg are one pin carrying a count, not two pins on top
+    // of each other — which is also why the map needs no clustering.
+    expect(find.byType(PeopleMap), findsOneWidget);
+    expect(find.text('Hamburg'), findsOneWidget);
+    expect(find.text('Munich'), findsOneWidget);
+  });
+
+  testWidgets('a city pin opens the people in it', (tester) async {
+    await pumpLuqa(tester);
+    await openPeople(tester);
+    await tester.tap(find.byKey(const ValueKey('people-places')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('places-view-toggle')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Hamburg'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('map-Hamburg-tessa')), findsOneWidget);
+    expect(find.byKey(const ValueKey('map-Hamburg-piet')), findsOneWidget);
+  });
+
+  testWidgets('a city with no point is counted rather than silently dropped', (
+    tester,
+  ) async {
+    // A geocoder resolves a few cities per call, so a roster spends its early
+    // runs part-pinned. A short map has to say why it is short.
+    await pumpLuqa(tester, peopleRepository: partlyPinnedPeopleRepository());
+    await openPeople(tester);
+    await tester.tap(find.byKey(const ValueKey('people-places')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('places-view-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 more city not placed yet.'), findsOneWidget);
+    // And it is still on the list, where it is just as useful.
+    await tester.tap(find.byKey(const ValueKey('places-view-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('city-Berlin-jonas')), findsOneWidget);
+  });
+
+  testWidgets('a fully pinned map invites the tap instead', (tester) async {
+    await pumpLuqa(tester);
+    await openPeople(tester);
+    await tester.tap(find.byKey(const ValueKey('people-places')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('places-view-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tap a city to see who is there.'), findsOneWidget);
+  });
+
+  testWidgets('the list still works when nothing has been geocoded', (
+    tester,
+  ) async {
+    // The state that matters: tiles need a connection and points need a
+    // geocoder, and neither is required to answer "who is in Hamburg".
+    await pumpLuqa(tester, peopleRepository: unpinnedPeopleRepository());
+    await openPeople(tester);
+    await tester.tap(find.byKey(const ValueKey('people-places')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hamburg, DE'), findsOneWidget);
+    expect(find.byKey(const ValueKey('city-Hamburg-tessa')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('places-view-toggle')));
+    await tester.pumpAndSettle();
+
+    // The map says why it is empty instead of showing a blank rectangle.
+    expect(find.text('Nothing to pin yet'), findsOneWidget);
+    expect(find.byType(PeopleMap), findsNothing);
   });
 }

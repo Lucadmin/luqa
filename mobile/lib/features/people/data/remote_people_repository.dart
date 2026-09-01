@@ -215,6 +215,10 @@ class RemotePeopleRepository implements PeopleRepository {
   @override
   Future<Person> removePlace(String personId, String placeId) async =>
       personFromApi(await client.deletePersonPlace(personId, placeId));
+
+  @override
+  Future<bool> geocodePendingPlaces() async =>
+      (await client.geocodePendingPlaces()).remaining > 0;
 }
 
 /// A value that is being set, or a field the request should not mention.

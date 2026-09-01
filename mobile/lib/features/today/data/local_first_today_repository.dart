@@ -109,6 +109,7 @@ class LocalFirstTodayRepository implements TodayRepository {
       start: draft.start,
       end: draft.end,
       pendingSync: true,
+      personIds: draft.personIds,
     );
 
     // Starting a timer stops whichever one was running, the same rule the

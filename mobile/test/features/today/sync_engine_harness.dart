@@ -54,6 +54,7 @@ class FakeApi implements LuqaApi {
     required String? categoryId,
     required DateTime start,
     required DateTime? end,
+    List<String> personIds = const [],
   }) async {
     _check();
     final entry = api.TimeEntry(

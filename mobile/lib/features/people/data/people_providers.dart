@@ -37,6 +37,7 @@ final peopleRepositoryProvider = Provider<PeopleRepository>((ref) {
   return LocalFirstPeopleRepository(
     store: store,
     sync: sync,
+    remote: ref.watch(remotePeopleRepositoryProvider),
     queue: ref.watch(moneySyncEngineProvider.notifier),
   );
 });

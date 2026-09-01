@@ -18,6 +18,7 @@ import {
 } from "@/lib/serializers";
 
 import { personInclude } from "@/lib/server/people";
+import { entryInclude } from "@/lib/server/today";
 
 export * from "@/lib/sync-cursor";
 
@@ -140,8 +141,14 @@ export async function collectionDelta(
         }),
       );
     case "timeEntries":
+      // Who was there rides inside the entry, so the delta has to carry them
+      // too — otherwise a second device shows the dinner without the people,
+      // and "last seen" is wrong everywhere but the phone it was typed on.
       return split(
-        await dbWithDeleted.timeEntry.findMany(query),
+        await dbWithDeleted.timeEntry.findMany({
+          ...query,
+          include: entryInclude,
+        }),
         limit,
         toEntryDTO,
       );

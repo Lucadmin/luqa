@@ -66,6 +66,7 @@ part 'model/expense_list_response.dart';
 part 'model/expense_participant_input.dart';
 part 'model/expense_response.dart';
 part 'model/expense_share.dart';
+part 'model/geocode_response.dart';
 part 'model/group_list_response.dart';
 part 'model/group_response.dart';
 part 'model/gym_exercise.dart';

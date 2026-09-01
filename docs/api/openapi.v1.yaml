@@ -1031,6 +1031,34 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /people/places/geocode:
+    post:
+      operationId: geocodePendingPlaces
+      tags: [People]
+      summary: Put points on the cities that have none yet
+      description: >-
+        Pull rather than push. Adding a city answers instantly and the pin
+        catches up: geocoding on the write path would make typing a city name
+        wait on a rate-limited third party, and a serverless request cannot
+        promise to finish background work after replying.
+
+
+        Only the city is ever sent to the geocoder, and only its centroid is
+        stored. The map answers "who is in this city", which a centroid answers
+        exactly as well as a street address would — without turning a record of
+        friends' addresses into a map of their front doors.
+
+
+        Call it when opening the map, and again while `remaining` is above zero.
+      responses:
+        "200":
+          description: How many cities were resolved, and how many are still waiting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeocodeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /people/{id}/places:
     parameters:
       - name: id
@@ -1647,6 +1675,7 @@ components:
         - startTime
         - endTime
         - source
+        - personIds
       properties:
         id:
           type: string
@@ -1662,6 +1691,15 @@ components:
           format: date-time
         source:
           $ref: "#/components/schemas/EntrySource"
+        personIds:
+          type: array
+          items:
+            type: string
+          description: >-
+            Who was there. Rides inside the entry rather than syncing on its
+            own, the same way a person's notes ride inside them: one row is one
+            whole block of time. This is what lets "last seen" be a fact the
+            app already knows rather than one the owner types twice.
     CreateTimeEntryRequest:
       type: object
       additionalProperties: false
@@ -1688,6 +1726,16 @@ components:
         endTime:
           type: [string, "null"]
           format: date-time
+        personIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+          description: >-
+            Who was there. Ids that are not this account's are dropped rather
+            than rejected: a phone replaying a queued write may name somebody
+            deleted since, and refusing the whole entry over a tag would lose a
+            block of time to protect it.
     TimeEntryResponse:
       type: object
       additionalProperties: false
@@ -1720,6 +1768,17 @@ components:
         endTime:
           type: [string, "null"]
           format: date-time
+        personIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+          description: >-
+            Who was there. Absent leaves the tags alone; an empty array clears
+            them. Ids that are not this account's are dropped rather than
+            rejected: a phone replaying a queued write may name somebody
+            deleted since, and refusing the whole entry over a tag would lose a
+            block of time to protect it.
     SleepSource:
       type: string
       enum: [HEALTH_CONNECT, APPLE_HEALTH, GOOGLE_HEALTH, MANUAL]
@@ -3332,6 +3391,20 @@ components:
             The first place is primary whether or not this is set: a person
             with exactly one city and no primary has no answer to "where are
             they".
+    GeocodeResponse:
+      type: object
+      additionalProperties: false
+      required: [resolved, remaining]
+      properties:
+        resolved:
+          type: integer
+          description: Places given a point by this call.
+        remaining:
+          type: integer
+          description: >-
+            Places still without one. Above zero means the map is worth asking
+            again; each call is bounded because every miss costs a second of
+            wall clock against the geocoder's rate limit.
     MarkSeenRequest:
       type: object
       additionalProperties: false

@@ -101,6 +101,7 @@ Class | Method | HTTP request | Description
 *PeopleApi* | [**deletePersonNote**](doc//PeopleApi.md#deletepersonnote) | **DELETE** /people/{id}/notes/{noteId} | Remove a note
 *PeopleApi* | [**deletePersonPlace**](doc//PeopleApi.md#deletepersonplace) | **DELETE** /people/{id}/places/{placeId} | Drop a city
 *PeopleApi* | [**deletePersonProfile**](doc//PeopleApi.md#deletepersonprofile) | **DELETE** /people/{id} | Remove someone, as far as it is safe to
+*PeopleApi* | [**geocodePendingPlaces**](doc//PeopleApi.md#geocodependingplaces) | **POST** /people/places/geocode | Put points on the cities that have none yet
 *PeopleApi* | [**getPersonProfile**](doc//PeopleApi.md#getpersonprofile) | **GET** /people/{id} | One person, whole profile
 *PeopleApi* | [**listPeopleProfiles**](doc//PeopleApi.md#listpeopleprofiles) | **GET** /people | Everyone, archived included, each with their whole profile
 *PeopleApi* | [**markPersonSeen**](doc//PeopleApi.md#markpersonseen) | **POST** /people/{id}/seen | Record that they were actually seen
@@ -144,6 +145,7 @@ Class | Method | HTTP request | Description
  - [ExpenseParticipantInput](doc//ExpenseParticipantInput.md)
  - [ExpenseResponse](doc//ExpenseResponse.md)
  - [ExpenseShare](doc//ExpenseShare.md)
+ - [GeocodeResponse](doc//GeocodeResponse.md)
  - [GroupListResponse](doc//GroupListResponse.md)
  - [GroupResponse](doc//GroupResponse.md)
  - [GymExercise](doc//GymExercise.md)

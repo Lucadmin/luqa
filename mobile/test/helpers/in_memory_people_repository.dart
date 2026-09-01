@@ -16,6 +16,9 @@ class InMemoryPeopleRepository implements PeopleRepository {
 
   final Map<String, Person> _people;
 
+  /// The seeded rows, for a test that wants to build a variant of them.
+  List<Person> get seedPeople => _people.values.toList();
+
   @override
   Future<List<Person>> loadPeople() async => _people.values.toList();
 
@@ -253,6 +256,13 @@ class InMemoryPeopleRepository implements PeopleRepository {
         ],
       ),
     );
+  }
+
+  @override
+  Future<bool> geocodePendingPlaces() async {
+    // Nothing to resolve: the seeded places already carry the coordinates the
+    // map needs, and a test has no business reaching a geocoder.
+    return false;
   }
 
   Person _require(String id) {

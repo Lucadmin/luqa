@@ -147,6 +147,7 @@ class TimelineLocalStore {
       'category_id': entry.categoryId,
       'start_ms': entry.start.millisecondsSinceEpoch,
       'end_ms': entry.end?.millisecondsSinceEpoch,
+      'person_ids': jsonEncode(entry.personIds),
       'pending': pending ? 1 : 0,
       'removed': 0,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -339,5 +340,22 @@ class TimelineLocalStore {
         : DateTime.fromMillisecondsSinceEpoch(row['end_ms']! as int),
     // What the timeline draws a dashed outline for.
     pendingSync: (row['pending']! as int) == 1,
+    personIds: _personIds(row['person_ids']),
   );
+
+  /// Unreadable tags are dropped rather than fatal. Who was at a dinner is
+  /// worth showing when it is known; it is not worth losing the dinner over.
+  static List<String> _personIds(Object? value) {
+    if (value is! String || value.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! List) return const [];
+      return [
+        for (final id in decoded)
+          if (id is String) id,
+      ];
+    } on FormatException {
+      return const [];
+    }
+  }
 }

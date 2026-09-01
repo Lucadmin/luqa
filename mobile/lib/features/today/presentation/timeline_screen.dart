@@ -7,6 +7,7 @@ import 'package:luqa/app/top_level_header.dart';
 import 'package:luqa/design_system/discarded_writes_notice.dart';
 import 'package:luqa/design_system/luqa_sync_status.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
+import 'package:luqa/features/today/application/people_names.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
 import 'package:luqa/features/today/data/today_repository.dart';
 import 'package:luqa/features/today/domain/sleep_entry.dart';
@@ -99,6 +100,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
       start: entry.start,
       end: entry.end!,
       canDelete: true,
+      personIds: entry.personIds,
     );
     if (result == null || !mounted) return;
 
@@ -114,6 +116,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
         clearCategory: result.categoryId == null,
         start: result.start,
         end: result.end,
+        personIds: result.personIds,
       ),
     );
   }
@@ -150,6 +153,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
       start: draft.start,
       end: draft.end,
       canDelete: !draft.isNew,
+      personIds: draft.personIds,
     );
     if (result == null || !mounted) return;
 
@@ -160,6 +164,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
     _controller
       ..describeDraft(result.description)
       ..categoriseDraft(result.categoryId)
+      ..tagDraft(result.personIds)
       ..moveDraft(result.start!, result.end!);
     await _controller.commitDraft();
   }
@@ -299,6 +304,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
                     entries: state.entries,
                     sleep: state.sleep,
                     categories: state.categories,
+              names: ref.watch(personNamesProvider),
                     draft: draft,
                     now: _now,
                     openedAt: _openedAt,

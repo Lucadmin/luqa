@@ -31,6 +31,7 @@ abstract interface class LuqaApi {
     required String? categoryId,
     required DateTime start,
     required DateTime? end,
+    List<String> personIds = const [],
   });
 
   Future<api.TimeEntry> updateTimeEntry(
@@ -148,6 +149,10 @@ abstract interface class LuqaApi {
   );
 
   Future<api.Person> deletePersonPlace(String personId, String placeId);
+
+  /// Resolves cities that have no point yet. Bounded per call; `remaining`
+  /// says whether it is worth asking again.
+  Future<api.GeocodeResponse> geocodePendingPlaces();
 
   Future<api.PersonGroup> createGroup(api.CreateGroupRequest request);
 
@@ -346,6 +351,7 @@ class LuqaApiClient implements LuqaApi {
     required String? categoryId,
     required DateTime start,
     required DateTime? end,
+    List<String> personIds = const [],
   }) => _authorized((client) async {
     final response = await api.TimeEntriesApi(client)
         .createTimeEntry(
@@ -357,6 +363,7 @@ class LuqaApiClient implements LuqaApi {
             description: api.Optional.present(description),
             categoryId: api.Optional.present(categoryId),
             endTime: api.Optional.present(end?.toUtc()),
+            personIds: api.Optional.present(personIds),
           ),
         )
         .timeout(_requestTimeout);
@@ -709,6 +716,16 @@ class LuqaApiClient implements LuqaApi {
   @override
   Future<api.Person> deletePersonPlace(String personId, String placeId) =>
       _person((people) => people.deletePersonPlace(personId, placeId));
+
+  @override
+  Future<api.GeocodeResponse> geocodePendingPlaces() =>
+      _authorized((client) async {
+        final response = await api.PeopleApi(
+          client,
+        ).geocodePendingPlaces().timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response;
+      });
 
   @override
   Future<api.PersonGroup> createGroup(api.CreateGroupRequest request) =>

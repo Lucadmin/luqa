@@ -19,6 +19,7 @@ class TimeEntry {
     required this.startTime,
     required this.endTime,
     required this.source_,
+    this.personIds = const [],
   });
 
   final String id;
@@ -33,6 +34,9 @@ class TimeEntry {
 
   final EntrySource source_;
 
+  /// Who was there. Rides inside the entry rather than syncing on its own, the same way a person's notes ride inside them: one row is one whole block of time. This is what lets \"last seen\" be a fact the app already knows rather than one the owner types twice.
+  final List<String> personIds;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -42,7 +46,8 @@ class TimeEntry {
           other.categoryId == categoryId &&
           other.startTime == startTime &&
           other.endTime == endTime &&
-          other.source_ == source_;
+          other.source_ == source_ &&
+          _deepEquality.equals(other.personIds, personIds);
 
   @override
   int get hashCode =>
@@ -52,11 +57,12 @@ class TimeEntry {
       (categoryId == null ? 0 : categoryId!.hashCode) +
       (startTime.hashCode) +
       (endTime == null ? 0 : endTime!.hashCode) +
-      (source_.hashCode);
+      (source_.hashCode) +
+      (personIds.hashCode);
 
   @override
   String toString() =>
-      'TimeEntry[id=$id, description=$description, categoryId=$categoryId, startTime=$startTime, endTime=$endTime, source_=$source_]';
+      'TimeEntry[id=$id, description=$description, categoryId=$categoryId, startTime=$startTime, endTime=$endTime, source_=$source_, personIds=$personIds]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -74,6 +80,7 @@ class TimeEntry {
       json[r'endTime'] = null;
     }
     json[r'source'] = this.source_;
+    json[r'personIds'] = this.personIds;
     return json;
   }
 
@@ -88,6 +95,7 @@ class TimeEntry {
     DateTime? endTime,
     bool endTimeSetToNull = false,
     EntrySource? source_,
+    List<String>? personIds,
   }) =>
       TimeEntry(
         id: id ?? this.id,
@@ -96,6 +104,7 @@ class TimeEntry {
         startTime: startTime ?? this.startTime,
         endTime: endTimeSetToNull ? null : endTime ?? this.endTime,
         source_: source_ ?? this.source_,
+        personIds: personIds ?? this.personIds,
       );
 
   /// Returns a new [TimeEntry] instance and imports its values from
@@ -129,6 +138,10 @@ class TimeEntry {
             'Required key "TimeEntry[source]" is missing from JSON.');
         assert(json[r'source'] != null,
             'Required key "TimeEntry[source]" has a null value in JSON.');
+        assert(json.containsKey(r'personIds'),
+            'Required key "TimeEntry[personIds]" is missing from JSON.');
+        assert(json[r'personIds'] != null,
+            'Required key "TimeEntry[personIds]" has a null value in JSON.');
         return true;
       }());
 
@@ -139,6 +152,11 @@ class TimeEntry {
         startTime: mapDateTime(json, r'startTime', r'')!,
         endTime: mapDateTime(json, r'endTime', r''),
         source_: EntrySource.fromJson(json[r'source'])!,
+        personIds: json[r'personIds'] is Iterable
+            ? (json[r'personIds'] as Iterable)
+                .cast<String>()
+                .toList(growable: false)
+            : const [],
       );
     }
     return null;
@@ -201,5 +219,6 @@ class TimeEntry {
     'startTime',
     'endTime',
     'source',
+    'personIds',
   };
 }

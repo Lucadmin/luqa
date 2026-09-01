@@ -34,6 +34,10 @@ export const clientId = z
   .max(64)
   .regex(/^[A-Za-z0-9_-]+$/, "Must be url-safe");
 
+/// Who was there. Bounded because it is a dinner, not a mailing list, and an
+/// unbounded array is a write nothing else on the row can survive.
+const entryPersonIds = z.array(z.string()).max(50).optional();
+
 export const createEntrySchema = z
   .object({
     id: clientId.optional(),
@@ -41,6 +45,7 @@ export const createEntrySchema = z
     categoryId: z.string().nullish(),
     startTime: isoString,
     endTime: isoString.nullish(),
+    personIds: entryPersonIds,
   })
   .refine(
     (v) => !v.endTime || Date.parse(v.endTime) > Date.parse(v.startTime),
@@ -53,6 +58,8 @@ export const updateEntrySchema = z
     categoryId: z.string().nullable().optional(),
     startTime: isoString.optional(),
     endTime: isoString.nullable().optional(),
+    // Absent leaves the tags alone; an empty array clears them.
+    personIds: entryPersonIds,
   })
   .refine(
     (v) =>
