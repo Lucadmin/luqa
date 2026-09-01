@@ -133,4 +133,171 @@ void main() {
     expect(gym.overview.exerciseById('lat-pulldown')!.sessionCount, 7);
     expect(find.text('Lat puldown'), findsNothing);
   });
+
+  testWidgets('renames an exercise everywhere it appears', (tester) async {
+    final gym = FakeGymRepository.sample();
+    await pumpLuqa(tester, gymRepository: gym);
+
+    await tester.tap(find.byIcon(Icons.fitness_center_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Exercises'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('exercise-menu-lat-pulldown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename…'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('rename-exercise-field')),
+      'Latzug',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('confirm-exercise-rename')));
+    await tester.pumpAndSettle();
+
+    expect(gym.overview.exerciseById('lat-pulldown')!.name, 'Latzug');
+    expect(find.text('Latzug'), findsOneWidget);
+  });
+
+  testWidgets('a rename onto a name already in use is refused, not merged', (
+    tester,
+  ) async {
+    final gym = FakeGymRepository.sample();
+    gym.overview = gym.overview.copyWith(
+      exercises: [
+        ...gym.overview.exercises,
+        const GymExercise(
+          id: 'row',
+          name: 'Seated row',
+          notes: '',
+          archived: false,
+          sessionCount: 2,
+          lastPerformed: '2026-08-21',
+          locationIds: ['luqa-gym'],
+        ),
+      ],
+    );
+    await pumpLuqa(tester, gymRepository: gym);
+
+    await tester.tap(find.byIcon(Icons.fitness_center_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Exercises'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('exercise-menu-row')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename…'));
+    await tester.pumpAndSettle();
+
+    // Same name, differently spaced and cased — the way the server judges it.
+    await tester.enterText(
+      find.byKey(const ValueKey('rename-exercise-field')),
+      '  lat   pulldown ',
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('already uses that name'),
+      findsOneWidget,
+    );
+    final save = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('confirm-exercise-rename')),
+    );
+    expect(save.onPressed, isNull);
+    expect(gym.overview.exerciseById('row')!.name, 'Seated row');
+  });
+
+  testWidgets('deletes an exercise with no history outright', (tester) async {
+    final gym = FakeGymRepository.sample();
+    gym.overview = gym.overview.copyWith(
+      exercises: [
+        ...gym.overview.exercises,
+        const GymExercise(
+          id: 'curls',
+          name: 'Preacher curls',
+          notes: '',
+          archived: false,
+          sessionCount: 0,
+          lastPerformed: null,
+          locationIds: [],
+        ),
+      ],
+    );
+    await pumpLuqa(tester, gymRepository: gym);
+
+    await tester.tap(find.byIcon(Icons.fitness_center_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Exercises'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('exercise-menu-curls')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete “Preacher curls”?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirm-exercise-delete')));
+    await tester.pumpAndSettle();
+
+    expect(gym.deletedExerciseIds, ['curls']);
+    expect(find.text('Preacher curls'), findsNothing);
+    expect(find.text('Deleted “Preacher curls”.'), findsOneWidget);
+  });
+
+  testWidgets('deleting a logged exercise says the workouts keep it', (
+    tester,
+  ) async {
+    final gym = FakeGymRepository.sample();
+    await pumpLuqa(tester, gymRepository: gym);
+
+    await tester.tap(find.byIcon(Icons.fitness_center_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Exercises'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('exercise-menu-lat-pulldown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('It is on 5 workouts'), findsOneWidget);
+    expect(find.textContaining('so those keep it'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirm-exercise-delete')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Removed “Lat pulldown”. Your logged workouts still show it.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('deletes the workout that is under way', (tester) async {
+    final gym = FakeGymRepository.sample();
+    await pumpLuqa(tester, gymRepository: gym);
+
+    await tester.tap(find.byIcon(Icons.fitness_center_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue workout'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const ValueKey('weight-0')), '75');
+    await tester.tap(find.byTooltip('Workout options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete workout'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete this workout?'), findsOneWidget);
+    final savesBeforeDelete = gym.saves;
+    await tester.tap(find.byKey(const ValueKey('confirm-workout-delete')));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(gym.deletedSessionIds, ['current-workout']);
+    // Autosave outlives this screen — it runs on a timer and again as the
+    // screen closes. Not one more save may land, or the workout comes back.
+    expect(gym.saves, savesBeforeDelete);
+    // Back on the gym tab, with nothing under way any more.
+    expect(find.text('Continue workout'), findsNothing);
+    expect(find.text('Start workout'), findsOneWidget);
+  });
 }

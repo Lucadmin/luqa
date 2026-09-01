@@ -3,6 +3,7 @@ import { getUserId } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { exerciseKey } from "@/lib/gym";
 import { exerciseUsage, mergeExercises, toExerciseDTO } from "@/lib/server/gym";
+import { reviveExercises } from "@/lib/server/tombstones";
 import { updateExerciseSchema } from "@/lib/validations";
 
 // PATCH /api/gym/exercises/:id — rename, annotate, archive.
@@ -39,6 +40,11 @@ export async function PATCH(
   const d = parsed.data;
 
   if (d.name && exerciseKey(d.name) !== exerciseKey(exercise.name)) {
+    // A deleted exercise still holds its name on the unique key, so renaming
+    // onto one would fail against a row nobody can see. Bringing it back
+    // first turns that into the ordinary clash below, which merges.
+    await reviveExercises(userId, [d.name]);
+
     const clash = (
       await db.exercise.findMany({ where: { userId }, select: { id: true, name: true } })
     ).find((e) => e.id !== id && exerciseKey(e.name) === exerciseKey(d.name as string));

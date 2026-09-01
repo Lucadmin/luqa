@@ -15,6 +15,10 @@ class ExerciseLibraryScreen extends ConsumerStatefulWidget {
 
 class _ExerciseLibraryScreenState extends ConsumerState<ExerciseLibraryScreen> {
   final _search = TextEditingController();
+
+  /// The one exercise whose row is currently doing something slow enough to
+  /// need saying so. Merging is the only such action; renaming and removing
+  /// land on this device immediately.
   String? _mergingExerciseId;
 
   @override
@@ -33,6 +37,87 @@ class _ExerciseLibraryScreenState extends ConsumerState<ExerciseLibraryScreen> {
 
   void _redraw() {
     if (mounted) setState(() {});
+  }
+
+  void _report(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _renameExercise(
+    GymExercise exercise,
+    List<GymExercise> exercises,
+  ) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => _RenameExerciseDialog(
+        exercise: exercise,
+        // Two exercises with the same name would be two histories the graph
+        // cannot tell apart, which is the mess merging exists to clean up.
+        // Better to name the clash and point at merging than to make it.
+        taken: {
+          for (final other in exercises)
+            if (other.id != exercise.id) _nameKey(other.name): other.name,
+        },
+      ),
+    );
+    if (name == null || !mounted) return;
+
+    final renamed = await ref
+        .read(gymOverviewControllerProvider.notifier)
+        .renameExercise(id: exercise.id, name: name);
+    if (!mounted) return;
+    _report(
+      renamed
+          ? 'Renamed “${exercise.name}” to “$name”.'
+          : ref.read(gymOverviewControllerProvider).error ??
+                'Could not rename the exercise.',
+    );
+  }
+
+  Future<void> _deleteExercise(GymExercise exercise) async {
+    final logged = exercise.sessionCount > 0;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete “${exercise.name}”?'),
+        content: Text(
+          logged
+              ? 'It is on ${exercise.sessionCount} '
+                    '${exercise.sessionCount == 1 ? 'workout' : 'workouts'}, so '
+                    'those keep it and it leaves this list. To fold its '
+                    'history into another exercise, merge instead.'
+              : 'Nothing has been logged against it, so it goes for good.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-exercise-delete'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final removal = await ref
+        .read(gymOverviewControllerProvider.notifier)
+        .deleteExercise(exercise.id);
+    if (!mounted) return;
+    _report(
+      removal == null
+          ? ref.read(gymOverviewControllerProvider).error ??
+                'Could not remove the exercise.'
+          : removal.archived
+          ? 'Removed “${exercise.name}”. Your logged workouts still show it.'
+          : 'Deleted “${exercise.name}”.',
+    );
   }
 
   Future<void> _mergeExercise(
@@ -96,16 +181,20 @@ class _ExerciseLibraryScreenState extends ConsumerState<ExerciseLibraryScreen> {
     final state = ref.watch(gymOverviewControllerProvider);
     final overview = state.overview;
     final query = _search.text.trim().toLowerCase();
-    final exercises =
+    // The whole library, which is what merging and renaming reason about: a
+    // name is taken whether or not the current search happens to show it.
+    final library =
         overview?.exercises
-            .where(
-              (exercise) =>
-                  !exercise.archived &&
-                  (query.isEmpty ||
-                      exercise.name.toLowerCase().contains(query)),
-            )
+            .where((exercise) => !exercise.archived)
             .toList(growable: false) ??
         const <GymExercise>[];
+    final exercises = query.isEmpty
+        ? library
+        : library
+              .where(
+                (exercise) => exercise.name.toLowerCase().contains(query),
+              )
+              .toList(growable: false);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Exercises')),
@@ -231,29 +320,42 @@ class _ExerciseLibraryScreenState extends ConsumerState<ExerciseLibraryScreen> {
                                           'exercise-menu-${exercise.id}',
                                         ),
                                         tooltip: 'Actions for ${exercise.name}',
-                                        enabled:
-                                            exercises.length > 1 &&
-                                            _mergingExerciseId == null,
-                                        onSelected: (value) {
-                                          if (value == 'merge') {
-                                            _mergeExercise(exercise, exercises);
-                                          }
+                                        enabled: _mergingExerciseId == null,
+                                        onSelected: (value) => switch (value) {
+                                          'rename' => _renameExercise(
+                                            exercise,
+                                            exercises,
+                                          ),
+                                          'merge' => _mergeExercise(
+                                            exercise,
+                                            exercises,
+                                          ),
+                                          'delete' => _deleteExercise(exercise),
+                                          _ => null,
                                         },
-                                        itemBuilder: (context) => const [
-                                          PopupMenuItem(
-                                            value: 'merge',
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.merge_rounded),
-                                                SizedBox(width: LuqaSpacing.sm),
-                                                Flexible(
-                                                  child: Text(
-                                                    'Merge into another…',
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                              ],
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(
+                                            value: 'rename',
+                                            child: _MenuItem(
+                                              icon: Icons.edit_rounded,
+                                              label: 'Rename…',
+                                            ),
+                                          ),
+                                          // Nothing to merge into when this is
+                                          // the only exercise there is.
+                                          if (exercises.length > 1)
+                                            const PopupMenuItem(
+                                              value: 'merge',
+                                              child: _MenuItem(
+                                                icon: Icons.merge_rounded,
+                                                label: 'Merge into another…',
+                                              ),
+                                            ),
+                                          const PopupMenuItem(
+                                            value: 'delete',
+                                            child: _MenuItem(
+                                              icon: Icons.delete_outline_rounded,
+                                              label: 'Delete',
                                             ),
                                           ),
                                         ],
@@ -270,6 +372,119 @@ class _ExerciseLibraryScreenState extends ConsumerState<ExerciseLibraryScreen> {
     );
   }
 }
+
+class _MenuItem extends StatelessWidget {
+  const _MenuItem({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon),
+        const SizedBox(width: LuqaSpacing.sm),
+        Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+      ],
+    );
+  }
+}
+
+class _RenameExerciseDialog extends StatefulWidget {
+  const _RenameExerciseDialog({required this.exercise, required this.taken});
+
+  final GymExercise exercise;
+
+  /// Every other exercise's name, keyed the way a clash is judged.
+  final Map<String, String> taken;
+
+  @override
+  State<_RenameExerciseDialog> createState() => _RenameExerciseDialogState();
+}
+
+class _RenameExerciseDialogState extends State<_RenameExerciseDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.exercise.name,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_redraw);
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_redraw)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _redraw() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _controller.text.trim();
+    final clash = widget.taken[_nameKey(name)];
+    final canSave = name.isNotEmpty && clash == null;
+
+    return AlertDialog(
+      title: const Text('Rename exercise'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            key: const ValueKey('rename-exercise-field'),
+            controller: _controller,
+            autofocus: true,
+            maxLength: 80,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Name'),
+            onSubmitted: (_) {
+              if (canSave) Navigator.pop(context, name);
+            },
+          ),
+          if (clash != null)
+            Text(
+              '“$clash” already uses that name. Merge the two instead to put '
+              'their history together.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
+            )
+          else
+            Text(
+              'The new name shows on every workout this exercise appears in.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('confirm-exercise-rename'),
+          onPressed: canSave ? () => Navigator.pop(context, name) : null,
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+/// How two spellings are judged to be the same name. Matches the server's
+/// rule, so a rename this screen accepts is not merged away behind the user.
+String _nameKey(String name) =>
+    name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
 class _MergeTargetSheet extends StatefulWidget {
   const _MergeTargetSheet({required this.source, required this.exercises});

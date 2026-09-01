@@ -431,6 +431,131 @@ void main() {
     });
   });
 
+  group('throwing things away', () {
+    test('a workout deleted offline is gone from the phone at once', () async {
+      await givenExercise('bench', 'Bench press');
+      final session = await repository.createSession(
+        dateKey: '2026-08-27',
+        locationId: null,
+      );
+      await repository.saveSession(
+        session.id,
+        _write(
+          exercises: [
+            _lift(
+              'Bench press',
+              exerciseId: 'bench',
+              sets: const [GymSetWrite(weight: 70, reps: 8)],
+            ),
+          ],
+        ),
+      );
+
+      await repository.deleteSession(session.id);
+
+      final overview = await repository.loadOverview();
+      expect(overview.sessions, isEmpty);
+      expect(overview.totalSessions, 0);
+      // The lift stays in the vocabulary; only the day it was logged on went.
+      expect(overview.exerciseById('bench'), isNotNull);
+      expect(overview.exerciseById('bench')!.sessionCount, 0);
+      // Never sent at all: the server was never told the workout existed.
+      expect(queue.pending, isEmpty);
+    });
+
+    test('deleting a workout the server has queues the delete', () async {
+      await local.applySessions([
+        GymSession(
+          id: 'server-1',
+          dateKey: '2026-08-20',
+          locationId: null,
+          notes: '',
+          exercises: const [],
+          createdAt: _now,
+        ),
+      ], const []);
+
+      await repository.deleteSession('server-1');
+
+      expect((await repository.loadOverview()).sessions, isEmpty);
+      final queued = queue.pending.single as DeleteSession;
+      expect(queued.sessionId, 'server-1');
+      expect(queued.dateKey, '2026-08-20');
+    });
+
+    test('renaming an exercise renames it across its history', () async {
+      await givenExercise('lat', 'Lat puldown');
+      final session = await repository.createSession(
+        dateKey: '2026-08-27',
+        locationId: null,
+      );
+      await repository.saveSession(
+        session.id,
+        _write(
+          exercises: [
+            _lift(
+              'Lat puldown',
+              exerciseId: 'lat',
+              sets: const [GymSetWrite(weight: 70, reps: 8)],
+            ),
+          ],
+        ),
+      );
+
+      final update = await repository.updateExercise(
+        id: 'lat',
+        name: 'Lat pulldown',
+      );
+
+      expect(update.exercise.name, 'Lat pulldown');
+      expect(update.mergedInto, isNull);
+      final history = await repository.loadExerciseHistory('lat');
+      expect(history.exercise.name, 'Lat pulldown');
+      expect(history.points, hasLength(1));
+      expect(queue.pending.whereType<UpdateExercise>(), hasLength(1));
+    });
+
+    test('an exercise nothing was logged against is deleted outright', () async {
+      await givenExercise('curls', 'Preacher curls');
+
+      final removal = await repository.deleteExercise('curls');
+
+      expect(removal.deleted, isTrue);
+      expect(removal.archived, isFalse);
+      expect((await repository.loadOverview()).exerciseById('curls'), isNull);
+      expect((queue.pending.single as DeleteExercise).name, 'Preacher curls');
+    });
+
+    test('an exercise with history is archived, and the workout keeps it', () async {
+      await givenExercise('bench', 'Bench press');
+      final session = await repository.createSession(
+        dateKey: '2026-08-27',
+        locationId: null,
+      );
+      await repository.saveSession(
+        session.id,
+        _write(
+          exercises: [
+            _lift(
+              'Bench press',
+              exerciseId: 'bench',
+              sets: const [GymSetWrite(weight: 70, reps: 8)],
+            ),
+          ],
+        ),
+      );
+
+      final removal = await repository.deleteExercise('bench');
+
+      expect(removal.archived, isTrue);
+      expect(removal.deleted, isFalse);
+      final overview = await repository.loadOverview();
+      expect(overview.exerciseById('bench'), isNull);
+      // The workout still reads the way it was written.
+      expect(overview.sessions.single.exercises.single.name, 'Bench press');
+    });
+  });
+
   group('an id the server chose instead', () {
     test('workouts logged at that gym follow it', () async {
       final home = await repository.createLocation(

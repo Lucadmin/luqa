@@ -238,6 +238,8 @@ class ApiClient {
           return CreateSettlementRequest.fromJson(value);
         case 'CreateTimeEntryRequest':
           return CreateTimeEntryRequest.fromJson(value);
+        case 'DeleteGymExerciseResponse':
+          return DeleteGymExerciseResponse.fromJson(value);
         case 'DeletePersonResponse':
           return DeletePersonResponse.fromJson(value);
         case 'DeviceHealthSource':
@@ -280,6 +282,8 @@ class ApiClient {
           return GymExercisePoint.fromJson(value);
         case 'GymExerciseReference':
           return GymExerciseReference.fromJson(value);
+        case 'GymExerciseUpdateResponse':
+          return GymExerciseUpdateResponse.fromJson(value);
         case 'GymLocation':
           return GymLocation.fromJson(value);
         case 'GymLocationDelta':
@@ -436,6 +440,8 @@ class ApiClient {
           return UpdateExpenseRequest.fromJson(value);
         case 'UpdateGroupRequest':
           return UpdateGroupRequest.fromJson(value);
+        case 'UpdateGymExerciseRequest':
+          return UpdateGymExerciseRequest.fromJson(value);
         case 'UpdateGymLocationRequest':
           return UpdateGymLocationRequest.fromJson(value);
         case 'UpdateGymSessionRequest':

@@ -455,6 +455,73 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteGymSession
+      tags: [Gym]
+      summary: Delete a workout
+      description: >-
+        Soft-deletes the workout and everything logged in it, including one
+        that was only just started. The exercise library is untouched.
+      responses:
+        "204":
+          description: Workout deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /gym/exercises/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updateGymExercise
+      tags: [Gym]
+      summary: Rename, annotate, archive, or restore an exercise
+      description: >-
+        Renaming onto a name another exercise already uses merges the two
+        rather than failing, which is the fix for years of spelling drift.
+        `mergedInto` names the surviving exercise when that happened.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGymExerciseRequest"
+      responses:
+        "200":
+          description: Exercise updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GymExerciseUpdateResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteGymExercise
+      tags: [Gym]
+      summary: Remove an exercise from the library
+      description: >-
+        An exercise nothing has been logged against is deleted. One with
+        history is archived instead, so the workouts that used it keep reading
+        the way they were written. `deleted` says which happened.
+      responses:
+        "200":
+          description: Removed or archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteGymExerciseResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /gym/exercises/{id}/merge:
     parameters:
       - name: id
@@ -2575,6 +2642,46 @@ components:
         movedEntries:
           type: integer
           minimum: 0
+    UpdateGymExerciseRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        notes:
+          type: string
+          maxLength: 2000
+        archived:
+          type: boolean
+    GymExerciseUpdateResponse:
+      type: object
+      additionalProperties: false
+      required: [exercise, mergedInto]
+      properties:
+        exercise:
+          $ref: "#/components/schemas/GymExercise"
+        mergedInto:
+          type: [string, "null"]
+          description: >-
+            Set when the new name already belonged to another exercise and the
+            two were merged. `exercise` is then the survivor and the exercise
+            in the path no longer exists.
+    DeleteGymExerciseResponse:
+      type: object
+      additionalProperties: false
+      required: [deleted, archived]
+      properties:
+        deleted:
+          type: boolean
+          description: True when the exercise was removed outright.
+        archived:
+          type: boolean
+          description: >-
+            True when logged workouts still reference it, so it was archived
+            rather than removed.
     GymLocationResponse:
       type: object
       additionalProperties: false

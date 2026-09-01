@@ -24,8 +24,11 @@ sealed class GymMutation implements PendingMutation {
         ? "your ${write.dateKey} workout"
         : 'your ${write.dateKey} workout '
               '(${write.exercises.length} exercises)',
+    DeleteSession(:final dateKey) => "deleting your $dateKey workout",
     CreateLocation(:final location) => 'the gym ${location.name}',
     UpdateLocation(:final name) => 'your edit to ${name ?? 'a gym'}',
+    UpdateExercise(:final name) => 'your edit to ${name ?? 'an exercise'}',
+    DeleteExercise(:final name) => 'removing $name from your exercises',
   };
 
   static GymMutation? fromJson(Map<String, Object?> json) {
@@ -39,6 +42,23 @@ sealed class GymMutation implements PendingMutation {
       'saveSession' => SaveSession(
         sessionId: json['sessionId']! as String,
         write: gymWriteFromJson(json['write']! as Map<String, Object?>),
+        queuedAt: queuedAt,
+      ),
+      'deleteSession' => DeleteSession(
+        sessionId: json['sessionId']! as String,
+        dateKey: json['dateKey']! as String,
+        queuedAt: queuedAt,
+      ),
+      'updateExercise' => UpdateExercise(
+        exerciseId: json['exerciseId']! as String,
+        name: json['name'] as String?,
+        notes: json['notes'] as String?,
+        archived: json['archived'] as bool?,
+        queuedAt: queuedAt,
+      ),
+      'deleteExercise' => DeleteExercise(
+        exerciseId: json['exerciseId']! as String,
+        name: json['name']! as String,
         queuedAt: queuedAt,
       ),
       'createLocation' => CreateLocation(
@@ -96,6 +116,100 @@ final class SaveSession extends GymMutation {
     'queuedAt': queuedAt.toUtc().toIso8601String(),
     'sessionId': sessionId,
     'write': gymWriteToJson(write),
+  };
+}
+
+/// [dateKey] is carried only so the user can be told which workout was lost
+/// if this is ever discarded; the server needs nothing but the id.
+final class DeleteSession extends GymMutation {
+  const DeleteSession({
+    required this.sessionId,
+    required this.dateKey,
+    required super.queuedAt,
+  });
+
+  final String sessionId;
+  final String dateKey;
+
+  @override
+  String get subjectId => sessionId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'deleteSession',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'sessionId': sessionId,
+    'dateKey': dateKey,
+  };
+}
+
+final class UpdateExercise extends GymMutation {
+  const UpdateExercise({
+    required this.exerciseId,
+    required this.name,
+    required this.notes,
+    required this.archived,
+    required super.queuedAt,
+  });
+
+  final String exerciseId;
+  final String? name;
+  final String? notes;
+  final bool? archived;
+
+  @override
+  String get subjectId => exerciseId;
+
+  UpdateExercise mergedOver(UpdateExercise earlier) => UpdateExercise(
+    exerciseId: exerciseId,
+    name: name ?? earlier.name,
+    notes: notes ?? earlier.notes,
+    archived: archived ?? earlier.archived,
+    queuedAt: earlier.queuedAt,
+  );
+
+  GymExercise applyTo(GymExercise exercise) => GymExercise(
+    id: exercise.id,
+    name: name ?? exercise.name,
+    notes: notes ?? exercise.notes,
+    archived: archived ?? exercise.archived,
+    sessionCount: exercise.sessionCount,
+    lastPerformed: exercise.lastPerformed,
+    locationIds: exercise.locationIds,
+  );
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'updateExercise',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'exerciseId': exerciseId,
+    'name': name,
+    'notes': notes,
+    'archived': archived,
+  };
+}
+
+/// [name] is only for the discard notice: the row is already gone from this
+/// device by the time this is sent, so there is nothing left to read it from.
+final class DeleteExercise extends GymMutation {
+  const DeleteExercise({
+    required this.exerciseId,
+    required this.name,
+    required super.queuedAt,
+  });
+
+  final String exerciseId;
+  final String name;
+
+  @override
+  String get subjectId => exerciseId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'deleteExercise',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'exerciseId': exerciseId,
+    'name': name,
   };
 }
 
@@ -168,6 +282,15 @@ final class UpdateLocation extends GymMutation {
 List<GymMutation> foldGym(List<GymMutation> queue, GymMutation next) {
   switch (next) {
     case SaveSession(:final sessionId, :final write):
+      // A workout queued for deletion is not worth filling in first. The
+      // editor can still flush one last autosave as the screen closes behind
+      // a delete, and sending it would resurrect what was just thrown away.
+      if (queue.any(
+        (pending) =>
+            pending is DeleteSession && pending.sessionId == sessionId,
+      )) {
+        return queue;
+      }
       // Deliberately not folded into a pending create: a create only carries
       // the workout's date and gym, so absorbing a save into it would throw
       // away every set that had been entered. A workout logged offline
@@ -186,6 +309,53 @@ List<GymMutation> foldGym(List<GymMutation> queue, GymMutation next) {
               queuedAt: pending.queuedAt,
             ),
           );
+          absorbed = true;
+        } else {
+          folded.add(pending);
+        }
+      }
+      return absorbed ? folded : [...folded, next];
+
+    case DeleteSession(:final sessionId):
+      // A workout the server has never heard of does not need deleting there.
+      // A create still sitting in the queue proves exactly that, so the pair
+      // cancels out and the empty workout never leaves the phone at all.
+      final unsent = queue.any(
+        (pending) =>
+            pending is CreateSession && pending.session.id == sessionId,
+      );
+      final folded = <GymMutation>[
+        for (final pending in queue)
+          if (!(pending is CreateSession && pending.session.id == sessionId) &&
+              !(pending is SaveSession && pending.sessionId == sessionId))
+            pending,
+      ];
+      return unsent ? folded : [...folded, next];
+
+    case DeleteExercise(:final exerciseId):
+      // Renaming something and then removing it leaves only the removal.
+      return [
+        for (final pending in queue)
+          if (!(pending is UpdateExercise &&
+              pending.exerciseId == exerciseId))
+            pending,
+        next,
+      ];
+
+    case UpdateExercise(:final exerciseId):
+      // An exercise already queued for removal is not coming back; an edit
+      // arriving after it would only fail against a row the server has gone.
+      if (queue.any(
+        (pending) =>
+            pending is DeleteExercise && pending.exerciseId == exerciseId,
+      )) {
+        return queue;
+      }
+      final folded = <GymMutation>[];
+      var absorbed = false;
+      for (final pending in queue) {
+        if (pending is UpdateExercise && pending.exerciseId == exerciseId) {
+          folded.add(next.mergedOver(pending));
           absorbed = true;
         } else {
           folded.add(pending);

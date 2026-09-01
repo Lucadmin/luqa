@@ -52,6 +52,10 @@ abstract interface class GymRepository {
 
   Future<GymSession> saveSession(String id, GymSessionWrite write);
 
+  /// Throws away a workout and everything logged in it, started or finished.
+  /// The exercises stay in the library; only this day's entries go.
+  Future<void> deleteSession(String id);
+
   Future<GymSessionPage> loadSessions({String? cursor, int limit = 20});
 
   Future<GymExerciseHistory> loadExerciseHistory(
@@ -59,6 +63,19 @@ abstract interface class GymRepository {
     String? locationId,
     String? beforeSessionId,
   });
+
+  /// Renames, annotates, or archives an exercise across its whole history.
+  Future<GymExerciseUpdate> updateExercise({
+    required String id,
+    String? name,
+    String? notes,
+    bool? archived,
+  });
+
+  /// Takes an exercise out of the library. One that workouts still reference
+  /// is archived rather than erased, so those workouts keep reading the way
+  /// they were written; the result says which happened.
+  Future<GymExerciseRemoval> deleteExercise(String id);
 
   /// Moves every logged performance from [sourceExerciseId] to
   /// [targetExerciseId]. The target name is kept and the source disappears.

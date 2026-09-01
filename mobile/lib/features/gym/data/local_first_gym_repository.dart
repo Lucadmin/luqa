@@ -143,6 +143,20 @@ class LocalFirstGymRepository implements GymRepository {
     return saved;
   }
 
+  @override
+  Future<void> deleteSession(String id) async {
+    await queue.ready;
+    final session = await store.session(id);
+    await _write(
+      DeleteSession(
+        sessionId: id,
+        dateKey: session?.dateKey ?? gymDateKey(_now()),
+        queuedAt: _now(),
+      ),
+      () => store.remove('gym_session', id),
+    );
+  }
+
   /// Repoints anything in the workout at an exercise that has since been
   /// merged into another.
   Future<GymSessionWrite> _resolveExercises(GymSessionWrite write) async {
@@ -234,6 +248,65 @@ class LocalFirstGymRepository implements GymRepository {
 
     await _write(mutation, () => store.putLocation(updated));
     return updated;
+  }
+
+  @override
+  Future<GymExerciseUpdate> updateExercise({
+    required String id,
+    String? name,
+    String? notes,
+    bool? archived,
+  }) async {
+    await queue.ready;
+    // A screen may still be holding the id of an exercise that was merged
+    // away while it was open.
+    final exerciseId = await store.resolve('gym_exercise', id) ?? id;
+    final mutation = UpdateExercise(
+      exerciseId: exerciseId,
+      name: name,
+      notes: notes,
+      archived: archived,
+      queuedAt: _now(),
+    );
+
+    final existing = await store.exercise(exerciseId);
+    if (existing == null) {
+      throw StateError('No exercise $exerciseId on this device');
+    }
+    final updated = mutation.applyTo(existing);
+
+    await _write(mutation, () => store.putExercise(updated));
+    // Whether the new name collides with another exercise is the server's to
+    // say, and it may not be reachable for hours. Locally the rename simply
+    // stands; a merge the server decides on arrives with the next delta.
+    return GymExerciseUpdate(exercise: updated, mergedInto: null);
+  }
+
+  @override
+  Future<GymExerciseRemoval> deleteExercise(String id) async {
+    await queue.ready;
+    final exerciseId = await store.resolve('gym_exercise', id) ?? id;
+    final existing = await store.exercise(exerciseId);
+    if (existing == null) {
+      throw StateError('No exercise $exerciseId on this device');
+    }
+
+    await _write(
+      DeleteExercise(
+        exerciseId: exerciseId,
+        name: existing.name,
+        queuedAt: _now(),
+      ),
+      () => store.remove('gym_exercise', exerciseId),
+    );
+
+    // The server archives anything with logged history instead of erasing it.
+    // This device holds those workouts too, so it can say which will happen
+    // without waiting to be told. Either way the exercise leaves the library.
+    final used = existing.sessionCount > 0;
+    return used
+        ? const GymExerciseRemoval.archived()
+        : const GymExerciseRemoval.deleted();
   }
 
   /// Folding two exercises into one is the server's decision: it owns which

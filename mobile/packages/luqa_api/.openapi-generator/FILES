@@ -20,6 +20,7 @@ doc/CreatePersonRequest.md
 doc/CreateSessionRequest.md
 doc/CreateSettlementRequest.md
 doc/CreateTimeEntryRequest.md
+doc/DeleteGymExerciseResponse.md
 doc/DeletePersonResponse.md
 doc/DeviceHealthSource.md
 doc/EntrySource.md
@@ -42,6 +43,7 @@ doc/GymExerciseHistoryResponse.md
 doc/GymExerciseMergeResponse.md
 doc/GymExercisePoint.md
 doc/GymExerciseReference.md
+doc/GymExerciseUpdateResponse.md
 doc/GymLocation.md
 doc/GymLocationDelta.md
 doc/GymLocationResponse.md
@@ -127,6 +129,7 @@ doc/TimeEntryListResponse.md
 doc/TimeEntryResponse.md
 doc/UpdateExpenseRequest.md
 doc/UpdateGroupRequest.md
+doc/UpdateGymExerciseRequest.md
 doc/UpdateGymLocationRequest.md
 doc/UpdateGymSessionRequest.md
 doc/UpdateHabitRequest.md
@@ -171,6 +174,7 @@ lib/model/create_person_request.dart
 lib/model/create_session_request.dart
 lib/model/create_settlement_request.dart
 lib/model/create_time_entry_request.dart
+lib/model/delete_gym_exercise_response.dart
 lib/model/delete_person_response.dart
 lib/model/device_health_source.dart
 lib/model/entry_source.dart
@@ -192,6 +196,7 @@ lib/model/gym_exercise_history_response.dart
 lib/model/gym_exercise_merge_response.dart
 lib/model/gym_exercise_point.dart
 lib/model/gym_exercise_reference.dart
+lib/model/gym_exercise_update_response.dart
 lib/model/gym_location.dart
 lib/model/gym_location_delta.dart
 lib/model/gym_location_response.dart
@@ -270,6 +275,7 @@ lib/model/time_entry_list_response.dart
 lib/model/time_entry_response.dart
 lib/model/update_expense_request.dart
 lib/model/update_group_request.dart
+lib/model/update_gym_exercise_request.dart
 lib/model/update_gym_location_request.dart
 lib/model/update_gym_session_request.dart
 lib/model/update_habit_request.dart

@@ -45,6 +45,34 @@ class GymSyncEngine extends Notifier<SyncState> with SyncQueue<GymMutation> {
       case SaveSession(:final sessionId, :final write):
         await _remote.saveSession(sessionId, write);
         await _store?.settle('gym_session', sessionId);
+      case DeleteSession(:final sessionId):
+        await _remote.deleteSession(sessionId);
+        await _store?.settle('gym_session', sessionId);
+      case UpdateExercise(:final exerciseId):
+        final update = await _remote.updateExercise(
+          id: exerciseId,
+          name: mutation.name,
+          notes: mutation.notes,
+          archived: mutation.archived,
+        );
+        final mergedInto = update.mergedInto;
+        if (mergedInto == null) {
+          await _store?.settle('gym_exercise', exerciseId);
+          break;
+        }
+        // The new name already belonged to another exercise, so the server
+        // folded the two rather than refusing. This device is still holding
+        // the retired id: record where it went, then drop the row the next
+        // delta will confirm is gone.
+        await _store?.recordMerge(exerciseId, mergedInto);
+        await _store?.remove('gym_exercise', exerciseId);
+        await _store?.settle('gym_exercise', exerciseId);
+      case DeleteExercise(:final exerciseId):
+        // Archived rather than deleted when workouts still reference it; the
+        // row comes back on the next pull and stays out of the library either
+        // way, so both outcomes leave the phone showing the same thing.
+        await _remote.deleteExercise(exerciseId);
+        await _store?.settle('gym_exercise', exerciseId);
       case CreateLocation(:final location):
         final saved = await _remote.createLocation(
           id: location.id,

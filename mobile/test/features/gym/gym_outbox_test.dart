@@ -108,6 +108,135 @@ void main() {
       expect((queue.single as CreateLocation).location.code, 'HOME');
     });
 
+    test('a workout started and thrown away offline never leaves the phone', () {
+      var queue = foldGym(
+        const [],
+        CreateSession(session: _session('w1'), queuedAt: _at),
+      );
+      queue = foldGym(
+        queue,
+        SaveSession(
+          sessionId: 'w1',
+          write: _write(sets: const [GymSetWrite(weight: 75, reps: 10)]),
+          queuedAt: _at,
+        ),
+      );
+
+      queue = foldGym(
+        queue,
+        DeleteSession(sessionId: 'w1', dateKey: '2026-08-31', queuedAt: _at),
+      );
+
+      expect(queue, isEmpty);
+    });
+
+    test('deleting a workout the server has drops its queued saves', () {
+      var queue = foldGym(
+        const [],
+        SaveSession(sessionId: 'server-1', write: _write(), queuedAt: _at),
+      );
+
+      queue = foldGym(
+        queue,
+        DeleteSession(
+          sessionId: 'server-1',
+          dateKey: '2026-08-31',
+          queuedAt: _at,
+        ),
+      );
+
+      expect(queue, hasLength(1));
+      expect(queue.single, isA<DeleteSession>());
+    });
+
+    test('a last autosave behind a delete cannot resurrect the workout', () {
+      var queue = foldGym(
+        const [],
+        DeleteSession(
+          sessionId: 'server-1',
+          dateKey: '2026-08-31',
+          queuedAt: _at,
+        ),
+      );
+
+      queue = foldGym(
+        queue,
+        SaveSession(sessionId: 'server-1', write: _write(), queuedAt: _at),
+      );
+
+      expect(queue.single, isA<DeleteSession>());
+    });
+
+    test('renaming an exercise twice sends the name it ended up with', () {
+      var queue = foldGym(
+        const [],
+        UpdateExercise(
+          exerciseId: 'e1',
+          name: 'Lat Puldown',
+          notes: 'wide grip',
+          archived: null,
+          queuedAt: _at,
+        ),
+      );
+
+      queue = foldGym(
+        queue,
+        UpdateExercise(
+          exerciseId: 'e1',
+          name: 'Lat pulldown',
+          notes: null,
+          archived: null,
+          queuedAt: _at,
+        ),
+      );
+
+      expect(queue, hasLength(1));
+      final folded = queue.single as UpdateExercise;
+      expect(folded.name, 'Lat pulldown');
+      // The note came from the earlier edit and was never taken back.
+      expect(folded.notes, 'wide grip');
+    });
+
+    test('an exercise renamed and then removed is only removed', () {
+      var queue = foldGym(
+        const [],
+        UpdateExercise(
+          exerciseId: 'e1',
+          name: 'Lat pulldown',
+          notes: null,
+          archived: null,
+          queuedAt: _at,
+        ),
+      );
+
+      queue = foldGym(
+        queue,
+        DeleteExercise(exerciseId: 'e1', name: 'Lat pulldown', queuedAt: _at),
+      );
+
+      expect(queue.single, isA<DeleteExercise>());
+    });
+
+    test('an edit queued behind a removal is dropped', () {
+      var queue = foldGym(
+        const [],
+        DeleteExercise(exerciseId: 'e1', name: 'Lat pulldown', queuedAt: _at),
+      );
+
+      queue = foldGym(
+        queue,
+        UpdateExercise(
+          exerciseId: 'e1',
+          name: 'Latzug',
+          notes: null,
+          archived: null,
+          queuedAt: _at,
+        ),
+      );
+
+      expect(queue.single, isA<DeleteExercise>());
+    });
+
     test('workouts and gyms stay in the order they were made', () {
       var queue = foldGym(
         const [],
@@ -181,6 +310,15 @@ void main() {
           archived: true,
           queuedAt: _at,
         ),
+        DeleteSession(sessionId: 'w2', dateKey: '2026-08-30', queuedAt: _at),
+        UpdateExercise(
+          exerciseId: 'e1',
+          name: 'Lat pulldown',
+          notes: 'wide grip',
+          archived: false,
+          queuedAt: _at,
+        ),
+        DeleteExercise(exerciseId: 'e2', name: 'Latzug', queuedAt: _at),
       ];
 
       final restored = [
@@ -192,12 +330,19 @@ void main() {
         'w1',
         'g1',
         'g1',
+        'w2',
+        'e1',
+        'e2',
       ]);
       final write = (restored[1] as SaveSession).write;
       expect(write.notes, 'Felt strong');
       expect(write.exercises.single.sets.single.note, 'lf');
       expect((restored[2] as CreateLocation).location.colorValue, 0xFF123456);
       expect((restored[3] as UpdateLocation).archived, isTrue);
+      expect((restored[4] as DeleteSession).dateKey, '2026-08-30');
+      expect((restored[5] as UpdateExercise).notes, 'wide grip');
+      expect((restored[5] as UpdateExercise).archived, isFalse);
+      expect((restored[6] as DeleteExercise).name, 'Latzug');
     });
 
     test('an op written by a newer build is skipped rather than fatal', () {

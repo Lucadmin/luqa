@@ -141,3 +141,38 @@ export async function PATCH(
   });
   return mobileJson({ session: toGymSessionDTO(session) });
 }
+
+// Soft-deletes a workout, including one that was only just started and has
+// nothing in it yet. The exercise library is untouched: a lift stays in the
+// vocabulary even when the day it was logged on is thrown away.
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  let mobileSession;
+  try {
+    mobileSession = await authenticateMobileRequest(request);
+  } catch (error) {
+    const response = mobileAuthError(error);
+    if (response) return response;
+    throw error;
+  }
+
+  const { id } = await params;
+  const existing = await db.gymSession.findFirst({
+    where: { id, userId: mobileSession.userId },
+    select: { id: true },
+  });
+  if (!existing) {
+    return mobileJson(
+      { error: { code: "not_found", message: "Workout not found" } },
+      { status: 404 },
+    );
+  }
+
+  await db.gymSession.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+  return new Response(null, { status: 204 });
+}

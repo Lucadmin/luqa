@@ -349,7 +349,7 @@ class _HistoryPointRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  MaterialLocalizations.of(context).formatMediumDate(date),
+                  gymDatedLabel(context, date),
                   style: Theme.of(
                     context,
                   ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),

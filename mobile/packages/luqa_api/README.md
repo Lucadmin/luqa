@@ -66,11 +66,14 @@ Class | Method | HTTP request | Description
 *CategoriesApi* | [**listCategories**](doc//CategoriesApi.md#listcategories) | **GET** /categories | List the current user's categories
 *GymApi* | [**createGymLocation**](doc//GymApi.md#creategymlocation) | **POST** /gym/locations | Add a gym
 *GymApi* | [**createGymSession**](doc//GymApi.md#creategymsession) | **POST** /gym/sessions | Start an autosaved workout
+*GymApi* | [**deleteGymExercise**](doc//GymApi.md#deletegymexercise) | **DELETE** /gym/exercises/{id} | Remove an exercise from the library
+*GymApi* | [**deleteGymSession**](doc//GymApi.md#deletegymsession) | **DELETE** /gym/sessions/{id} | Delete a workout
 *GymApi* | [**getGymExerciseHistory**](doc//GymApi.md#getgymexercisehistory) | **GET** /gym/exercises/{id}/history | Load one exercise's progress history
 *GymApi* | [**getGymOverview**](doc//GymApi.md#getgymoverview) | **GET** /gym | Load gyms, exercises, per-gym references, and recent workouts
 *GymApi* | [**getGymSession**](doc//GymApi.md#getgymsession) | **GET** /gym/sessions/{id} | Load one workout
 *GymApi* | [**listGymSessions**](doc//GymApi.md#listgymsessions) | **GET** /gym/sessions | List workouts newest first
 *GymApi* | [**mergeGymExercise**](doc//GymApi.md#mergegymexercise) | **POST** /gym/exercises/{id}/merge | Merge a duplicate exercise into another exercise
+*GymApi* | [**updateGymExercise**](doc//GymApi.md#updategymexercise) | **PATCH** /gym/exercises/{id} | Rename, annotate, archive, or restore an exercise
 *GymApi* | [**updateGymLocation**](doc//GymApi.md#updategymlocation) | **PATCH** /gym/locations/{id} | Edit, archive, or restore a gym
 *GymApi* | [**updateGymSession**](doc//GymApi.md#updategymsession) | **PATCH** /gym/sessions/{id} | Autosave a workout draft
 *HabitsApi* | [**archiveHabit**](doc//HabitsApi.md#archivehabit) | **DELETE** /habits/{id} | Archive a habit
@@ -141,6 +144,7 @@ Class | Method | HTTP request | Description
  - [CreateSessionRequest](doc//CreateSessionRequest.md)
  - [CreateSettlementRequest](doc//CreateSettlementRequest.md)
  - [CreateTimeEntryRequest](doc//CreateTimeEntryRequest.md)
+ - [DeleteGymExerciseResponse](doc//DeleteGymExerciseResponse.md)
  - [DeletePersonResponse](doc//DeletePersonResponse.md)
  - [DeviceHealthSource](doc//DeviceHealthSource.md)
  - [EntrySource](doc//EntrySource.md)
@@ -162,6 +166,7 @@ Class | Method | HTTP request | Description
  - [GymExerciseMergeResponse](doc//GymExerciseMergeResponse.md)
  - [GymExercisePoint](doc//GymExercisePoint.md)
  - [GymExerciseReference](doc//GymExerciseReference.md)
+ - [GymExerciseUpdateResponse](doc//GymExerciseUpdateResponse.md)
  - [GymLocation](doc//GymLocation.md)
  - [GymLocationDelta](doc//GymLocationDelta.md)
  - [GymLocationResponse](doc//GymLocationResponse.md)
@@ -240,6 +245,7 @@ Class | Method | HTTP request | Description
  - [TimeEntryResponse](doc//TimeEntryResponse.md)
  - [UpdateExpenseRequest](doc//UpdateExpenseRequest.md)
  - [UpdateGroupRequest](doc//UpdateGroupRequest.md)
+ - [UpdateGymExerciseRequest](doc//UpdateGymExerciseRequest.md)
  - [UpdateGymLocationRequest](doc//UpdateGymLocationRequest.md)
  - [UpdateGymSessionRequest](doc//UpdateGymSessionRequest.md)
  - [UpdateHabitRequest](doc//UpdateHabitRequest.md)

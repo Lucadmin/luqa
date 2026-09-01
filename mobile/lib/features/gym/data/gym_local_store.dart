@@ -213,6 +213,30 @@ class GymLocalStore {
 
   Future<List<GymLocation>> locations() async => _locations(await _db);
 
+  /// One exercise with the counts derived from this device's workouts, which
+  /// is what decides whether removing it can erase it or has to archive it.
+  Future<GymExercise?> exercise(String id) async {
+    final db = await _db;
+    final rows = await db.query(
+      'gym_exercise',
+      where: 'namespace = ? AND id = ? AND removed = 0',
+      whereArgs: [namespace, id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    final stats = (await _usage(db))[id];
+    return GymExercise(
+      id: row['id']! as String,
+      name: row['name']! as String,
+      notes: row['notes']! as String,
+      archived: (row['archived']! as int) == 1,
+      sessionCount: stats?.sessionCount ?? 0,
+      lastPerformed: stats?.lastPerformed,
+      locationIds: stats?.locationIds.toList() ?? const [],
+    );
+  }
+
   // ------------------------------------------------------- local mutations
 
   Future<void> putLocation(

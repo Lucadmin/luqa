@@ -143,6 +143,131 @@ class GymApi {
     return null;
   }
 
+  /// Remove an exercise from the library
+  ///
+  /// An exercise nothing has been logged against is deleted. One with history is archived instead, so the workouts that used it keep reading the way they were written. `deleted` says which happened.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  Future<Response> deleteGymExerciseWithHttpInfo(
+    String id, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/gym/exercises/{id}'.replaceAll('{id}', id);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Remove an exercise from the library
+  ///
+  /// An exercise nothing has been logged against is deleted. One with history is archived instead, so the workouts that used it keep reading the way they were written. `deleted` says which happened.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  Future<DeleteGymExerciseResponse?> deleteGymExercise(
+    String id, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await deleteGymExerciseWithHttpInfo(
+      id,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'DeleteGymExerciseResponse',
+      ) as DeleteGymExerciseResponse;
+    }
+    return null;
+  }
+
+  /// Delete a workout
+  ///
+  /// Soft-deletes the workout and everything logged in it, including one that was only just started. The exercise library is untouched.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  Future<Response> deleteGymSessionWithHttpInfo(
+    String id, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/gym/sessions/{id}'.replaceAll('{id}', id);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Delete a workout
+  ///
+  /// Soft-deletes the workout and everything logged in it, including one that was only just started. The exercise library is untouched.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  Future<void> deleteGymSession(
+    String id, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await deleteGymSessionWithHttpInfo(
+      id,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Load one exercise's progress history
   ///
   /// Note: This method returns the HTTP [Response].
@@ -515,6 +640,81 @@ class GymApi {
         await _decodeBodyBytes(response),
         'GymExerciseMergeResponse',
       ) as GymExerciseMergeResponse;
+    }
+    return null;
+  }
+
+  /// Rename, annotate, archive, or restore an exercise
+  ///
+  /// Renaming onto a name another exercise already uses merges the two rather than failing, which is the fix for years of spelling drift. `mergedInto` names the surviving exercise when that happened.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  ///
+  /// * [UpdateGymExerciseRequest] updateGymExerciseRequest (required):
+  Future<Response> updateGymExerciseWithHttpInfo(
+    String id,
+    UpdateGymExerciseRequest updateGymExerciseRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/gym/exercises/{id}'.replaceAll('{id}', id);
+
+    // ignore: prefer_final_locals
+    Object? postBody = updateGymExerciseRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PATCH',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Rename, annotate, archive, or restore an exercise
+  ///
+  /// Renaming onto a name another exercise already uses merges the two rather than failing, which is the fix for years of spelling drift. `mergedInto` names the surviving exercise when that happened.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  ///
+  /// * [UpdateGymExerciseRequest] updateGymExerciseRequest (required):
+  Future<GymExerciseUpdateResponse?> updateGymExercise(
+    String id,
+    UpdateGymExerciseRequest updateGymExerciseRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await updateGymExerciseWithHttpInfo(
+      id,
+      updateGymExerciseRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'GymExerciseUpdateResponse',
+      ) as GymExerciseUpdateResponse;
     }
     return null;
   }

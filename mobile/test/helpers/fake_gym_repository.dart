@@ -151,6 +151,8 @@ class FakeGymRepository implements GymRepository {
 
   GymOverview overview;
   final Map<String, GymExerciseHistory> histories;
+  final List<String> deletedSessionIds = [];
+  final List<String> deletedExerciseIds = [];
   int saves = 0;
   Object? saveError;
   Completer<void>? saveStarted;
@@ -238,6 +240,60 @@ class FakeGymRepository implements GymRepository {
       bestEver: null,
       heaviest: null,
     );
+  }
+
+  @override
+  Future<void> deleteSession(String id) async {
+    deletedSessionIds.add(id);
+    final remaining = overview.sessions
+        .where((session) => session.id != id)
+        .toList(growable: false);
+    overview = overview.copyWith(
+      sessions: remaining,
+      totalSessions:
+          overview.totalSessions -
+          (overview.sessions.length - remaining.length),
+    );
+  }
+
+  @override
+  Future<GymExerciseUpdate> updateExercise({
+    required String id,
+    String? name,
+    String? notes,
+    bool? archived,
+  }) async {
+    final existing = overview.exerciseById(id)!;
+    final updated = GymExercise(
+      id: existing.id,
+      name: name ?? existing.name,
+      notes: notes ?? existing.notes,
+      archived: archived ?? existing.archived,
+      sessionCount: existing.sessionCount,
+      lastPerformed: existing.lastPerformed,
+      locationIds: existing.locationIds,
+    );
+    overview = overview.copyWith(
+      exercises: [
+        for (final exercise in overview.exercises)
+          if (exercise.id == id) updated else exercise,
+      ],
+    );
+    return GymExerciseUpdate(exercise: updated, mergedInto: null);
+  }
+
+  @override
+  Future<GymExerciseRemoval> deleteExercise(String id) async {
+    final existing = overview.exerciseById(id)!;
+    deletedExerciseIds.add(id);
+    overview = overview.copyWith(
+      exercises: overview.exercises
+          .where((exercise) => exercise.id != id)
+          .toList(growable: false),
+    );
+    return existing.sessionCount > 0
+        ? const GymExerciseRemoval.archived()
+        : const GymExerciseRemoval.deleted();
   }
 
   @override

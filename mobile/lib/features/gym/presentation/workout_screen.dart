@@ -85,6 +85,61 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen>
     unawaited(HapticFeedback.selectionClick());
   }
 
+  /// Throws the whole workout away — the one being logged right now included.
+  ///
+  /// The autosave is stopped before anything else, or the flush that runs as
+  /// this screen closes would queue a save for a workout that is already
+  /// gone.
+  Future<void> _deleteWorkout(WorkoutState state) async {
+    final draft = state.draft;
+    final logged = draft?.exercises.length ?? 0;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this workout?'),
+        content: Text(
+          logged == 0
+              ? 'Nothing has been logged in it yet.'
+              : 'Its $logged ${logged == 1 ? 'exercise' : 'exercises'} and '
+                    'every set in them go with it. Your exercise list is not '
+                    'touched. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-workout-delete'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    _controller.abandon();
+    final deleted = await ref
+        .read(gymOverviewControllerProvider.notifier)
+        .deleteSession(widget.sessionId);
+    if (!mounted) return;
+    if (!deleted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              ref.read(gymOverviewControllerProvider).error ??
+                  'Could not delete the workout.',
+            ),
+          ),
+        );
+      return;
+    }
+    if (context.canPop()) context.pop();
+  }
+
   void _openHistory(WorkoutState state) {
     final exercise = state.activeExercise;
     if (exercise?.exerciseId == null) return;
@@ -134,6 +189,7 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen>
                 if (value == 'notes') {
                   setState(() => _showExerciseNotes = true);
                 }
+                if (value == 'delete') unawaited(_deleteWorkout(state));
               },
               itemBuilder: (context) => [
                 const PopupMenuItem(
@@ -144,6 +200,12 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen>
                   const PopupMenuItem(
                     value: 'remove',
                     child: Text('Remove exercise'),
+                  ),
+                if (state.draft != null)
+                  const PopupMenuItem(
+                    key: ValueKey('delete-workout'),
+                    value: 'delete',
+                    child: Text('Delete workout'),
                   ),
               ],
             ),

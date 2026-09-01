@@ -63,6 +63,9 @@ class RemoteGymRepository implements GymRepository {
   }
 
   @override
+  Future<void> deleteSession(String id) => client.deleteGymSession(id);
+
+  @override
   Future<GymSessionPage> loadSessions({String? cursor, int limit = 20}) async {
     final response = await client.listGymSessions(cursor: cursor, limit: limit);
     return GymSessionPage(
@@ -83,6 +86,42 @@ class RemoteGymRepository implements GymRepository {
       beforeSessionId: beforeSessionId,
     ),
   );
+
+  @override
+  Future<GymExerciseUpdate> updateExercise({
+    required String id,
+    String? name,
+    String? notes,
+    bool? archived,
+  }) async {
+    final response = await client.updateGymExercise(
+      id,
+      api.UpdateGymExerciseRequest(
+        name: name == null
+            ? const api.Optional.absent()
+            : api.Optional.present(name),
+        notes: notes == null
+            ? const api.Optional.absent()
+            : api.Optional.present(notes),
+        archived: archived == null
+            ? const api.Optional.absent()
+            : api.Optional.present(archived),
+      ),
+    );
+    return GymExerciseUpdate(
+      exercise: gymExerciseFromApi(response.exercise),
+      mergedInto: response.mergedInto,
+    );
+  }
+
+  @override
+  Future<GymExerciseRemoval> deleteExercise(String id) async {
+    final response = await client.deleteGymExercise(id);
+    return GymExerciseRemoval(
+      deleted: response.deleted,
+      archived: response.archived,
+    );
+  }
 
   @override
   Future<GymExercise> mergeExercise({

@@ -69,6 +69,18 @@ abstract interface class LuqaApi {
     String? beforeSessionId,
   });
 
+  Future<void> deleteGymSession(String id);
+
+  /// Returns the exercise as it now stands, plus the id it was merged into
+  /// when the new name already belonged to another exercise.
+  Future<api.GymExerciseUpdateResponse> updateGymExercise(
+    String id,
+    api.UpdateGymExerciseRequest request,
+  );
+
+  /// Removes the exercise, or archives it when workouts still reference it.
+  Future<api.DeleteGymExerciseResponse> deleteGymExercise(String id);
+
   Future<api.GymExercise> mergeGymExercise(
     String sourceExerciseId,
     String targetExerciseId,
@@ -510,6 +522,33 @@ class LuqaApiClient implements LuqaApi {
     if (response == null) throw api.ApiException(500, 'Empty response');
     return response.history;
   });
+
+  @override
+  Future<void> deleteGymSession(String id) => _authorized(
+    (client) => api.GymApi(client).deleteGymSession(id).timeout(_requestTimeout),
+  );
+
+  @override
+  Future<api.GymExerciseUpdateResponse> updateGymExercise(
+    String id,
+    api.UpdateGymExerciseRequest request,
+  ) => _authorized((client) async {
+    final response = await api.GymApi(
+      client,
+    ).updateGymExercise(id, request).timeout(_requestTimeout);
+    if (response == null) throw api.ApiException(500, 'Empty response');
+    return response;
+  });
+
+  @override
+  Future<api.DeleteGymExerciseResponse> deleteGymExercise(String id) =>
+      _authorized((client) async {
+        final response = await api.GymApi(
+          client,
+        ).deleteGymExercise(id).timeout(_requestTimeout);
+        if (response == null) throw api.ApiException(500, 'Empty response');
+        return response;
+      });
 
   @override
   Future<api.GymExercise> mergeGymExercise(

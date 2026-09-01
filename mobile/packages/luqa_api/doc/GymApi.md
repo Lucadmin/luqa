@@ -11,11 +11,14 @@ Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**createGymLocation**](GymApi.md#creategymlocation) | **POST** /gym/locations | Add a gym
 [**createGymSession**](GymApi.md#creategymsession) | **POST** /gym/sessions | Start an autosaved workout
+[**deleteGymExercise**](GymApi.md#deletegymexercise) | **DELETE** /gym/exercises/{id} | Remove an exercise from the library
+[**deleteGymSession**](GymApi.md#deletegymsession) | **DELETE** /gym/sessions/{id} | Delete a workout
 [**getGymExerciseHistory**](GymApi.md#getgymexercisehistory) | **GET** /gym/exercises/{id}/history | Load one exercise's progress history
 [**getGymOverview**](GymApi.md#getgymoverview) | **GET** /gym | Load gyms, exercises, per-gym references, and recent workouts
 [**getGymSession**](GymApi.md#getgymsession) | **GET** /gym/sessions/{id} | Load one workout
 [**listGymSessions**](GymApi.md#listgymsessions) | **GET** /gym/sessions | List workouts newest first
 [**mergeGymExercise**](GymApi.md#mergegymexercise) | **POST** /gym/exercises/{id}/merge | Merge a duplicate exercise into another exercise
+[**updateGymExercise**](GymApi.md#updategymexercise) | **PATCH** /gym/exercises/{id} | Rename, annotate, archive, or restore an exercise
 [**updateGymLocation**](GymApi.md#updategymlocation) | **PATCH** /gym/locations/{id} | Edit, archive, or restore a gym
 [**updateGymSession**](GymApi.md#updategymsession) | **PATCH** /gym/sessions/{id} | Autosave a workout draft
 
@@ -110,6 +113,103 @@ Name | Type | Description  | Notes
 ### HTTP request headers
 
  - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **deleteGymExercise**
+> DeleteGymExerciseResponse deleteGymExercise(id)
+
+Remove an exercise from the library
+
+An exercise nothing has been logged against is deleted. One with history is archived instead, so the workouts that used it keep reading the way they were written. `deleted` says which happened.
+
+### Example
+```dart
+import 'package:luqa_api/api.dart';
+// TODO Configure HTTP Bearer authorization: mobileBearer
+// Case 1. Use String Token
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken('YOUR_ACCESS_TOKEN');
+// Case 2. Use Function which generate token.
+// String yourTokenGeneratorFunction() { ... }
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken(yourTokenGeneratorFunction);
+
+final api_instance = GymApi();
+final id = id_example; // String |
+
+try {
+    final result = api_instance.deleteGymExercise(id);
+    print(result);
+} catch (e) {
+    print('Exception when calling GymApi->deleteGymExercise: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **id** | **String**|  |
+
+### Return type
+
+[**DeleteGymExerciseResponse**](DeleteGymExerciseResponse.md)
+
+### Authorization
+
+[mobileBearer](../README.md#mobileBearer)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **deleteGymSession**
+> deleteGymSession(id)
+
+Delete a workout
+
+Soft-deletes the workout and everything logged in it, including one that was only just started. The exercise library is untouched.
+
+### Example
+```dart
+import 'package:luqa_api/api.dart';
+// TODO Configure HTTP Bearer authorization: mobileBearer
+// Case 1. Use String Token
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken('YOUR_ACCESS_TOKEN');
+// Case 2. Use Function which generate token.
+// String yourTokenGeneratorFunction() { ... }
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken(yourTokenGeneratorFunction);
+
+final api_instance = GymApi();
+final id = id_example; // String |
+
+try {
+    api_instance.deleteGymSession(id);
+} catch (e) {
+    print('Exception when calling GymApi->deleteGymSession: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **id** | **String**|  |
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+[mobileBearer](../README.md#mobileBearer)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
  - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
@@ -347,6 +447,57 @@ Name | Type | Description  | Notes
 ### Return type
 
 [**GymExerciseMergeResponse**](GymExerciseMergeResponse.md)
+
+### Authorization
+
+[mobileBearer](../README.md#mobileBearer)
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **updateGymExercise**
+> GymExerciseUpdateResponse updateGymExercise(id, updateGymExerciseRequest)
+
+Rename, annotate, archive, or restore an exercise
+
+Renaming onto a name another exercise already uses merges the two rather than failing, which is the fix for years of spelling drift. `mergedInto` names the surviving exercise when that happened.
+
+### Example
+```dart
+import 'package:luqa_api/api.dart';
+// TODO Configure HTTP Bearer authorization: mobileBearer
+// Case 1. Use String Token
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken('YOUR_ACCESS_TOKEN');
+// Case 2. Use Function which generate token.
+// String yourTokenGeneratorFunction() { ... }
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken(yourTokenGeneratorFunction);
+
+final api_instance = GymApi();
+final id = id_example; // String |
+final updateGymExerciseRequest = UpdateGymExerciseRequest(); // UpdateGymExerciseRequest |
+
+try {
+    final result = api_instance.updateGymExercise(id, updateGymExerciseRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling GymApi->updateGymExercise: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **id** | **String**|  |
+ **updateGymExerciseRequest** | [**UpdateGymExerciseRequest**](UpdateGymExerciseRequest.md)|  |
+
+### Return type
+
+[**GymExerciseUpdateResponse**](GymExerciseUpdateResponse.md)
 
 ### Authorization
 

@@ -243,6 +243,11 @@ class WorkoutController extends Notifier<WorkoutState> {
   int _loadGeneration = 0;
   int _historyGeneration = 0;
 
+  /// Set once the workout has been thrown away. Autosave outlives the screen
+  /// — it runs on a timer and again as the app goes to the background — so
+  /// without this a save could arrive after the delete and bring it back.
+  bool _abandoned = false;
+
   static const autosaveDelay = Duration(milliseconds: 600);
 
   @override
@@ -419,7 +424,15 @@ class WorkoutController extends Notifier<WorkoutState> {
     _edit(draft.copyWith(exercises: exercises));
   }
 
+  /// Stops autosaving for good, because the workout is being deleted.
+  void abandon() {
+    _abandoned = true;
+    _autosaveTimer?.cancel();
+    _autosaveTimer = null;
+  }
+
   void _edit(WorkoutDraft draft) {
+    if (_abandoned) return;
     state = state.copyWith(
       draft: draft,
       revision: state.revision + 1,
@@ -458,6 +471,7 @@ class WorkoutController extends Notifier<WorkoutState> {
 
   Future<void> flush() {
     _autosaveTimer?.cancel();
+    if (_abandoned) return Future<void>.value();
     final existing = _saveFuture;
     if (existing != null) return existing;
     final future = _drainSaves();

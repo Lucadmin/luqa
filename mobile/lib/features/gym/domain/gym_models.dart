@@ -210,6 +210,32 @@ class GymExerciseHistory {
   GymExercisePoint? get lastPoint => points.isEmpty ? null : points.last;
 }
 
+/// What came back from editing an exercise.
+///
+/// [mergedInto] is set when the new name already belonged to another exercise
+/// and the server folded the two together instead of refusing the rename. The
+/// exercise that was edited no longer exists in that case; [exercise] is the
+/// one that survived.
+class GymExerciseUpdate {
+  const GymExerciseUpdate({required this.exercise, required this.mergedInto});
+
+  final GymExercise exercise;
+  final String? mergedInto;
+}
+
+/// What came back from removing an exercise. Anything with logged history is
+/// archived rather than erased, which is what [archived] reports.
+class GymExerciseRemoval {
+  const GymExerciseRemoval({required this.deleted, required this.archived});
+
+  const GymExerciseRemoval.deleted() : deleted = true, archived = false;
+
+  const GymExerciseRemoval.archived() : deleted = false, archived = true;
+
+  final bool deleted;
+  final bool archived;
+}
+
 class GymSessionPage {
   const GymSessionPage({required this.sessions, required this.nextCursor});
 

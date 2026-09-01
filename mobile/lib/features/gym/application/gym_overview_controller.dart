@@ -192,6 +192,138 @@ class GymOverviewController extends Notifier<GymOverviewState> {
     }
   }
 
+  /// Throws away a workout, including one started minutes ago. It leaves the
+  /// screen at once; the server is told when it can be.
+  Future<bool> deleteSession(String id) async {
+    state = state.copyWith(clearError: true);
+    final overview = state.overview;
+    // Off the screen straight away, and put back if the device itself refuses
+    // the write — the only failure that reaches here.
+    if (overview != null) {
+      final remaining = overview.sessions
+          .where((session) => session.id != id)
+          .toList(growable: false);
+      state = state.copyWith(
+        overview: overview.copyWith(
+          sessions: remaining,
+          totalSessions: overview.totalSessions -
+              (overview.sessions.length - remaining.length),
+        ),
+      );
+    }
+
+    try {
+      await _repository.deleteSession(id);
+      return true;
+    } on Object catch (error) {
+      if (!ref.mounted) return false;
+      state = state.copyWith(
+        overview: overview,
+        error: describeNetworkFailure(
+          error,
+          whileDoing: 'deleting the workout',
+        ),
+      );
+      return false;
+    }
+  }
+
+  /// Renames an exercise everywhere it appears.
+  Future<bool> renameExercise({
+    required String id,
+    required String name,
+  }) async {
+    state = state.copyWith(clearError: true);
+    try {
+      final update = await _repository.updateExercise(id: id, name: name);
+      if (!ref.mounted) return true;
+      final overview = state.overview;
+      if (overview != null) {
+        state = state.copyWith(
+          overview: _withExercise(overview, update.exercise),
+          clearError: true,
+        );
+      }
+      return true;
+    } on Object catch (error) {
+      if (ref.mounted) {
+        state = state.copyWith(
+          error: describeNetworkFailure(
+            error,
+            whileDoing: 'renaming the exercise',
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  /// Takes an exercise out of the library. One that workouts still reference
+  /// is archived rather than erased; the result says which happened so the
+  /// user can be told the truth about their history.
+  Future<GymExerciseRemoval?> deleteExercise(String id) async {
+    state = state.copyWith(clearError: true);
+    try {
+      final removal = await _repository.deleteExercise(id);
+      if (!ref.mounted) return removal;
+      final overview = state.overview;
+      if (overview != null) {
+        state = state.copyWith(
+          overview: overview.copyWith(
+            exercises: overview.exercises
+                .where((exercise) => exercise.id != id)
+                .toList(growable: false),
+          ),
+          clearError: true,
+        );
+      }
+      return removal;
+    } on Object catch (error) {
+      if (ref.mounted) {
+        state = state.copyWith(
+          error: describeNetworkFailure(
+            error,
+            whileDoing: 'removing the exercise',
+          ),
+        );
+      }
+      return null;
+    }
+  }
+
+  GymOverview _withExercise(GymOverview overview, GymExercise exercise) =>
+      overview.copyWith(
+        exercises: [
+          for (final item in overview.exercises)
+            if (item.id == exercise.id) exercise else item,
+        ],
+        sessions: [
+          for (final session in overview.sessions)
+            GymSession(
+              id: session.id,
+              dateKey: session.dateKey,
+              locationId: session.locationId,
+              notes: session.notes,
+              createdAt: session.createdAt,
+              exercises: [
+                for (final entry in session.exercises)
+                  if (entry.exerciseId == exercise.id)
+                    GymSessionExercise(
+                      id: entry.id,
+                      exerciseId: entry.exerciseId,
+                      name: exercise.name,
+                      order: entry.order,
+                      raw: entry.raw,
+                      notes: entry.notes,
+                      sets: entry.sets,
+                    )
+                  else
+                    entry,
+              ],
+            ),
+        ],
+      );
+
   Future<bool> createLocation({
     required String name,
     required String code,
