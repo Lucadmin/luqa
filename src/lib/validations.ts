@@ -564,6 +564,9 @@ export const createGymSessionSchema = z.object({
   locationId: z.string().nullish(),
   notes: z.string().trim().max(4000).optional().default(""),
   exercises: z.array(sessionExerciseSchema).max(60).optional().default([]),
+  // Null reopens a finished workout. Omitting it leaves the session's open or
+  // finished state exactly as it was, which is what every autosave does.
+  endedAt: z.string().datetime().nullish(),
 });
 
 // Omitting `exercises` leaves the session's exercises alone; sending it

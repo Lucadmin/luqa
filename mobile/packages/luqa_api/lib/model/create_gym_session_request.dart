@@ -18,6 +18,7 @@ class CreateGymSessionRequest {
     this.locationId = const Optional.absent(),
     this.notes = const Optional.absent(),
     this.exercises = const Optional.present(const []),
+    this.endedAt = const Optional.absent(),
   });
 
   /// Client-minted identity for the workout, so one started with no signal can still be opened and saved into. Supplying it makes the create idempotent.
@@ -55,6 +56,15 @@ class CreateGymSessionRequest {
 
   final Optional<List<GymSessionExerciseInput>?> exercises;
 
+  /// When training stopped. Omitted on a workout being started, which opens it.
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<DateTime?> endedAt;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -63,7 +73,8 @@ class CreateGymSessionRequest {
           other.date == date &&
           other.locationId == locationId &&
           other.notes == notes &&
-          _deepEquality.equals(other.exercises, exercises);
+          _deepEquality.equals(other.exercises, exercises) &&
+          other.endedAt == endedAt;
 
   @override
   int get hashCode =>
@@ -72,11 +83,12 @@ class CreateGymSessionRequest {
       (date == null ? 0 : date!.hashCode) +
       (locationId == null ? 0 : locationId!.hashCode) +
       (notes == null ? 0 : notes!.hashCode) +
-      (exercises.hashCode);
+      (exercises.hashCode) +
+      (endedAt == null ? 0 : endedAt!.hashCode);
 
   @override
   String toString() =>
-      'CreateGymSessionRequest[id=$id, date=$date, locationId=$locationId, notes=$notes, exercises=$exercises]';
+      'CreateGymSessionRequest[id=$id, date=$date, locationId=$locationId, notes=$notes, exercises=$exercises, endedAt=$endedAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -100,6 +112,10 @@ class CreateGymSessionRequest {
       final value = this.exercises.value;
       json[r'exercises'] = value;
     }
+    if (this.endedAt.isPresent) {
+      final value = this.endedAt.value;
+      json[r'endedAt'] = value == null ? null : value.toUtc().toIso8601String();
+    }
     return json;
   }
 
@@ -111,6 +127,7 @@ class CreateGymSessionRequest {
     Optional<String?>? locationId,
     Optional<String?>? notes,
     Optional<List<GymSessionExerciseInput>?>? exercises,
+    Optional<DateTime?>? endedAt,
   }) =>
       CreateGymSessionRequest(
         id: id ?? this.id,
@@ -118,6 +135,7 @@ class CreateGymSessionRequest {
         locationId: locationId ?? this.locationId,
         notes: notes ?? this.notes,
         exercises: exercises ?? this.exercises,
+        endedAt: endedAt ?? this.endedAt,
       );
 
   /// Returns a new [CreateGymSessionRequest] instance and imports its values from
@@ -150,6 +168,9 @@ class CreateGymSessionRequest {
         exercises: json.containsKey(r'exercises')
             ? Optional.present(
                 GymSessionExerciseInput.listFromJson(json[r'exercises']))
+            : const Optional.absent(),
+        endedAt: json.containsKey(r'endedAt')
+            ? Optional.present(mapDateTime(json, r'endedAt', r''))
             : const Optional.absent(),
       );
     }

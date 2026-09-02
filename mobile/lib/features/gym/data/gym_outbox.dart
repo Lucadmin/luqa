@@ -24,6 +24,9 @@ sealed class GymMutation implements PendingMutation {
         ? "your ${write.dateKey} workout"
         : 'your ${write.dateKey} workout '
               '(${write.exercises.length} exercises)',
+    EndSession(:final dateKey, :final endedAt) => endedAt == null
+        ? "reopening your $dateKey workout"
+        : "finishing your $dateKey workout",
     DeleteSession(:final dateKey) => "deleting your $dateKey workout",
     CreateLocation(:final location) => 'the gym ${location.name}',
     UpdateLocation(:final name) => 'your edit to ${name ?? 'a gym'}',
@@ -42,6 +45,15 @@ sealed class GymMutation implements PendingMutation {
       'saveSession' => SaveSession(
         sessionId: json['sessionId']! as String,
         write: gymWriteFromJson(json['write']! as Map<String, Object?>),
+        queuedAt: queuedAt,
+      ),
+      'endSession' => EndSession(
+        sessionId: json['sessionId']! as String,
+        endedAt: switch (json['endedAt']) {
+          final String at => DateTime.parse(at).toLocal(),
+          _ => null,
+        },
+        dateKey: json['dateKey']! as String,
         queuedAt: queuedAt,
       ),
       'deleteSession' => DeleteSession(
@@ -116,6 +128,39 @@ final class SaveSession extends GymMutation {
     'queuedAt': queuedAt.toUtc().toIso8601String(),
     'sessionId': sessionId,
     'write': gymWriteToJson(write),
+  };
+}
+
+/// Finishing a workout, or reopening one when [endedAt] is null.
+///
+/// Deliberately not folded into [SaveSession]: a save replaces the workout's
+/// contents and says nothing about whether it is over, so the two have to be
+/// able to travel independently and in the order they were made.
+final class EndSession extends GymMutation {
+  const EndSession({
+    required this.sessionId,
+    required this.endedAt,
+    required this.dateKey,
+    required super.queuedAt,
+  });
+
+  final String sessionId;
+  final DateTime? endedAt;
+
+  /// Carried for the same reason [DeleteSession] carries it: so a discarded
+  /// write can be described to the user.
+  final String dateKey;
+
+  @override
+  String get subjectId => sessionId;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'op': 'endSession',
+    'queuedAt': queuedAt.toUtc().toIso8601String(),
+    'sessionId': sessionId,
+    'endedAt': endedAt?.toUtc().toIso8601String(),
+    'dateKey': dateKey,
   };
 }
 
@@ -316,6 +361,37 @@ List<GymMutation> foldGym(List<GymMutation> queue, GymMutation next) {
       }
       return absorbed ? folded : [...folded, next];
 
+    case EndSession(:final sessionId):
+      // Same reasoning as a save: a workout on its way to being deleted is not
+      // worth finishing first.
+      if (queue.any(
+        (pending) =>
+            pending is DeleteSession && pending.sessionId == sessionId,
+      )) {
+        return queue;
+      }
+      // Finishing and reopening are a single piece of state, so only the last
+      // word on it needs sending. It stays where the earlier one sat, which
+      // keeps it behind the save it was made after.
+      final folded = <GymMutation>[];
+      var absorbed = false;
+      for (final pending in queue) {
+        if (pending is EndSession && pending.sessionId == sessionId) {
+          folded.add(
+            EndSession(
+              sessionId: sessionId,
+              endedAt: next.endedAt,
+              dateKey: next.dateKey,
+              queuedAt: pending.queuedAt,
+            ),
+          );
+          absorbed = true;
+        } else {
+          folded.add(pending);
+        }
+      }
+      return absorbed ? folded : [...folded, next];
+
     case DeleteSession(:final sessionId):
       // A workout the server has never heard of does not need deleting there.
       // A create still sitting in the queue proves exactly that, so the pair
@@ -327,7 +403,8 @@ List<GymMutation> foldGym(List<GymMutation> queue, GymMutation next) {
       final folded = <GymMutation>[
         for (final pending in queue)
           if (!(pending is CreateSession && pending.session.id == sessionId) &&
-              !(pending is SaveSession && pending.sessionId == sessionId))
+              !(pending is SaveSession && pending.sessionId == sessionId) &&
+              !(pending is EndSession && pending.sessionId == sessionId))
             pending,
       ];
       return unsent ? folded : [...folded, next];
@@ -396,12 +473,21 @@ List<GymMutation> foldGym(List<GymMutation> queue, GymMutation next) {
 /// Exercise ids are the interesting part: an exercise typed by name has none
 /// until the server resolves it, so the local copy keeps a placeholder id and
 /// adopts the real one after the save lands.
-GymSession applyWrite(GymSession session, GymSessionWrite write) => GymSession(
+/// [at] is when the save happened, which is what makes the workout count as
+/// still going. Whether it is finished is not a save's business — only
+/// [EndSession] moves that.
+GymSession applyWrite(
+  GymSession session,
+  GymSessionWrite write, {
+  required DateTime at,
+}) => GymSession(
   id: session.id,
   dateKey: write.dateKey,
   locationId: write.locationId,
   notes: write.notes,
   createdAt: session.createdAt,
+  updatedAt: at,
+  endedAt: session.endedAt,
   exercises: [
     for (final (index, exercise) in write.exercises.indexed)
       GymSessionExercise(
@@ -442,6 +528,8 @@ List<GymMutation> remapLocationId(
               notes: session.notes,
               exercises: session.exercises,
               createdAt: session.createdAt,
+              updatedAt: session.updatedAt,
+              endedAt: session.endedAt,
             ),
             queuedAt: pending.queuedAt,
           ),

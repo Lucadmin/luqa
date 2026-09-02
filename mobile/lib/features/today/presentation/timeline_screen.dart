@@ -7,6 +7,7 @@ import 'package:luqa/app/top_level_header.dart';
 import 'package:luqa/design_system/discarded_writes_notice.dart';
 import 'package:luqa/design_system/luqa_sync_status.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
+import 'package:luqa/features/habits/application/habits_controller.dart';
 import 'package:luqa/features/habits/presentation/widgets/habits_strip.dart';
 import 'package:luqa/features/today/application/people_names.dart';
 import 'package:luqa/features/today/application/timeline_controller.dart';
@@ -54,6 +55,13 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
       _tick();
       _clock = Timer.periodic(const Duration(minutes: 1), (_) => _tick());
     });
+    // The habits controller outlives this screen, so the day the strip was
+    // scrolled to last time would otherwise still be showing above a timeline
+    // that has gone back to today.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _habits.viewStripDay(ref.read(timelineControllerProvider).visibleDay);
+    });
   }
 
   void _tick() {
@@ -68,6 +76,8 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
 
   TimelineController get _controller =>
       ref.read(timelineControllerProvider.notifier);
+
+  HabitsController get _habits => ref.read(habitsControllerProvider.notifier);
 
   // Day navigation -----------------------------------------------------------
 
@@ -239,6 +249,21 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
       if (message == null || message == previous?.error) return;
       if (next.draft == null) _showMessage(message);
     });
+
+    // The habits row above the grid belongs to the day the grid is showing, and
+    // a category-linked habit's progress *is* the blocks on it. Both are wired
+    // here rather than inside HabitsController, because the timeline controller
+    // is autoDispose and the habits controller is not: a listen from there
+    // would keep the timeline alive for the life of the app. This screen
+    // already watches both.
+    ref.listen(
+      timelineControllerProvider.select((state) => state.visibleDay),
+      (_, day) => _habits.viewStripDay(day),
+    );
+    ref.listen(
+      timelineControllerProvider.select((state) => state.entries),
+      (_, entries) => unawaited(_habits.syncTrackedTime(entries)),
+    );
 
     return SafeArea(
       bottom: false,

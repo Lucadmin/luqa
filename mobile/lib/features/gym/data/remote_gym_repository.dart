@@ -63,6 +63,15 @@ class RemoteGymRepository implements GymRepository {
   }
 
   @override
+  Future<GymSession> endSession(String id, DateTime? endedAt) async =>
+      gymSessionFromApi(
+        await client.updateGymSession(
+          id,
+          api.UpdateGymSessionRequest(endedAt: api.Optional.present(endedAt)),
+        ),
+      );
+
+  @override
   Future<void> deleteSession(String id) => client.deleteGymSession(id);
 
   @override
@@ -221,6 +230,8 @@ GymSession gymSessionFromApi(api.GymSession value) => GymSession(
       .map(_sessionExerciseFromApi)
       .toList(growable: false),
   createdAt: value.createdAt.toLocal(),
+  updatedAt: value.updatedAt.toLocal(),
+  endedAt: value.endedAt?.toLocal(),
 );
 
 GymExercise gymExerciseFromApi(api.GymExercise value) => GymExercise(

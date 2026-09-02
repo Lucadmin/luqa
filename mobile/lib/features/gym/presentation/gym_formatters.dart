@@ -26,6 +26,13 @@ String gymDatedLabel(BuildContext context, DateTime date) {
       '${day.year}';
 }
 
+/// The time of day a workout ended, in the reader's own clock format.
+String gymTimeLabel(BuildContext context, DateTime at) =>
+    MaterialLocalizations.of(context).formatTimeOfDay(
+      TimeOfDay.fromDateTime(at),
+      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+    );
+
 String gymSessionSummary(GymSession session) {
   final exerciseCount = session.exercises.length;
   final setCount = session.completedSetCount;

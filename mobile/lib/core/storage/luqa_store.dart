@@ -33,7 +33,7 @@ class LuqaStore {
   /// providers build them eagerly and signed-out ones never read anything.
   static final LuqaStore shared = LuqaStore();
 
-  static const _version = 8;
+  static const _version = 9;
 
   final DatabaseFactory? _injectedFactory;
   final String? _path;
@@ -112,6 +112,7 @@ class LuqaStore {
         if (oldVersion < 5) _createRemapTable(batch);
         if (oldVersion < 7) _createHabitTables(batch);
         if (oldVersion < 8) _addRollingInterval(batch, oldVersion);
+        if (oldVersion < 9) _addSessionEnd(batch, oldVersion);
         await batch.commit();
       },
       // Going backwards means an older build opened a newer file. There is
@@ -414,6 +415,8 @@ class LuqaStore {
         location_id TEXT,
         notes TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        ended_at TEXT,
         pending INTEGER NOT NULL DEFAULT 0,
         removed INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (namespace, id)
@@ -592,6 +595,28 @@ class LuqaStore {
     batch.execute(
       'ALTER TABLE habit ADD COLUMN interval_from_last_done '
       'INTEGER NOT NULL DEFAULT 0',
+    );
+  }
+
+  /// A workout can now say when it ended, instead of the app inferring it from
+  /// the calendar.
+  ///
+  /// Both columns are backfilled from `created_at`: every cached session
+  /// predates them, and the day it was made is the only timestamp this device
+  /// has for it. `ended_at` stays null so nothing is claimed about workouts
+  /// that were never explicitly finished — the next pull brings the server's
+  /// answer, and until then the idle window closes them.
+  ///
+  /// Only for a database that already had the gym tables; one created at
+  /// version 9 or later has both columns from the start.
+  static void _addSessionEnd(Batch batch, int oldVersion) {
+    if (oldVersion < 3) return;
+    batch.execute(
+      "ALTER TABLE gym_session ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''",
+    );
+    batch.execute('ALTER TABLE gym_session ADD COLUMN ended_at TEXT');
+    batch.execute(
+      "UPDATE gym_session SET updated_at = created_at WHERE updated_at = ''",
     );
   }
 

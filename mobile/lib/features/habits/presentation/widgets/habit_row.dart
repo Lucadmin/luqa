@@ -111,11 +111,13 @@ class HabitRow extends StatelessWidget {
             child: HabitControl(
               day: day,
               now: now,
-              onToggle: onToggle,
-              onIncrement: onIncrement,
-              onDecrement: onDecrement,
-              onStart: onStart,
-              onStop: onStop,
+              actions: HabitActions(
+                onToggle: onToggle,
+                onIncrement: onIncrement,
+                onDecrement: onDecrement,
+                onStart: onStart,
+                onStop: onStop,
+              ),
             ),
           ),
         ],

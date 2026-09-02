@@ -292,6 +292,8 @@ void main() {
           notes: 'from server',
           exercises: const [],
           createdAt: _now,
+          updatedAt: _now,
+          endedAt: null,
         ),
       ], const []);
 
@@ -316,6 +318,8 @@ void main() {
           notes: 'stale server copy',
           exercises: const [],
           createdAt: _now,
+          updatedAt: _now,
+          endedAt: null,
         ),
       ], const []);
 
@@ -472,6 +476,8 @@ void main() {
           notes: '',
           exercises: const [],
           createdAt: _now,
+          updatedAt: _now,
+          endedAt: null,
         ),
       ], const []);
 

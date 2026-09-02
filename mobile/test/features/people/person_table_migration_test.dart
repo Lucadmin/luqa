@@ -60,6 +60,32 @@ void main() {
               PRIMARY KEY (namespace, id)
             )
           ''');
+          // Version 4 had the gym tables (they arrived at 3) but not the two
+          // columns that say when a workout stopped. Present here so the
+          // migration that adds them is exercised against a real table.
+          await db.execute('''
+            CREATE TABLE gym_session (
+              namespace TEXT NOT NULL,
+              id TEXT NOT NULL,
+              date_key TEXT NOT NULL,
+              location_id TEXT,
+              notes TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL,
+              pending INTEGER NOT NULL DEFAULT 0,
+              removed INTEGER NOT NULL DEFAULT 0,
+              PRIMARY KEY (namespace, id)
+            )
+          ''');
+          await db.insert('gym_session', {
+            'namespace': 'user-a',
+            'id': 'leg-day',
+            'date_key': '2026-08-26',
+            'location_id': null,
+            'notes': '',
+            'created_at': DateTime.utc(2026, 8, 26, 17).toIso8601String(),
+            'pending': 0,
+            'removed': 0,
+          });
           await db.insert('timeline_entry', {
             'namespace': 'user-a',
             'id': 'dinner',

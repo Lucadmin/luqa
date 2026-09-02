@@ -12,6 +12,8 @@ GymSession _session(String id, {String? locationId}) => GymSession(
   notes: '',
   exercises: const [],
   createdAt: _at,
+  updatedAt: _at,
+  endedAt: null,
 );
 
 GymSessionWrite _write({
@@ -167,6 +169,82 @@ void main() {
       expect(queue.single, isA<DeleteSession>());
     });
 
+    test('finishing a workout does not overtake the sets it ends', () {
+      var queue = foldGym(
+        const [],
+        SaveSession(
+          sessionId: 'w1',
+          write: _write(sets: const [GymSetWrite(weight: 75, reps: 10)]),
+          queuedAt: _at,
+        ),
+      );
+
+      queue = foldGym(
+        queue,
+        EndSession(
+          sessionId: 'w1',
+          endedAt: _at,
+          dateKey: '2026-08-31',
+          queuedAt: _at,
+        ),
+      );
+
+      // A save replaces the workout's contents and says nothing about whether
+      // it is over, so the two travel separately and in the order they were
+      // made.
+      expect(queue, hasLength(2));
+      expect(queue.first, isA<SaveSession>());
+      expect(queue.last, isA<EndSession>());
+    });
+
+    test('finishing and reopening leaves only the last word on it', () {
+      var queue = foldGym(
+        const [],
+        EndSession(
+          sessionId: 'w1',
+          endedAt: _at,
+          dateKey: '2026-08-31',
+          queuedAt: _at,
+        ),
+      );
+
+      queue = foldGym(
+        queue,
+        EndSession(
+          sessionId: 'w1',
+          endedAt: null,
+          dateKey: '2026-08-31',
+          queuedAt: _at,
+        ),
+      );
+
+      expect(queue, hasLength(1));
+      expect((queue.single as EndSession).endedAt, isNull);
+    });
+
+    test('a workout on its way out is not finished first', () {
+      var queue = foldGym(
+        const [],
+        DeleteSession(
+          sessionId: 'server-1',
+          dateKey: '2026-08-31',
+          queuedAt: _at,
+        ),
+      );
+
+      queue = foldGym(
+        queue,
+        EndSession(
+          sessionId: 'server-1',
+          endedAt: _at,
+          dateKey: '2026-08-31',
+          queuedAt: _at,
+        ),
+      );
+
+      expect(queue.single, isA<DeleteSession>());
+    });
+
     test('renaming an exercise twice sends the name it ended up with', () {
       var queue = foldGym(
         const [],
@@ -310,6 +388,12 @@ void main() {
           archived: true,
           queuedAt: _at,
         ),
+        EndSession(
+          sessionId: 'w1',
+          endedAt: _at,
+          dateKey: '2026-08-31',
+          queuedAt: _at,
+        ),
         DeleteSession(sessionId: 'w2', dateKey: '2026-08-30', queuedAt: _at),
         UpdateExercise(
           exerciseId: 'e1',
@@ -330,6 +414,7 @@ void main() {
         'w1',
         'g1',
         'g1',
+        'w1',
         'w2',
         'e1',
         'e2',
@@ -339,10 +424,13 @@ void main() {
       expect(write.exercises.single.sets.single.note, 'lf');
       expect((restored[2] as CreateLocation).location.colorValue, 0xFF123456);
       expect((restored[3] as UpdateLocation).archived, isTrue);
-      expect((restored[4] as DeleteSession).dateKey, '2026-08-30');
-      expect((restored[5] as UpdateExercise).notes, 'wide grip');
-      expect((restored[5] as UpdateExercise).archived, isFalse);
-      expect((restored[6] as DeleteExercise).name, 'Latzug');
+      // Stored as UTC and read back in the phone's zone: the same instant,
+      // which is the only part that has to survive.
+      expect((restored[4] as EndSession).endedAt?.toUtc(), _at);
+      expect((restored[5] as DeleteSession).dateKey, '2026-08-30');
+      expect((restored[6] as UpdateExercise).notes, 'wide grip');
+      expect((restored[6] as UpdateExercise).archived, isFalse);
+      expect((restored[7] as DeleteExercise).name, 'Latzug');
     });
 
     test('an op written by a newer build is skipped rather than fatal', () {

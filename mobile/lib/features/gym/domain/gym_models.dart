@@ -44,6 +44,13 @@ class GymSessionExercise {
   final List<GymSet> sets;
 }
 
+/// How long a workout can sit untouched before the app takes it as over.
+///
+/// Long enough to cover a sauna, a phone call, or a session logged in a
+/// basement with the screen off, and short enough that a workout abandoned
+/// after two exercises is not still offering to continue the next morning.
+const kWorkoutIdleTimeout = Duration(hours: 5);
+
 class GymSession {
   const GymSession({
     required this.id,
@@ -52,6 +59,8 @@ class GymSession {
     required this.notes,
     required this.exercises,
     required this.createdAt,
+    required this.updatedAt,
+    required this.endedAt,
   });
 
   final String id;
@@ -61,6 +70,24 @@ class GymSession {
   final List<GymSessionExercise> exercises;
   final DateTime createdAt;
 
+  /// Last time anything in the workout changed. What [idleAt] measures from.
+  final DateTime updatedAt;
+
+  /// When training stopped, or null while the workout is still going.
+  final DateTime? endedAt;
+
+  bool get isFinished => endedAt != null;
+
+  /// Untouched for longer than a workout plausibly lasts, so whatever happened
+  /// to it, it is not still happening.
+  bool idleAt(DateTime now) =>
+      now.difference(updatedAt) >= kWorkoutIdleTimeout;
+
+  /// The workout the Gym tab offers to continue. Deliberately not a question
+  /// about today's date: a session started at 23:50 is still the one being
+  /// trained at 00:10, and one abandoned this morning is not.
+  bool isOpenAt(DateTime now) => !isFinished && !idleAt(now);
+
   int get completedSetCount => exercises.fold(
     0,
     (sum, exercise) =>
@@ -69,7 +96,24 @@ class GymSession {
             .where((set) => set.weight != null || set.reps != null)
             .length,
   );
+
+  GymSession copyWith({
+    List<GymSessionExercise>? exercises,
+    DateTime? updatedAt,
+    Object? endedAt = _unsetEnd,
+  }) => GymSession(
+    id: id,
+    dateKey: dateKey,
+    locationId: locationId,
+    notes: notes,
+    exercises: exercises ?? this.exercises,
+    createdAt: createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    endedAt: identical(endedAt, _unsetEnd) ? this.endedAt : endedAt as DateTime?,
+  );
 }
+
+const _unsetEnd = Object();
 
 class GymExercise {
   const GymExercise({
@@ -283,11 +327,7 @@ GymOverview applyExerciseMerge(
     recentReferences: references,
     sessions: [
       for (final session in overview.sessions)
-        GymSession(
-          id: session.id,
-          dateKey: session.dateKey,
-          locationId: session.locationId,
-          notes: session.notes,
+        session.copyWith(
           exercises: [
             for (final exercise in session.exercises)
               exercise.exerciseId == sourceExerciseId
@@ -302,7 +342,6 @@ GymOverview applyExerciseMerge(
                     )
                   : exercise,
           ],
-          createdAt: session.createdAt,
         ),
     ],
   );

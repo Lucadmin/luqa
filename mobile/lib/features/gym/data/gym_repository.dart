@@ -52,6 +52,12 @@ abstract interface class GymRepository {
 
   Future<GymSession> saveSession(String id, GymSessionWrite write);
 
+  /// Marks when the workout stopped, or reopens a finished one with a null
+  /// [endedAt]. Separate from [saveSession] because saving a workout says
+  /// nothing about whether it is over: the editor autosaves constantly and
+  /// must never decide that question on the user's behalf.
+  Future<GymSession> endSession(String id, DateTime? endedAt);
+
   /// Throws away a workout and everything logged in it, started or finished.
   /// The exercises stay in the library; only this day's entries go.
   Future<void> deleteSession(String id);

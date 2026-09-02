@@ -128,6 +128,9 @@ export async function POST(request: Request) {
         date: dateFromKey(input.date ?? todayKey()),
         locationId: input.locationId ?? null,
         notes: input.notes,
+        // A workout is created by starting one, so it opens unfinished. An
+        // import that already knows when training stopped can say so.
+        endedAt: input.endedAt ? new Date(input.endedAt) : null,
       },
     });
     await writeSessionExercises(

@@ -2437,7 +2437,8 @@ components:
     GymSession:
       type: object
       additionalProperties: false
-      required: [id, date, locationId, notes, exercises, createdAt]
+      required:
+        [id, date, locationId, notes, exercises, createdAt, updatedAt, endedAt]
       properties:
         id:
           type: string
@@ -2455,6 +2456,16 @@ components:
         createdAt:
           type: string
           format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          description: >-
+            Last time anything in the workout changed. What an open workout's idle time is measured from.
+        endedAt:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            When training stopped, or null while the workout is still open.
     GymExercise:
       type: object
       additionalProperties: false
@@ -2746,6 +2757,11 @@ components:
           maxItems: 60
           items:
             $ref: "#/components/schemas/GymSessionExerciseInput"
+        endedAt:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            When training stopped. Omitted on a workout being started, which opens it.
     UpdateGymSessionRequest:
       type: object
       additionalProperties: false
@@ -2764,6 +2780,11 @@ components:
           maxItems: 60
           items:
             $ref: "#/components/schemas/GymSessionExerciseInput"
+        endedAt:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            Finishes the workout, or reopens it when null. Omitting it leaves the workout open or finished exactly as it was, which is what every autosave does.
     CreateGymLocationRequest:
       type: object
       additionalProperties: false

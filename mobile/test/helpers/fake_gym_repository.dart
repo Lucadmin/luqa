@@ -58,6 +58,9 @@ class FakeGymRepository implements GymRepository {
         ),
       ],
       createdAt: DateTime(2026, 8, 27, 15),
+      // Just touched, so this is the workout the Gym tab offers to continue.
+      updatedAt: DateTime(2026, 8, 27, 15),
+      endedAt: null,
     );
     final previous = GymSession(
       id: 'previous-workout',
@@ -76,6 +79,9 @@ class FakeGymRepository implements GymRepository {
         ),
       ],
       createdAt: DateTime(2026, 8, 25, 15),
+      updatedAt: DateTime(2026, 8, 25, 16, 30),
+      // Finished, so it is history rather than something to be closed again.
+      endedAt: DateTime(2026, 8, 25, 16, 30),
     );
     return FakeGymRepository(
       overview: GymOverview(
@@ -157,6 +163,8 @@ class FakeGymRepository implements GymRepository {
   Object? saveError;
   Completer<void>? saveStarted;
   Future<void>? saveGate;
+  final List<({String id, DateTime? endedAt})> endedSessions = [];
+  Object? endError;
 
   @override
   Future<GymOverview> loadOverview({int limit = 30}) async => overview;
@@ -178,6 +186,8 @@ class FakeGymRepository implements GymRepository {
       notes: '',
       exercises: const [],
       createdAt: DateTime(2026, 8, 27, 16),
+      updatedAt: DateTime(2026, 8, 27, 16),
+      endedAt: null,
     );
     overview = overview.copyWith(
       sessions: [session, ...overview.sessions],
@@ -217,11 +227,39 @@ class FakeGymRepository implements GymRepository {
           ),
       ],
       createdAt: DateTime(2026, 8, 27, 15),
+      updatedAt: DateTime(2026, 8, 27, 15),
+      // Saving says nothing about whether the workout is over; only
+      // [endSession] moves that.
+      endedAt: overview.sessions
+          .where((item) => item.id == id)
+          .map((item) => item.endedAt)
+          .firstOrNull,
     );
     overview = overview.copyWith(
       sessions: [session, ...overview.sessions.where((item) => item.id != id)],
     );
     return session;
+  }
+
+  @override
+  Future<GymSession> endSession(String id, DateTime? endedAt) async {
+    endedSessions.add((id: id, endedAt: endedAt));
+    final error = endError;
+    if (error != null) throw error;
+    final existing = overview.sessions.firstWhere(
+      (session) => session.id == id,
+    );
+    final ended = existing.copyWith(
+      endedAt: endedAt,
+      updatedAt: DateTime(2026, 8, 27, 15),
+    );
+    overview = overview.copyWith(
+      sessions: [
+        for (final session in overview.sessions)
+          if (session.id == id) ended else session,
+      ],
+    );
+    return ended;
   }
 
   @override

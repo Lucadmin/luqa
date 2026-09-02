@@ -145,6 +145,8 @@ export interface SessionInput {
   locationId?: string | null;
   notes?: string;
   exercises?: SessionExerciseInput[];
+  /** ISO instant training stopped; null reopens a finished workout. */
+  endedAt?: string | null;
 }
 
 export async function createSession(input: SessionInput) {

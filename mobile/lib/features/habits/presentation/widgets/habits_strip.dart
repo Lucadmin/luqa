@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:luqa/design_system/luqa_tokens.dart';
@@ -6,80 +9,113 @@ import 'package:luqa/features/habits/application/habits_controller.dart';
 import 'package:luqa/features/habits/domain/habit_day.dart';
 import 'package:luqa/features/habits/presentation/widgets/habit_control.dart';
 import 'package:luqa/features/habits/presentation/widgets/habit_glyph.dart';
+import 'package:luqa/features/habits/presentation/widgets/habit_ring.dart';
 
-/// Today's habits, as one scrolling line.
+/// The habits of the day the timeline is showing, as one scrolling line.
 ///
 /// This is where habits are actually kept up: in the middle of logging the
 /// day, not on a screen you have to remember to visit. A chip is a whole
-/// interaction — the name to know which it is, and the control to tick it —
-/// and the row ends with the way through to everything else about them.
-class HabitsStrip extends ConsumerWidget {
+/// interaction — the name to know which it is, the control to read it at a
+/// glance, and the whole surface as the target — and the row ends with the
+/// day's tally, which is also the way through to everything else about them.
+///
+/// It belongs to the day on screen behind it. Scroll the timeline back to
+/// Tuesday and this is Tuesday's line: what was due then, how it went, and a
+/// tap that lands on Tuesday.
+class HabitsStrip extends ConsumerStatefulWidget {
   const HabitsStrip({required this.now, super.key});
 
-  /// Passed in rather than read here, so the running rings tick on the same
-  /// clock as the timeline they sit above rather than on one of their own.
+  /// The screen's clock, which advances once a minute.
+  ///
+  /// Enough for everything on this row except a running ring, which gets a
+  /// faster one of its own below — see [_HabitsStripState._ticking].
   final DateTime now;
 
   static const height = 46.0;
 
+  /// How much of the scrolling line is faded out under the summary.
+  static const _fade = 20.0;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HabitsStrip> createState() => _HabitsStripState();
+}
+
+class _HabitsStripState extends ConsumerState<HabitsStrip> {
+  Timer? _ticker;
+  late DateTime _now = widget.now;
+
+  @override
+  void didUpdateWidget(HabitsStrip old) {
+    super.didUpdateWidget(old);
+    // The screen's minute is the floor: a second-hand of our own may be ahead
+    // of it, but it is never behind.
+    if (widget.now.isAfter(_now)) _now = widget.now;
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  /// Runs a clock only while there is something on the row that moves.
+  ///
+  /// A duration habit's ring fills continuously, and on the screen's own
+  /// minute clock it would sit visibly still for the best part of a minute —
+  /// which reads as broken rather than as running. The rest of the time this
+  /// row has no business rebuilding sixty times a minute, so it does not.
+  void _ticking(bool running) {
+    if (running == (_ticker != null)) return;
+    if (!running) {
+      _ticker?.cancel();
+      _ticker = null;
+      return;
+    }
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(habitsControllerProvider);
     final controller = ref.read(habitsControllerProvider.notifier);
+    final days = state.stripDay;
+
+    _ticking(days.any((day) => day.isRunning));
 
     // The height is held through the first load rather than collapsed, so the
     // timeline underneath does not jump down the moment the cache answers.
-    if (state.isLoading && state.today.isEmpty) {
-      return const SizedBox(height: height);
+    if (state.isLoading && days.isEmpty) {
+      return const SizedBox(height: HabitsStrip.height);
     }
 
     return SizedBox(
-      height: height,
+      height: HabitsStrip.height,
       child: Row(
         children: [
           Expanded(
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(
-                left: LuqaSpacing.lg,
-                right: LuqaSpacing.sm,
-              ),
-              itemCount: state.today.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(width: LuqaSpacing.sm),
-              itemBuilder: (context, index) {
-                final day = state.today[index];
-                return _HabitChip(
-                  key: ValueKey('habit-chip-${day.id}'),
-                  day: day,
-                  now: now,
-                  // Always today, whatever day the habits screen was left
-                  // browsing: this line belongs to the day on screen behind
-                  // it, not to a selection made somewhere else.
-                  onToggle: () =>
-                      controller.toggle(day.id, dateKey: state.todayDate),
-                  onIncrement: () =>
-                      controller.increment(day.id, dateKey: state.todayDate),
-                  onDecrement: () =>
-                      controller.decrement(day.id, dateKey: state.todayDate),
-                  onStart: () =>
-                      controller.startTimer(day.id, dateKey: state.todayDate),
-                  onStop: () =>
-                      controller.stopTimer(day.id, dateKey: state.todayDate),
-                );
-              },
-            ),
+            child: days.isEmpty
+                ? _NothingDue(hasHabits: state.habits.isNotEmpty)
+                : _ChipList(
+                    days: days,
+                    now: _now,
+                    // The day on screen, not today: this line belongs to the
+                    // grid behind it, and a tap has to land on the day the
+                    // person tapping it can see.
+                    dateKey: state.stripDate,
+                    controller: controller,
+                  ),
           ),
           // Outside the scroll rather than at the end of it. The tally and the
           // way through to the rest of habits are the two things on this line
           // that have to be reachable without reading it — and a chip at the
           // far end of six habits is neither.
-          Padding(
-            padding: const EdgeInsets.only(right: LuqaSpacing.lg),
-            child: _AllHabitsChip(
-              done: state.doneCount,
-              total: state.today.length,
-            ),
+          _DayTally(
+            done: state.stripDoneCount,
+            total: days.length,
+            hasHabits: state.habits.isNotEmpty,
+            isToday: state.stripIsToday,
           ),
         ],
       ),
@@ -87,139 +123,275 @@ class HabitsStrip extends ConsumerWidget {
   }
 }
 
+/// The scrolling line itself, with its trailing edge faded out.
+///
+/// The fade is what lets a chip pass under the tally instead of colliding with
+/// it. A vertical rule would be the other way to separate them, but it would
+/// meet the divider under the strip at a corner and read as a stray tick.
+class _ChipList extends StatelessWidget {
+  const _ChipList({
+    required this.days,
+    required this.now,
+    required this.dateKey,
+    required this.controller,
+  });
+
+  final List<HabitDay> days;
+  final DateTime now;
+  final String dateKey;
+  final HabitsController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final canvas = Theme.of(context).scaffoldBackgroundColor;
+
+    return ShaderMask(
+      shaderCallback: (bounds) => LinearGradient(
+        begin: Alignment.centerRight,
+        end: Alignment.centerLeft,
+        colors: [canvas.withValues(alpha: 0), canvas],
+        stops: const [0, 1],
+      ).createShader(
+        Rect.fromLTWH(
+          bounds.width - HabitsStrip._fade,
+          0,
+          HabitsStrip._fade,
+          bounds.height,
+        ),
+      ),
+      blendMode: BlendMode.dstIn,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(
+          left: LuqaSpacing.lg,
+          right: LuqaSpacing.sm,
+        ),
+        itemCount: days.length,
+        separatorBuilder: (_, _) => const SizedBox(width: LuqaSpacing.sm),
+        itemBuilder: (context, index) {
+          final day = days[index];
+          return _HabitChip(
+            key: ValueKey('habit-chip-${day.id}'),
+            day: day,
+            now: now,
+            actions: HabitActions(
+              onToggle: () => controller.toggle(day.id, dateKey: dateKey),
+              onIncrement: () => controller.increment(day.id, dateKey: dateKey),
+              onDecrement: () => controller.decrement(day.id, dateKey: dateKey),
+              onStart: () => controller.startTimer(day.id, dateKey: dateKey),
+              onStop: () => controller.stopTimer(day.id, dateKey: dateKey),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// One habit, and the gesture that moves it on.
+///
+/// The whole chip is the target rather than the ring at its end. A habit that
+/// takes aim before it takes a tap is a habit that stops being ticked, and a
+/// 140-wide chip is a target a thumb finds without looking at it.
 class _HabitChip extends StatelessWidget {
   const _HabitChip({
     required this.day,
-    super.key,
     required this.now,
-    required this.onToggle,
-    required this.onIncrement,
-    required this.onDecrement,
-    required this.onStart,
-    required this.onStop,
+    required this.actions,
+    super.key,
   });
 
   final HabitDay day;
   final DateTime now;
-  final VoidCallback onToggle;
-  final VoidCallback onIncrement;
-  final VoidCallback onDecrement;
-  final VoidCallback onStart;
-  final VoidCallback onStop;
+  final HabitActions actions;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final palette = LuqaPalette.of(context);
+    final action = actions.primaryFor(day);
+    final colour = Color(day.habit.colorValue);
+    final onLongPress = action.onLongPress;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.workingSurface,
-        border: Border.all(color: palette.border),
-        borderRadius: BorderRadius.circular(HabitsStrip.height / 2),
-      ),
-      padding: const EdgeInsets.only(left: LuqaSpacing.xs, right: 2),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          HabitGlyph(habit: day.habit, size: 26, faded: day.done),
-          const SizedBox(width: LuqaSpacing.sm),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 116),
-            child: Text(
-              day.habit.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: day.done
-                    ? theme.colorScheme.onSurfaceVariant
-                    : theme.colorScheme.onSurface,
+    return Semantics(
+      button: true,
+      label: '${day.habit.name}. ${action.label}',
+      child: Material(
+        // Flat and crisp: raised tone, no border, 6px corners. A pill is for a
+        // tag or a status, and this is neither — it is a control.
+        color: day.done
+            // The Tint Ceiling: a finished habit's own colour washes the chip
+            // so the row reads at a glance, well short of full saturation,
+            // which is kept for the marks on top of it.
+            ? Color.alphaBlend(colour.withValues(alpha: 0.10), palette.raised)
+            : palette.raised,
+        borderRadius: BorderRadius.circular(LuqaRadii.compact),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            unawaited(HapticFeedback.selectionClick());
+            action.onTap();
+          },
+          onLongPress: onLongPress == null
+              ? null
+              : () {
+                  unawaited(HapticFeedback.mediumImpact());
+                  onLongPress();
+                },
+          child: ExcludeSemantics(
+            child: Padding(
+              padding: const EdgeInsets.only(left: LuqaSpacing.xs, right: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  HabitGlyph(habit: day.habit, size: 26, faded: day.done),
+                  const SizedBox(width: LuqaSpacing.sm),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 116),
+                    child: Text(
+                      day.habit.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: day.done
+                            ? theme.colorScheme.onSurfaceVariant
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: LuqaSpacing.xxs),
+                  // Drawn, not tapped: the chip around it owns the gesture, so
+                  // the two are never competing for the same finger.
+                  HabitControl(
+                    day: day,
+                    now: now,
+                    actions: actions,
+                    size: HabitControlSize.compact,
+                    interactive: false,
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(width: LuqaSpacing.xxs),
-          HabitControl(
-            day: day,
-            now: now,
-            size: HabitControlSize.compact,
-            onToggle: onToggle,
-            onIncrement: onIncrement,
-            onDecrement: onDecrement,
-            onStart: onStart,
-            onStop: onStop,
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-/// The end of the strip, and the way through to the rest of habits.
-///
-/// It carries the day's tally rather than only a plus, so the line answers
-/// "how am I doing" without being scrolled to the end and read chip by chip.
-class _AllHabitsChip extends StatelessWidget {
-  const _AllHabitsChip({required this.done, required this.total});
+/// The day with habits but none of them due on it.
+class _NothingDue extends StatelessWidget {
+  const _NothingDue({required this.hasHabits});
 
-  final int done;
-  final int total;
+  final bool hasHabits;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final palette = LuqaPalette.of(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(left: LuqaSpacing.lg),
+        child: Text(
+          // With no habits at all this line is the invitation to make one, so
+          // it says what to do rather than reporting that there is nothing.
+          hasHabits ? 'Nothing due' : 'Add a habit',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// How the day is going, and the way through to the rest of habits.
+///
+/// A ring rather than a pill: the arc is the same mark every habit on the row
+/// already wears, so the tally reads as the sum of the line instead of as one
+/// more chip on the end of it. Ghost at rest — no container until it is
+/// pressed — because it is the quietest thing on a row of controls.
+class _DayTally extends StatelessWidget {
+  const _DayTally({
+    required this.done,
+    required this.total,
+    required this.hasHabits,
+    required this.isToday,
+  });
+
+  final int done;
+  final int total;
+  final bool hasHabits;
+
+  /// A tally for a day the timeline was scrolled to is drawn muted rather than
+  /// in Luqa purple, so a number that is not about today never looks like it
+  /// is. The header directly above already names the day; this only has to
+  /// avoid contradicting it.
+  final bool isToday;
+
+  static const _diameter = 32.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final complete = total > 0 && done == total;
-    // Terse on purpose. This chip is pinned beside a scrolling line of
-    // habits, so every character it spends is a character of habit name that
-    // no longer fits; the full sentence is in the semantics label instead.
-    final label = total == 0 ? 'Add a habit' : '$done/$total';
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final accent = isToday ? theme.colorScheme.primary : muted;
+
+    // Terse on purpose. This sits beside a scrolling line of habits, so every
+    // character it spends is a character of habit name that no longer fits;
+    // the full sentence is in the semantics label instead.
+    final Widget centre;
+    if (total == 0) {
+      centre = Icon(
+        hasHabits ? Icons.checklist_rounded : Icons.add_rounded,
+        size: 15,
+        color: muted,
+      );
+    } else if (complete) {
+      centre = Icon(
+        Icons.check_rounded,
+        size: 16,
+        weight: 700,
+        color: accent,
+      );
+    } else {
+      centre = Text(
+        '$done/$total',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: accent,
+          fontWeight: FontWeight.w700,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      );
+    }
 
     return Semantics(
       button: true,
-      label: total == 0 ? 'Add a habit' : 'Habits, $done of $total done',
-      child: InkWell(
-        key: const ValueKey('habits-strip-all'),
-        onTap: () => context.push('/habits'),
-        borderRadius: BorderRadius.circular(HabitsStrip.height / 2),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: palette.border,
-              // Dashed is not worth a custom painter here; the open outline
-              // and the muted ink already read as "not a habit, a way out".
-              style: BorderStyle.solid,
-            ),
-            borderRadius: BorderRadius.circular(HabitsStrip.height / 2),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: LuqaSpacing.md),
-          child: ExcludeSemantics(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  total == 0 ? Icons.add_rounded : Icons.checklist_rounded,
-                  size: 16,
-                  color: complete
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant,
+      label: switch ((total, hasHabits)) {
+        (0, false) => 'Add a habit',
+        (0, true) => 'Habits, nothing due',
+        _ => 'Habits, $done of $total done',
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(right: LuqaSpacing.sm),
+        child: InkResponse(
+          key: const ValueKey('habits-strip-all'),
+          onTap: () => context.push('/habits'),
+          radius: 24,
+          containedInkWell: false,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 44),
+            child: Center(
+              child: ExcludeSemantics(
+                child: HabitRing(
+                  fraction: total == 0 ? 0 : done / total,
+                  color: accent,
+                  size: _diameter,
+                  stroke: 2.5,
+                  child: centre,
                 ),
-                const SizedBox(width: LuqaSpacing.xs),
-                Text(
-                  label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: complete
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurfaceVariant,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(width: LuqaSpacing.xxs),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 16,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ],
+              ),
             ),
           ),
         ),

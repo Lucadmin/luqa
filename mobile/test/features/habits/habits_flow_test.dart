@@ -35,6 +35,15 @@ Future<void> openHabits(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Moves the timeline a day at a time, the way the header arrows do.
+Future<void> shiftTimeline(WidgetTester tester, int days) async {
+  final tooltip = days < 0 ? 'Previous day' : 'Next day';
+  for (var step = 0; step < days.abs(); step++) {
+    await tester.tap(find.byTooltip(tooltip));
+    await tester.pumpAndSettle();
+  }
+}
+
 void main() {
   testWidgets('Today shows the habits due today, and not the ones that are not', (
     tester,
@@ -126,7 +135,7 @@ void main() {
     expect(find.byKey(const ValueKey('habit-row-stretch')), findsOneWidget);
   });
 
-  testWidgets('browsing back a day does not move the strip off today', (
+  testWidgets('the habits screen browsing a day does not move the strip', (
     tester,
   ) async {
     final habits = FakeHabitsRepository.sample(now: fixedNow);
@@ -140,13 +149,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(habits.written.single.date, '2026-08-24');
 
-    // Back on Today, the strip is showing today — not the day the habits
-    // screen was left on — and a tap lands on today.
+    // Back on the timeline, the strip belongs to the day the timeline is
+    // showing — not to a selection made on another screen — so it is still on
+    // today and a tap lands on today.
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tapOnStrip(tester, 'read');
     expect(habits.written.last.date, '2026-08-27');
     expect(find.text('1/3'), findsOneWidget);
+  });
+
+  testWidgets('the strip follows the timeline onto another day', (
+    tester,
+  ) async {
+    final habits = FakeHabitsRepository.sample(now: fixedNow);
+    await pumpLuqa(tester, habitsRepository: habits);
+
+    await shiftTimeline(tester, -1);
+
+    // The row is Wednesday's now, and so is the tap.
+    await tapOnStrip(tester, 'read');
+    expect(habits.written.single.date, '2026-08-26');
+
+    // And the tally is that day's, not today's.
+    expect(find.text('1/3'), findsOneWidget);
+
+    // Back on today, which was never ticked.
+    await shiftTimeline(tester, 1);
+    expect(find.text('0/3'), findsOneWidget);
+  });
+
+  testWidgets('a habit not due on the day scrolled to is not on the strip', (
+    tester,
+  ) async {
+    await pumpLuqa(tester);
+
+    // Monday the 24th is the only day Stretch is due, and the pinned day is
+    // the Thursday after it.
+    expect(find.byKey(const ValueKey('habit-chip-stretch')), findsNothing);
+    await shiftTimeline(tester, -3);
+
+    await scrollStripTo(tester, 'habit-chip-stretch');
+    expect(find.byKey(const ValueKey('habit-chip-stretch')), findsOneWidget);
   });
 
   testWidgets('reopening the habits screen starts on today again', (
@@ -294,6 +338,63 @@ void main() {
       find.byKey(const ValueKey('habit-save')),
     );
     expect(save.onPressed, isNull);
+  });
+
+  testWidgets('logging time on a linked category moves its habit there and then', (
+    tester,
+  ) async {
+    await pumpLuqa(
+      tester,
+      habitsRepository: FakeHabitsRepository(
+        now: fixedNow,
+        habits: [
+          // A habit whose progress *is* tracked time: nothing is ever written
+          // against it directly, so the only thing that can move it is a block
+          // appearing on the timeline. Fifty minutes against the half hour
+          // already on the day, so it takes one more block to finish.
+          Habit(
+            id: 'deep',
+            name: 'Deep work',
+            icon: null,
+            colorValue: 0xFF6366F1,
+            order: 0,
+            goalType: HabitGoalType.time,
+            goalPeriod: HabitGoalPeriod.day,
+            targetCount: 1,
+            targetSeconds: 50 * 60,
+            categoryId: 'food',
+            scheduleType: HabitScheduleType.daily,
+            weekdays: const [],
+            weekInterval: 1,
+            intervalDays: 2,
+            intervalFromLastDone: false,
+            timesPerPeriod: 3,
+            anchorDate: null,
+            dates: const [],
+            excludedDates: const [],
+            archived: false,
+            createdAt: DateTime(2026, 1, 1),
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('0/1'), findsOneWidget);
+
+    // Compose a half-hour block on the grid and file it under the habit's
+    // category — the ordinary way time gets logged.
+    await tapTimelineAt(tester, const Offset(200, 560));
+    await tester.tap(find.text('Food'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('save-draft-button')));
+    await tester.pumpAndSettle();
+
+    // No sync round, no visit to the habits screen: the strip already knows.
+    expect(find.text('0/1'), findsNothing);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('habits-strip-all'))).label,
+      'Habits, 1 of 1 done',
+    );
   });
 
   testWidgets('insights show a streak for each habit', (tester) async {

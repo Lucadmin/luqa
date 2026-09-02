@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luqa/core/network/network_failure.dart';
+import 'package:luqa/features/gym/application/gym_overview_controller.dart';
 import 'package:luqa/features/gym/application/gym_sync_engine.dart';
 import 'package:luqa/features/gym/data/gym_providers.dart';
 import 'package:luqa/features/gym/data/gym_repository.dart';
@@ -67,6 +68,7 @@ class WorkoutDraft {
     required this.locationId,
     required this.notes,
     required this.exercises,
+    required this.endedAt,
   });
 
   factory WorkoutDraft.fromSession(GymSession session) => WorkoutDraft(
@@ -74,6 +76,7 @@ class WorkoutDraft {
     dateKey: session.dateKey,
     locationId: session.locationId,
     notes: session.notes,
+    endedAt: session.endedAt,
     exercises: [
       for (final exercise in session.exercises)
         WorkoutExerciseDraft(
@@ -102,11 +105,19 @@ class WorkoutDraft {
   final String notes;
   final List<WorkoutExerciseDraft> exercises;
 
+  /// When the workout was finished, or null while it is still going. Editing
+  /// a finished workout is allowed and does not reopen it — only the user
+  /// saying so does, which is why [toWrite] leaves this out.
+  final DateTime? endedAt;
+
+  bool get isFinished => endedAt != null;
+
   WorkoutDraft copyWith({
     String? dateKey,
     Object? locationId = _unset,
     String? notes,
     List<WorkoutExerciseDraft>? exercises,
+    Object? endedAt = _unset,
   }) => WorkoutDraft(
     id: id,
     dateKey: dateKey ?? this.dateKey,
@@ -115,6 +126,9 @@ class WorkoutDraft {
         : locationId as String?,
     notes: notes ?? this.notes,
     exercises: exercises ?? this.exercises,
+    endedAt: identical(endedAt, _unset)
+        ? this.endedAt
+        : endedAt as DateTime?,
   );
 
   GymSessionWrite toWrite() => GymSessionWrite(
@@ -374,18 +388,11 @@ class WorkoutController extends Notifier<WorkoutState> {
   void addSet() {
     final active = state.activeExercise;
     if (active == null) return;
-    var carriedWeight = '';
-    for (final set in active.sets.reversed) {
-      if (set.weight.trim().isNotEmpty) {
-        carriedWeight = set.weight;
-        break;
-      }
-    }
     _replaceActive(
       active.copyWith(
         sets: [
           ...active.sets,
-          WorkoutSetDraft(weight: carriedWeight),
+          const WorkoutSetDraft(),
         ],
       ),
     );
@@ -422,6 +429,39 @@ class WorkoutController extends Notifier<WorkoutState> {
     final exercises = [...draft.exercises];
     exercises[state.activeExerciseIndex] = exercise;
     _edit(draft.copyWith(exercises: exercises));
+  }
+
+  /// Finishes the workout, or reopens a finished one.
+  ///
+  /// Everything typed goes in first: the last set is usually entered seconds
+  /// before the button is pressed, and it belongs inside the workout rather
+  /// than after the end of it.
+  Future<bool> setFinished(bool finished) async {
+    final draft = state.draft;
+    if (draft == null || _abandoned) return false;
+    await flush();
+    if (!ref.mounted) return false;
+    final endedAt = finished ? ref.read(gymClockProvider)() : null;
+    // On screen straight away; the workout is over whether or not the server
+    // has been told, which is the same promise every other write here makes.
+    state = state.copyWith(
+      draft: state.draft?.copyWith(endedAt: endedAt),
+      saveError: null,
+    );
+    try {
+      await _repository.endSession(draft.id, endedAt);
+      return true;
+    } on Object catch (error) {
+      if (!ref.mounted) return false;
+      state = state.copyWith(
+        draft: state.draft?.copyWith(endedAt: draft.endedAt),
+        saveError: describeNetworkFailure(
+          error,
+          whileDoing: finished ? 'finishing the workout' : 'reopening it',
+        ),
+      );
+      return false;
+    }
   }
 
   /// Stops autosaving for good, because the workout is being deleted.

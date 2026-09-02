@@ -140,6 +140,19 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen>
     if (context.canPop()) context.pop();
   }
 
+  /// Ends the workout and leaves. The Gym tab stops offering to continue it,
+  /// and the idle window never has to guess.
+  Future<void> _finishWorkout() async {
+    final finished = await _controller.setFinished(true);
+    if (!finished || !mounted) return;
+    unawaited(HapticFeedback.selectionClick());
+    if (context.canPop()) context.pop();
+  }
+
+  Future<void> _resumeWorkout() async {
+    await _controller.setFinished(false);
+  }
+
   void _openHistory(WorkoutState state) {
     final exercise = state.activeExercise;
     if (exercise?.exerciseId == null) return;
@@ -182,6 +195,18 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen>
         appBar: AppBar(
           title: const Text('Workout'),
           actions: [
+            if (state.draft case final draft?)
+              draft.isFinished
+                  ? TextButton(
+                      key: const ValueKey('resume-workout'),
+                      onPressed: () => unawaited(_resumeWorkout()),
+                      child: const Text('Resume'),
+                    )
+                  : TextButton(
+                      key: const ValueKey('finish-workout'),
+                      onPressed: () => unawaited(_finishWorkout()),
+                      child: const Text('Finish'),
+                    ),
             PopupMenuButton<String>(
               tooltip: 'Workout options',
               onSelected: (value) {
@@ -312,12 +337,15 @@ class _WorkoutContextRow extends StatelessWidget {
     // "Saved" means saved on this phone, which is the promise the app can
     // actually keep in a basement. Reaching the server is reported separately
     // and never as a failure the user has to act on.
+    final endedAt = state.draft?.endedAt;
     final status = state.saveError != null
         ? 'Save failed'
         : state.hasUnsavedChanges || state.isSaving
         ? 'Saving…'
         : state.pendingWrites > 0
         ? 'Saved · syncing'
+        : endedAt != null
+        ? 'Finished ${gymTimeLabel(context, endedAt)}'
         : 'Saved';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: LuqaSpacing.lg),

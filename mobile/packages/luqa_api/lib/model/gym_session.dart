@@ -19,6 +19,8 @@ class GymSession {
     required this.notes,
     this.exercises = const [],
     required this.createdAt,
+    required this.updatedAt,
+    required this.endedAt,
   });
 
   final String id;
@@ -33,6 +35,12 @@ class GymSession {
 
   final DateTime createdAt;
 
+  /// Last time anything in the workout changed. What an open workout's idle time is measured from.
+  final DateTime updatedAt;
+
+  /// When training stopped, or null while the workout is still open.
+  final DateTime? endedAt;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -42,7 +50,9 @@ class GymSession {
           other.locationId == locationId &&
           other.notes == notes &&
           _deepEquality.equals(other.exercises, exercises) &&
-          other.createdAt == createdAt;
+          other.createdAt == createdAt &&
+          other.updatedAt == updatedAt &&
+          other.endedAt == endedAt;
 
   @override
   int get hashCode =>
@@ -52,11 +62,13 @@ class GymSession {
       (locationId == null ? 0 : locationId!.hashCode) +
       (notes.hashCode) +
       (exercises.hashCode) +
-      (createdAt.hashCode);
+      (createdAt.hashCode) +
+      (updatedAt.hashCode) +
+      (endedAt == null ? 0 : endedAt!.hashCode);
 
   @override
   String toString() =>
-      'GymSession[id=$id, date=$date, locationId=$locationId, notes=$notes, exercises=$exercises, createdAt=$createdAt]';
+      'GymSession[id=$id, date=$date, locationId=$locationId, notes=$notes, exercises=$exercises, createdAt=$createdAt, updatedAt=$updatedAt, endedAt=$endedAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -70,6 +82,12 @@ class GymSession {
     json[r'notes'] = this.notes;
     json[r'exercises'] = this.exercises;
     json[r'createdAt'] = this.createdAt.toUtc().toIso8601String();
+    json[r'updatedAt'] = this.updatedAt.toUtc().toIso8601String();
+    if (this.endedAt != null) {
+      json[r'endedAt'] = this.endedAt!.toUtc().toIso8601String();
+    } else {
+      json[r'endedAt'] = null;
+    }
     return json;
   }
 
@@ -83,6 +101,9 @@ class GymSession {
     String? notes,
     List<GymSessionExercise>? exercises,
     DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? endedAt,
+    bool endedAtSetToNull = false,
   }) =>
       GymSession(
         id: id ?? this.id,
@@ -91,6 +112,8 @@ class GymSession {
         notes: notes ?? this.notes,
         exercises: exercises ?? this.exercises,
         createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+        endedAt: endedAtSetToNull ? null : endedAt ?? this.endedAt,
       );
 
   /// Returns a new [GymSession] instance and imports its values from
@@ -126,6 +149,12 @@ class GymSession {
             'Required key "GymSession[createdAt]" is missing from JSON.');
         assert(json[r'createdAt'] != null,
             'Required key "GymSession[createdAt]" has a null value in JSON.');
+        assert(json.containsKey(r'updatedAt'),
+            'Required key "GymSession[updatedAt]" is missing from JSON.');
+        assert(json[r'updatedAt'] != null,
+            'Required key "GymSession[updatedAt]" has a null value in JSON.');
+        assert(json.containsKey(r'endedAt'),
+            'Required key "GymSession[endedAt]" is missing from JSON.');
         return true;
       }());
 
@@ -136,6 +165,8 @@ class GymSession {
         notes: mapValueOfType<String>(json, r'notes')!,
         exercises: GymSessionExercise.listFromJson(json[r'exercises']),
         createdAt: mapDateTime(json, r'createdAt', r'')!,
+        updatedAt: mapDateTime(json, r'updatedAt', r'')!,
+        endedAt: mapDateTime(json, r'endedAt', r''),
       );
     }
     return null;
@@ -198,5 +229,7 @@ class GymSession {
     'notes',
     'exercises',
     'createdAt',
+    'updatedAt',
+    'endedAt',
   };
 }

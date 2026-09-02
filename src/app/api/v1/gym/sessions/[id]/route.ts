@@ -123,6 +123,9 @@ export async function PATCH(
           ? { locationId: input.locationId ?? null }
           : {}),
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        ...(input.endedAt !== undefined
+          ? { endedAt: input.endedAt ? new Date(input.endedAt) : null }
+          : {}),
       },
     });
     if (input.exercises) {

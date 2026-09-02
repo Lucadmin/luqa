@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,15 +12,44 @@ import 'package:luqa/features/gym/domain/gym_models.dart';
 import 'package:luqa/features/gym/presentation/gym_picker_sheet.dart';
 import 'package:luqa/features/gym/presentation/widgets/gym_session_row.dart';
 
-class GymScreen extends ConsumerWidget {
+class GymScreen extends ConsumerStatefulWidget {
   const GymScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GymScreen> createState() => _GymScreenState();
+}
+
+class _GymScreenState extends ConsumerState<GymScreen> {
+  late DateTime _now = ref.read(gymNowProvider);
+  Timer? _clock;
+
+  @override
+  void initState() {
+    super.initState();
+    // Whether a workout is still open is a question about elapsed time, so the
+    // answer goes stale on its own. A minute is far finer than the idle window
+    // needs and cheap enough not to matter.
+    _clock = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!mounted) return;
+      setState(() => _now = ref.read(gymClockProvider)());
+      unawaited(
+        ref.read(gymOverviewControllerProvider.notifier).closeIdleSessions(),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _clock?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(gymOverviewControllerProvider);
     final controller = ref.read(gymOverviewControllerProvider.notifier);
     final overview = state.overview;
-    final now = ref.watch(gymNowProvider);
+    final now = _now;
 
     if (state.isLoading && overview == null) {
       return const SafeArea(child: _GymSkeleton());

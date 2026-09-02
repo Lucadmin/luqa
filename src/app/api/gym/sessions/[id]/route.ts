@@ -92,6 +92,9 @@ export async function PATCH(
         ...(d.date !== undefined ? { date: dateFromKey(d.date) } : {}),
         ...(d.locationId !== undefined ? { locationId: d.locationId ?? null } : {}),
         ...(d.notes !== undefined ? { notes: d.notes } : {}),
+        ...(d.endedAt !== undefined
+          ? { endedAt: d.endedAt ? new Date(d.endedAt) : null }
+          : {}),
       },
     });
 

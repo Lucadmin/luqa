@@ -22,6 +22,8 @@ Map<String, Object?> gymSessionToJson(GymSession value) => {
   'locationId': value.locationId,
   'notes': value.notes,
   'createdAt': value.createdAt.toUtc().toIso8601String(),
+  'updatedAt': value.updatedAt.toUtc().toIso8601String(),
+  'endedAt': value.endedAt?.toUtc().toIso8601String(),
   'exercises': [
     for (final exercise in value.exercises)
       {
@@ -42,6 +44,15 @@ GymSession gymSessionFromJson(Map<String, Object?> value) => GymSession(
   locationId: value['locationId'] as String?,
   notes: value['notes']! as String,
   createdAt: DateTime.parse(value['createdAt']! as String).toLocal(),
+  // A workout queued by a build that predates these two is one that was
+  // started and never finished, and creating it is the only thing still owed.
+  updatedAt: DateTime.parse(
+    (value['updatedAt'] ?? value['createdAt']!) as String,
+  ).toLocal(),
+  endedAt: switch (value['endedAt']) {
+    final String at => DateTime.parse(at).toLocal(),
+    _ => null,
+  },
   exercises: [
     for (final item in value['exercises']! as List<Object?>)
       GymSessionExercise(

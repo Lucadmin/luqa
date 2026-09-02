@@ -103,7 +103,9 @@ Future<FakeTimelineRepository> pumpLuqa(
         gymRepositoryProvider.overrideWithValue(
           gymRepository ?? FakeGymRepository.sample(),
         ),
-        gymNowProvider.overrideWithValue(fixedNow),
+        // The clock, not the moment: gymNowProvider is derived from this, and
+        // the gym's writes and its idle window both ask for the time again.
+        gymClockProvider.overrideWithValue(() => fixedNow),
         moneyRepositoryProvider.overrideWithValue(
           moneyRepository ?? FakeMoneyRepository.sample(),
         ),

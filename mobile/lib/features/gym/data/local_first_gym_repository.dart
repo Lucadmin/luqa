@@ -114,6 +114,9 @@ class LocalFirstGymRepository implements GymRepository {
       notes: '',
       exercises: const [],
       createdAt: _now(),
+      updatedAt: _now(),
+      // Starting a workout is the one moment it is certainly not over.
+      endedAt: null,
     );
     await _write(
       CreateSession(session: session, queuedAt: _now()),
@@ -134,13 +137,49 @@ class LocalFirstGymRepository implements GymRepository {
           notes: write.notes,
           exercises: const [],
           createdAt: _now(),
+          updatedAt: _now(),
+          endedAt: null,
         );
-    final saved = applyWrite(base, await _resolveExercises(write));
+    final saved = applyWrite(base, await _resolveExercises(write), at: _now());
     await _write(
       SaveSession(sessionId: id, write: write, queuedAt: _now()),
       () => store.putSession(saved),
     );
     return saved;
+  }
+
+  @override
+  Future<GymSession> endSession(String id, DateTime? endedAt) async {
+    await queue.ready;
+    final session = await store.session(id);
+    // Nothing local to finish means nothing local to show for it either; the
+    // write still goes out, because the server may well have the workout.
+    //
+    // Reopening counts as activity, and has to: a workout the idle window just
+    // closed would otherwise be closed again the moment it was reopened.
+    final ended = session?.copyWith(endedAt: endedAt, updatedAt: _now());
+    await _write(
+      EndSession(
+        sessionId: id,
+        endedAt: endedAt,
+        dateKey: session?.dateKey ?? gymDateKey(_now()),
+        queuedAt: _now(),
+      ),
+      () async {
+        if (ended != null) await store.putSession(ended);
+      },
+    );
+    return ended ??
+        GymSession(
+          id: id,
+          dateKey: gymDateKey(_now()),
+          locationId: null,
+          notes: '',
+          exercises: const [],
+          createdAt: _now(),
+          updatedAt: _now(),
+          endedAt: endedAt,
+        );
   }
 
   @override

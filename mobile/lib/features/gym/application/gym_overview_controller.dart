@@ -8,7 +8,22 @@ import 'package:luqa/features/gym/data/gym_providers.dart';
 import 'package:luqa/features/gym/data/gym_repository.dart';
 import 'package:luqa/features/gym/domain/gym_models.dart';
 
-final gymNowProvider = Provider<DateTime>((ref) => DateTime.now());
+/// The gym's clock, as something that can be asked more than once.
+///
+/// A `Provider<DateTime>` is evaluated once and cached for the life of the
+/// process, so anything reading one is reading the time the app happened to
+/// launch. That is fine for a label and quietly wrong for a decision: a
+/// workout started on Wednesday in an app opened on Monday was being filed
+/// under Monday. Anything that writes a time, or that has to notice one
+/// passing, calls this.
+final gymClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
+/// The moment a screen was built. Fine for formatting a date; not for
+/// deciding whether a workout is still going — read [gymClockProvider] for
+/// that, or hold a ticking value.
+final gymNowProvider = Provider<DateTime>(
+  (ref) => ref.watch(gymClockProvider)(),
+);
 
 final gymOverviewControllerProvider =
     NotifierProvider<GymOverviewController, GymOverviewState>(
@@ -39,14 +54,24 @@ class GymOverviewState {
 
   final String? error;
 
+  /// The workout still being trained, if there is one.
+  ///
+  /// Open means the user has not finished it and has touched it recently
+  /// enough for it to plausibly still be happening. Sessions are newest first,
+  /// so the first match is the one in front of them.
   GymSession? currentSession(DateTime now) {
-    final today = gymDateKey(now);
-    final sessions = overview?.sessions ?? const <GymSession>[];
-    for (final session in sessions) {
-      if (session.dateKey == today) return session;
+    for (final session in overview?.sessions ?? const <GymSession>[]) {
+      if (session.isOpenAt(now)) return session;
     }
     return null;
   }
+
+  /// Workouts left open that have plainly been abandoned. Finishing them is
+  /// what [GymOverviewController.closeIdleSessions] writes back.
+  Iterable<GymSession> idleSessions(DateTime now) =>
+      (overview?.sessions ?? const <GymSession>[]).where(
+        (session) => !session.isFinished && session.idleAt(now),
+      );
 
   GymOverviewState copyWith({
     GymOverview? overview,
@@ -130,6 +155,7 @@ class GymOverviewController extends Notifier<GymOverviewState> {
       if (ref.mounted && generation == _generation) {
         state = state.copyWith(isRefreshing: false);
       }
+      await closeIdleSessions();
       return;
     }
     try {
@@ -146,6 +172,9 @@ class GymOverviewController extends Notifier<GymOverviewState> {
       if (!ref.mounted || generation != _generation) return;
       state = state.copyWith(isRefreshing: false);
     }
+    // After the pull, so a workout left open on another device is judged on
+    // the last edit that device actually made rather than on this one's copy.
+    if (generation == _generation) await closeIdleSessions();
   }
 
   /// The user has read the notice about a workout that could not be saved.
@@ -160,13 +189,90 @@ class GymOverviewController extends Notifier<GymOverviewState> {
     await load(refresh: true);
   }
 
+  /// Finishes workouts that were left open and have since gone quiet.
+  ///
+  /// Stamped with the last edit rather than with now, because that is when the
+  /// training actually stopped — a session abandoned on Tuesday evening should
+  /// not be recorded as having ended when the app next happened to be opened.
+  ///
+  /// Runs off a read rather than a timer: there is no background execution to
+  /// rely on, and nothing depends on the write having happened until somebody
+  /// looks at the Gym tab.
+  Future<void> closeIdleSessions() async {
+    if (!ref.mounted) return;
+    final stale = state.idleSessions(ref.read(gymClockProvider)()).toList();
+    if (stale.isEmpty) return;
+    for (final session in stale) {
+      try {
+        await _repository.endSession(session.id, session.updatedAt);
+      } on Object {
+        // Nothing was asked for, so there is nothing to report. The next read
+        // finds the workout still open and tries again.
+        return;
+      }
+      if (!ref.mounted) return;
+    }
+    final overview = state.overview;
+    if (overview == null) return;
+    final closed = {for (final session in stale) session.id};
+    state = state.copyWith(
+      overview: overview.copyWith(
+        sessions: [
+          for (final session in overview.sessions)
+            if (closed.contains(session.id))
+              session.copyWith(endedAt: session.updatedAt)
+            else
+              session,
+        ],
+      ),
+    );
+  }
+
+  /// Finishes a workout by hand, or reopens a finished one.
+  Future<bool> endWorkout(String id, {required DateTime? endedAt}) async {
+    state = state.copyWith(clearError: true);
+    final overview = state.overview;
+    if (overview != null) {
+      state = state.copyWith(
+        overview: overview.copyWith(
+          sessions: [
+            for (final session in overview.sessions)
+              if (session.id == id)
+                session.copyWith(
+                  endedAt: endedAt,
+                  updatedAt: ref.read(gymClockProvider)(),
+                )
+              else
+                session,
+          ],
+        ),
+      );
+    }
+    try {
+      await _repository.endSession(id, endedAt);
+      return true;
+    } on Object catch (error) {
+      if (!ref.mounted) return false;
+      state = state.copyWith(
+        overview: overview,
+        error: describeNetworkFailure(
+          error,
+          whileDoing: endedAt == null
+              ? 'reopening the workout'
+              : 'finishing the workout',
+        ),
+      );
+      return false;
+    }
+  }
+
   /// Starts a workout and returns it immediately. The server hears about it
   /// when it can; the user is already on the workout screen by then.
   Future<GymSession?> startWorkout({String? locationId}) async {
     state = state.copyWith(clearError: true);
     try {
       final session = await _repository.createSession(
-        dateKey: gymDateKey(ref.read(gymNowProvider)),
+        dateKey: gymDateKey(ref.read(gymClockProvider)()),
         locationId: locationId,
       );
       if (!ref.mounted) return session;
@@ -299,12 +405,7 @@ class GymOverviewController extends Notifier<GymOverviewState> {
         ],
         sessions: [
           for (final session in overview.sessions)
-            GymSession(
-              id: session.id,
-              dateKey: session.dateKey,
-              locationId: session.locationId,
-              notes: session.notes,
-              createdAt: session.createdAt,
+            session.copyWith(
               exercises: [
                 for (final entry in session.exercises)
                   if (entry.exerciseId == exercise.id)

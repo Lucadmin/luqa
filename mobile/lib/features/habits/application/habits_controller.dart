@@ -23,9 +23,10 @@ class HabitsState {
   const HabitsState({
     required this.selectedDate,
     required this.todayDate,
+    required this.stripDate,
     this.habits = const [],
     this.day = const [],
-    this.today = const [],
+    this.stripDay = const [],
     this.facts = const HabitDayFacts(),
     this.dayStartHour = 3,
     this.weekStartsOn = 1,
@@ -40,8 +41,16 @@ class HabitsState {
   /// The logical day the habits screen is showing, as a date key.
   final String selectedDate;
 
-  /// Today, whatever day the habits screen has been left on.
+  /// Today, whatever day either screen has been left on.
   final String todayDate;
+
+  /// The logical day the strip above the timeline is showing — the day the
+  /// timeline itself is scrolled to.
+  ///
+  /// A third axis rather than a second use of [selectedDate], because the two
+  /// screens browse independently: the habits screen being left on last Monday
+  /// must not decide what the timeline's row shows, and vice versa.
+  final String stripDate;
 
   /// Every live habit, in the order they are shown. Archived ones are not
   /// here; nothing on these screens acts on one.
@@ -50,10 +59,8 @@ class HabitsState {
   /// The habits [selectedDate] actually holds, with their progress resolved.
   final List<HabitDay> day;
 
-  /// The same for today, kept apart from [day] so browsing back through the
-  /// week on the habits screen cannot leave the strip on Today showing last
-  /// Monday's check-ins.
-  final List<HabitDay> today;
+  /// The same for [stripDate].
+  final List<HabitDay> stripDay;
 
   /// The rows the day was resolved from, kept so a week strip or an insights
   /// grid can resolve their own days without another round of queries.
@@ -82,15 +89,19 @@ class HabitsState {
     return null;
   }
 
-  /// How many of today's habits are done, for the strip's summary.
-  int get doneCount => today.where((entry) => entry.done).length;
+  /// How many of the strip day's habits are done, for its summary ring.
+  int get stripDoneCount => stripDay.where((entry) => entry.done).length;
+
+  /// Whether the strip is showing today, or a day the timeline was scrolled to.
+  bool get stripIsToday => stripDate == todayDate;
 
   HabitsState copyWith({
     String? selectedDate,
     String? todayDate,
+    String? stripDate,
     List<Habit>? habits,
     List<HabitDay>? day,
-    List<HabitDay>? today,
+    List<HabitDay>? stripDay,
     HabitDayFacts? facts,
     int? dayStartHour,
     int? weekStartsOn,
@@ -104,9 +115,10 @@ class HabitsState {
   }) => HabitsState(
     selectedDate: selectedDate ?? this.selectedDate,
     todayDate: todayDate ?? this.todayDate,
+    stripDate: stripDate ?? this.stripDate,
     habits: habits ?? this.habits,
     day: day ?? this.day,
-    today: today ?? this.today,
+    stripDay: stripDay ?? this.stripDay,
     facts: facts ?? this.facts,
     dayStartHour: dayStartHour ?? this.dayStartHour,
     weekStartsOn: weekStartsOn ?? this.weekStartsOn,
@@ -132,9 +144,19 @@ class HabitsController extends Notifier<HabitsState> {
   /// first load starts before `build` has returned a state to read it from.
   late String _today;
 
+  /// The day the timeline's strip is showing. Same reason as [_today]: the
+  /// first load has to know what to cover before there is a state to ask.
+  late String _stripDate;
+
   /// The window of logs currently loaded, as date keys.
   String? _loadedFrom;
   String? _loadedTo;
+
+  /// Widening the window for a day scrolled to is debounced: a fling across
+  /// the timeline crosses every day between here and there, and none of the
+  /// ones passed over is worth a round of queries.
+  Timer? _windowDebounce;
+  static const _windowSettleDelay = Duration(milliseconds: 250);
 
   /// Blocks of tracked time behind the category-linked habits, for the same
   /// window.
@@ -161,14 +183,18 @@ class HabitsController extends Notifier<HabitsState> {
       );
     });
 
+    ref.onDispose(() => _windowDebounce?.cancel());
+
     // Three in the morning is the server's default day start, and the right
     // guess until a sync reports what this account actually uses.
     _today = logicalDateKey(ref.watch(currentTimeProvider), 3);
+    _stripDate = _today;
     unawaited(_initialise(_today));
 
     return HabitsState(
       selectedDate: _today,
       todayDate: _today,
+      stripDate: _today,
       pendingWrites: sync.pending,
       discarded: sync.discarded,
     );
@@ -195,39 +221,42 @@ class HabitsController extends Notifier<HabitsState> {
   /// cover their own.
   ///
   /// Today is always inside it, whatever day is being browsed, because the
-  /// strip on Today is resolved from the same rows.
+  /// insights grid is counted from today whichever screen asked.
+  ///
+  /// Every day on screen anywhere is an anchor: the habits screen's selected
+  /// day, the day the timeline's strip is scrolled to, and today. All three
+  /// browse independently, and one window covering the lot is cheaper than
+  /// reloading whenever the active screen changes.
   ///
   /// A yearly quota is the one thing that needs a year, so it is the one thing
   /// that gets one. Loading twelve months of history for an account whose
   /// habits are all daily would be paying a rare case's price on every screen.
   static ({String from, String to}) _windowFor(
-    String dateKey,
+    List<String> anchors,
     String today,
     List<Habit> habits,
   ) {
-    final date = parseDateKey(dateKey);
-    final now = parseDateKey(today);
+    final dates = [for (final key in anchors) parseDateKey(key)];
+    final yearly = habits.any(
+      (habit) => habit.scheduleType == HabitScheduleType.timesPerYear,
+    );
 
     final starts = [
-      dateKeyOf(DateTime(date.year, date.month, 1)),
       // Far enough back for the insights grid, which counts four weeks from
       // today rather than from whatever day is on screen.
       addDaysToKey(today, -35),
+      for (final date in dates) dateKeyOf(DateTime(date.year, date.month, 1)),
+      if (yearly)
+        for (final date in dates) dateKeyOf(DateTime(date.year, 1, 1)),
     ];
     final ends = [
       // Through the end of the month, so moving a day forward inside it never
       // needs the window reloaded.
-      dateKeyOf(DateTime(date.year, date.month + 1, 0)),
-      dateKeyOf(DateTime(now.year, now.month + 1, 0)),
+      for (final date in dates)
+        dateKeyOf(DateTime(date.year, date.month + 1, 0)),
+      if (yearly)
+        for (final date in dates) dateKeyOf(DateTime(date.year, 12, 31)),
     ];
-
-    if (habits.any(
-      (habit) => habit.scheduleType == HabitScheduleType.timesPerYear,
-    )) {
-      starts.add(dateKeyOf(DateTime(date.year, 1, 1)));
-      starts.add(dateKeyOf(DateTime(now.year, 1, 1)));
-      ends.add(dateKeyOf(DateTime(date.year, 12, 31)));
-    }
 
     starts.sort();
     ends.sort();
@@ -261,7 +290,7 @@ class HabitsController extends Notifier<HabitsState> {
       final habits = await _repository.loadHabits();
       if (!ref.mounted || generation != _generation) return;
 
-      final window = _windowFor(dateKey, _today, habits);
+      final window = _windowFor([dateKey, _today, _stripDate], _today, habits);
       if (force || !_covers(window.from, window.to)) {
         final logs = await _repository.loadLogs(
           from: window.from,
@@ -292,18 +321,63 @@ class HabitsController extends Notifier<HabitsState> {
   ///
   /// A linked habit's progress *is* tracked time; keeping a separate tally of
   /// it here would be a second answer to a question that already has one.
+  ///
+  /// Two sources for one answer, and they are not redundant. The store holds
+  /// the whole window — which can be a month or a year, far more than the three
+  /// weeks the timeline keeps in memory. [_liveEntries] holds what the timeline
+  /// is showing right now, including a block saved a moment ago. The store is
+  /// the base and the live rows are laid over it by id, so a block created a
+  /// second ago counts immediately and one from last March still counts at all.
   Future<List<TimeEntry>> _trackedEntries(String from, String to) async {
-    final store = ref.read(timelineLocalStoreProvider);
-    if (store == null) return const [];
     final start = parseDateKey(from);
     final end = parseDateKey(to);
-    final window = await store.window(
-      DateTime(start.year, start.month, start.day),
-      // Exclusive, and a day past the end so a block begun late on the last
-      // day of the window is still inside it.
-      DateTime(end.year, end.month, end.day + 2),
-    );
-    return window.entries;
+    // Exclusive, and a day past the end so a block begun late on the last day
+    // of the window is still inside it.
+    final until = DateTime(end.year, end.month, end.day + 2);
+    final since = DateTime(start.year, start.month, start.day);
+
+    final store = ref.read(timelineLocalStoreProvider);
+    final stored = store == null
+        ? const <TimeEntry>[]
+        : (await store.window(since, until)).entries;
+
+    final byId = {
+      for (final entry in stored) entry.id: entry,
+      for (final entry in _liveEntries)
+        if (!entry.start.isBefore(since) && entry.start.isBefore(until))
+          entry.id: entry,
+    };
+    return byId.values.toList(growable: false);
+  }
+
+  /// What the timeline is currently showing, pushed in rather than read.
+  ///
+  /// Read from here it would have to come through the timeline's own provider,
+  /// which is autoDispose: asking it for its entries while nobody is looking at
+  /// the timeline would build it back up and set it loading, for an answer the
+  /// store already has. The screen that owns both hands them over instead.
+  List<TimeEntry> _liveEntries = const [];
+
+  /// Re-resolves the tracked time behind category-linked habits from the blocks
+  /// the timeline is showing.
+  ///
+  /// What the timeline does to a block changes what those habits have achieved,
+  /// immediately — a "two hours of focus" habit is a claim about the blocks on
+  /// screen, and a claim that only caught up on the next sync round would be
+  /// wrong for exactly as long as somebody was watching it.
+  ///
+  /// No habit query, no log query, no network: only the rows that changed.
+  Future<void> syncTrackedTime(List<TimeEntry> entries) async {
+    _liveEntries = entries;
+    final from = _loadedFrom;
+    final to = _loadedTo;
+    if (from == null || to == null) return;
+    final generation = _generation;
+    final tracked = await _trackedEntries(from, to);
+    // A load in flight is about to publish a fresher answer than this one.
+    if (!ref.mounted || generation != _generation) return;
+    _entries = tracked;
+    _publish(habits: state.habits, dateKey: state.selectedDate);
   }
 
   void _publish({required List<Habit> habits, required String dateKey}) {
@@ -336,15 +410,57 @@ class HabitsController extends Notifier<HabitsState> {
     state = state.copyWith(
       selectedDate: dateKey,
       todayDate: todayDate,
+      stripDate: _stripDate,
       habits: live,
       facts: facts,
       day: day,
-      today: dateKey == todayDate ? day : resolve(todayDate),
+      stripDay: _stripDate == dateKey ? day : resolve(_stripDate),
       dayStartHour: dayStartHour,
       weekStartsOn: weekStartsOn,
       isLoading: false,
       clearError: true,
     );
+  }
+
+  /// The timeline has scrolled onto another day, so the strip moves with it.
+  ///
+  /// [day] is a logical day the timeline has already resolved — midnight of the
+  /// day it belongs to, not a wall-clock instant inside it — so it is named
+  /// directly rather than put back through [logicalDateKey], which would push
+  /// every day one earlier by reading that midnight as the small hours of the
+  /// day before.
+  ///
+  /// Answered from the facts already held rather than through [_publish],
+  /// which would rebuild the whole window's fact maps. The timeline reports
+  /// every day boundary it crosses, so a fling across a month would rebuild
+  /// them dozens of times over for an answer that never needed them rebuilt.
+  void viewStripDay(DateTime day) {
+    final dateKey = dateKeyOf(day);
+    if (dateKey == _stripDate) return;
+    _stripDate = dateKey;
+    state = state.copyWith(
+      stripDate: dateKey,
+      stripDay: resolveHabitDay(
+        habits: state.habits,
+        dateKey: dateKey,
+        facts: state.facts,
+        weekStartsOn: state.weekStartsOn,
+      ),
+    );
+
+    // Scrolled clean out of what is loaded — off the end of the month, most
+    // likely. Widen once the scrolling stops rather than at every day passed.
+    _windowDebounce?.cancel();
+    _windowDebounce = Timer(_windowSettleDelay, () {
+      if (!ref.mounted) return;
+      final window = _windowFor(
+        [state.selectedDate, _today, _stripDate],
+        _today,
+        state.habits,
+      );
+      if (_covers(window.from, window.to)) return;
+      unawaited(_load(state.selectedDate));
+    });
   }
 
   /// Re-resolves from the rows already loaded. No queries, no network — this
@@ -562,13 +678,14 @@ class HabitsController extends Notifier<HabitsState> {
         .read(timelineControllerProvider.notifier)
         .startTimer(description: habit.name, categoryId: habit.categoryId);
     if (!ref.mounted) return;
-    await _load(state.selectedDate, force: true);
+    // Already holding the timeline, so its rows come straight back with us.
+    await syncTrackedTime(ref.read(timelineControllerProvider).entries);
   }
 
   Future<void> _stopTracking() async {
     await ref.read(timelineControllerProvider.notifier).stopTimer();
     if (!ref.mounted) return;
-    await _load(state.selectedDate, force: true);
+    await syncTrackedTime(ref.read(timelineControllerProvider).entries);
   }
 
   void _fail(Object error, String whileDoing) {

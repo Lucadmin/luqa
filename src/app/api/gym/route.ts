@@ -78,6 +78,8 @@ export async function POST(request: Request) {
         date: dateFromKey(d.date ?? todayKey()),
         locationId: d.locationId ?? null,
         notes: d.notes,
+        // Starting a workout opens it; the editor autosaves into it from here.
+        endedAt: d.endedAt ? new Date(d.endedAt) : null,
       },
     });
 

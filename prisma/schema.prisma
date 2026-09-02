@@ -934,6 +934,12 @@ model GymSession {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  /// When the user stopped training. Null means the workout is still open,
+  /// which is what makes the Gym tab offer to continue it. Set by finishing
+  /// the workout by hand, or stamped with the last edit's time once a session
+  /// has sat untouched long enough to have plainly been abandoned.
+  endedAt DateTime?
+
   /// Set instead of removing the row, so a phone that syncs later can
   /// be told the thing is gone. Filtered out of every ordinary read.
   deletedAt DateTime?

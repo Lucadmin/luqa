@@ -306,4 +306,84 @@ void main() {
     expect(find.text('Continue workout'), findsNothing);
     expect(find.text('Start workout'), findsOneWidget);
   });
+
+  testWidgets('finishing a workout ends it and leaves the screen', (
+    tester,
+  ) async {
+    final gym = FakeGymRepository.sample();
+    await pumpLuqa(tester, gymRepository: gym);
+
+    await tester.tap(find.byIcon(Icons.fitness_center_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue workout'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const ValueKey('weight-0')), '75');
+    await tester.tap(find.byKey(const ValueKey('finish-workout')));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    // The last set was typed seconds before the button; it belongs inside the
+    // workout, not after the end of it.
+    expect(gym.saves, greaterThan(0));
+    expect(gym.endedSessions.single.id, 'current-workout');
+    expect(gym.endedSessions.single.endedAt, fixedNow);
+
+    // The gym tab has nothing to continue, but the workout is still in history.
+    expect(find.text('Continue workout'), findsNothing);
+    expect(find.text('Start workout'), findsOneWidget);
+    expect(gym.deletedSessionIds, isEmpty);
+  });
+
+  testWidgets('a workout left untouched for hours stops being current', (
+    tester,
+  ) async {
+    final gym = FakeGymRepository.sample();
+    // Started before lunch and never touched again: whatever happened to it,
+    // it is not still happening at three in the afternoon.
+    final stale = gym.overview.sessions.first.copyWith(
+      updatedAt: fixedNow.subtract(const Duration(hours: 6)),
+    );
+    gym.overview = gym.overview.copyWith(
+      sessions: [stale, ...gym.overview.sessions.skip(1)],
+    );
+    await pumpLuqa(tester, gymRepository: gym);
+
+    await tester.tap(find.byIcon(Icons.fitness_center_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue workout'), findsNothing);
+    expect(find.text('Start workout'), findsOneWidget);
+    // Closed for real, and stamped with when the training actually stopped
+    // rather than with whenever the app was next opened.
+    expect(gym.endedSessions.single.id, 'current-workout');
+    expect(gym.endedSessions.single.endedAt, stale.updatedAt);
+  });
+
+  testWidgets('a workout being logged past midnight is still current', (
+    tester,
+  ) async {
+    final gym = FakeGymRepository.sample();
+    // Yesterday's date, touched minutes ago — the case the old date-key rule
+    // got wrong, cutting a late-night workout off at midnight.
+    final overnight = GymSession(
+      id: 'overnight',
+      dateKey: '2026-08-26',
+      locationId: 'luqa-gym',
+      notes: '',
+      exercises: const [],
+      createdAt: fixedNow.subtract(const Duration(hours: 2)),
+      updatedAt: fixedNow.subtract(const Duration(minutes: 10)),
+      endedAt: null,
+    );
+    gym.overview = gym.overview.copyWith(
+      sessions: [overnight, ...gym.overview.sessions.skip(1)],
+    );
+    await pumpLuqa(tester, gymRepository: gym);
+
+    await tester.tap(find.byIcon(Icons.fitness_center_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue workout'), findsOneWidget);
+    expect(gym.endedSessions, isEmpty);
+  });
 }

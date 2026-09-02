@@ -482,6 +482,10 @@ export interface GymSessionDTO {
   notes: string;
   exercises: SessionExerciseDTO[];
   createdAt: string;
+  /** Last time anything in the workout changed. What "idle" is measured from. */
+  updatedAt: string;
+  /** When training stopped, or null while the workout is still open. */
+  endedAt: string | null;
 }
 
 export interface ExerciseDTO {

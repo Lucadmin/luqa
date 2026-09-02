@@ -359,5 +359,7 @@ export function toGymSessionDTO(
       .sort((a, b) => a.order - b.order)
       .map(toSessionExerciseDTO),
     createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
+    endedAt: s.endedAt?.toISOString() ?? null,
   };
 }

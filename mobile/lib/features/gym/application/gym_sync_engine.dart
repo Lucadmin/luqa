@@ -45,6 +45,9 @@ class GymSyncEngine extends Notifier<SyncState> with SyncQueue<GymMutation> {
       case SaveSession(:final sessionId, :final write):
         await _remote.saveSession(sessionId, write);
         await _store?.settle('gym_session', sessionId);
+      case EndSession(:final sessionId, :final endedAt):
+        await _remote.endSession(sessionId, endedAt);
+        await _store?.settle('gym_session', sessionId);
       case DeleteSession(:final sessionId):
         await _remote.deleteSession(sessionId);
         await _store?.settle('gym_session', sessionId);

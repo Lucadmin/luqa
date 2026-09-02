@@ -293,6 +293,8 @@ class GymLocalStore {
         'location_id': session.locationId,
         'notes': session.notes,
         'created_at': session.createdAt.toUtc().toIso8601String(),
+        'updated_at': session.updatedAt.toUtc().toIso8601String(),
+        'ended_at': session.endedAt?.toUtc().toIso8601String(),
         'pending': pending ? 1 : 0,
         'removed': 0,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -695,15 +697,33 @@ class GymLocalStore {
 
     return [
       for (final row in sessionRows)
-        GymSession(
-          id: row['id']! as String,
-          dateKey: row['date_key']! as String,
-          locationId: row['location_id'] as String?,
-          notes: row['notes']! as String,
-          exercises: bySession[row['id']] ?? const [],
-          createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
-        ),
+        _sessionFrom(row, bySession[row['id']] ?? const []),
     ];
+  }
+
+  static GymSession _sessionFrom(
+    Map<String, Object?> row,
+    List<GymSessionExercise> exercises,
+  ) {
+    final createdAt = DateTime.parse(row['created_at']! as String).toLocal();
+    return GymSession(
+      id: row['id']! as String,
+      dateKey: row['date_key']! as String,
+      locationId: row['location_id'] as String?,
+      notes: row['notes']! as String,
+      exercises: exercises,
+      createdAt: createdAt,
+      // A row written before the column existed was backfilled from its
+      // creation, which is the only timestamp this device kept for it.
+      updatedAt: switch (row['updated_at']) {
+        final String at when at.isNotEmpty => DateTime.parse(at).toLocal(),
+        _ => createdAt,
+      },
+      endedAt: switch (row['ended_at']) {
+        final String at => DateTime.parse(at).toLocal(),
+        _ => null,
+      },
+    );
   }
 
   Future<Map<String, List<GymSet>>> _setsFor(
