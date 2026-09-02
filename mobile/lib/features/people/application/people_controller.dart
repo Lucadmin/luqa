@@ -3,6 +3,7 @@ import 'package:luqa/core/network/network_failure.dart';
 import 'package:luqa/features/people/application/shared_time_provider.dart';
 import 'package:luqa/features/people/data/people_providers.dart';
 import 'package:luqa/features/people/data/people_repository.dart';
+import 'package:luqa/features/people/domain/city_candidate.dart';
 import 'package:luqa/features/people/domain/people_math.dart';
 import 'package:luqa/features/people/domain/person.dart';
 
@@ -234,19 +235,34 @@ class PeopleController extends Notifier<PeopleState> {
         _apply(await _repository.removeGift(personId, giftId));
       });
 
+  /// The cities [query] might mean.
+  ///
+  /// Not routed through `_write`, and not held in the controller's state: this
+  /// is a keystroke's worth of lookup that belongs to the sheet asking for it,
+  /// and a failed search there is an offer to use the typed name — not the
+  /// tab-wide error banner a failed write earns.
+  Future<List<CityCandidate>> searchCities(String query) =>
+      _repository.searchCities(query);
+
+  /// [chosen] is the city picked from [searchCities], and null means the name
+  /// is being taken as typed — which is what happens with no connection.
   Future<bool> addPlace(
     String personId, {
     required String label,
     required String city,
     String? country,
+    CityCandidate? chosen,
     bool isPrimary = false,
   }) => _write('saving the place', () async {
     _apply(
       await _repository.addPlace(
         personId,
         label: label,
-        city: city,
-        country: country,
+        city: chosen?.name ?? city,
+        country: chosen?.countryCode ?? country,
+        cityId: chosen?.id,
+        latitude: chosen?.latitude,
+        longitude: chosen?.longitude,
         isPrimary: isPrimary,
       ),
     );
@@ -259,9 +275,10 @@ class PeopleController extends Notifier<PeopleState> {
 
   /// Asks for points on the cities that have none, then re-reads.
   ///
-  /// Bounded per call, so it loops while there are more — a first sync of a
-  /// contact book with twenty cities in it needs a few passes, and each one
-  /// costs a second per city against a rate-limited geocoder.
+  /// Only cities that were typed rather than chosen need this — one picked
+  /// from the search list arrives already pinned. Bounded per call, so it
+  /// loops while there are more: a first sync of a contact book with twenty
+  /// cities in it needs a few passes.
   Future<void> geocodePlaces({int maxRounds = 4}) async {
     for (var round = 0; round < maxRounds; round++) {
       final more = await _repository.geocodePendingPlaces();

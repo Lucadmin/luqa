@@ -167,7 +167,7 @@ class _MapView extends StatelessWidget {
             const SizedBox(height: LuqaSpacing.sm),
             for (final person in city.people)
               PersonRow(
-                key: ValueKey('map-${city.city}-${person.id}'),
+                key: ValueKey('map-${city.key}-${person.id}'),
                 person: person,
                 onTap: () {
                   Navigator.of(context).pop();
@@ -234,7 +234,7 @@ class _CityList extends StatelessWidget {
           ),
           for (final person in city.people)
             PersonRow(
-              key: ValueKey('city-${city.city}-${person.id}'),
+              key: ValueKey('city-${city.key}-${person.id}'),
               person: person,
               detail: _reasonToVisit(person, now),
               onTap: () => context.push('/people/${person.id}'),

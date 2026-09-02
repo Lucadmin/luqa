@@ -844,6 +844,88 @@ class PeopleApi {
     return null;
   }
 
+  /// The cities a name might mean
+  ///
+  /// So that the owner decides which Springfield, rather than a geocoder deciding for them. Each candidate carries its administrative area, its country and its population — the fields that make two rows both reading \"Springfield\" tellable apart — and a stable id, which is what the place then stores.  Answering also fills the server's city cache, which is what lets the subsequent `POST /people/{id}/places` resolve that id without touching a third party.  Safe to call per keystroke behind a short debounce: repeated queries are answered from the cache.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] q (required):
+  ///   What has been typed so far. Under two characters answers with nothing.
+  ///
+  /// * [int] limit:
+  Future<Response> searchCitiesWithHttpInfo(
+    String q, {
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/people/places/search';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    queryParams.addAll(_queryParams('', 'q', q));
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// The cities a name might mean
+  ///
+  /// So that the owner decides which Springfield, rather than a geocoder deciding for them. Each candidate carries its administrative area, its country and its population — the fields that make two rows both reading \"Springfield\" tellable apart — and a stable id, which is what the place then stores.  Answering also fills the server's city cache, which is what lets the subsequent `POST /people/{id}/places` resolve that id without touching a third party.  Safe to call per keystroke behind a short debounce: repeated queries are answered from the cache.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] q (required):
+  ///   What has been typed so far. Under two characters answers with nothing.
+  ///
+  /// * [int] limit:
+  Future<CitySearchResponse?> searchCities(
+    String q, {
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await searchCitiesWithHttpInfo(
+      q,
+      limit: limit,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'CitySearchResponse',
+      ) as CitySearchResponse;
+    }
+    return null;
+  }
+
   /// Reword an idea, or mark it given
   ///
   /// Note: This method returns the HTTP [Response].

@@ -7,6 +7,8 @@ doc/Category.md
 doc/CategoryDelta.md
 doc/CategoryListResponse.md
 doc/CategoryResponse.md
+doc/CityCandidate.md
+doc/CitySearchResponse.md
 doc/CreateCategoryRequest.md
 doc/CreateExpenseRequest.md
 doc/CreateGroupRequest.md
@@ -161,6 +163,8 @@ lib/model/category.dart
 lib/model/category_delta.dart
 lib/model/category_list_response.dart
 lib/model/category_response.dart
+lib/model/city_candidate.dart
+lib/model/city_search_response.dart
 lib/model/create_category_request.dart
 lib/model/create_expense_request.dart
 lib/model/create_group_request.dart

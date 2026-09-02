@@ -230,6 +230,8 @@ class PersonPlace {
     this.region,
     this.country,
     this.address,
+    this.cityId,
+    this.timezone,
     this.latitude,
     this.longitude,
     this.isPrimary = false,
@@ -242,6 +244,9 @@ class PersonPlace {
   final String label;
 
   final String city;
+
+  /// The first-level administrative area — state, province, Land. What tells
+  /// Springfield, Illinois from Springfield, Missouri.
   final String? region;
   final String? country;
 
@@ -249,8 +254,20 @@ class PersonPlace {
   /// thing that gets plotted.
   final String? address;
 
-  /// The city centroid, once it has been geocoded. Null until then, which is
-  /// a place that lists but does not yet pin.
+  /// The GeoNames id of the city that was chosen from the search list.
+  ///
+  /// Null for a city that was only typed — added offline, or imported from a
+  /// contact book — which is the place the geocoding batch is for. Two places
+  /// with the same id are the same city whatever their names look like, and
+  /// that is what keeps two Cambridges as two pins.
+  final int? cityId;
+
+  /// The IANA zone of that city, e.g. "Europe/Berlin".
+  final String? timezone;
+
+  /// The city centroid. Present from the start for a city that was chosen;
+  /// null for one that was only typed, which is a place that lists but does
+  /// not yet pin.
   final double? latitude;
   final double? longitude;
 
@@ -261,6 +278,15 @@ class PersonPlace {
 
   /// "Munich, DE" — what a row shows when the city alone is ambiguous.
   String get shortLocation => country == null ? city : '$city, $country';
+
+  /// How the map groups places into cities.
+  ///
+  /// The chosen city's id when there is one, and the name otherwise. Both
+  /// halves matter: the id is what stops Cambridge, England and Cambridge,
+  /// Massachusetts collapsing into one pin, and the name is what still groups
+  /// places typed before anybody picked anything.
+  String get cityKey =>
+      cityId != null ? 'id:$cityId' : 'name:${city.trim().toLowerCase()}';
 }
 
 enum ChannelKind { phone, email, handle }

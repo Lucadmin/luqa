@@ -19,6 +19,8 @@ class PersonPlace {
     required this.region,
     required this.country,
     required this.address,
+    required this.cityId,
+    required this.timezone,
     required this.latitude,
     required this.longitude,
     required this.isPrimary,
@@ -32,6 +34,7 @@ class PersonPlace {
 
   final String city;
 
+  /// The first-level administrative area — state, province, Land. What tells two cities of the same name apart in a list.
   final String? region;
 
   final String? country;
@@ -39,7 +42,13 @@ class PersonPlace {
   /// Kept for reference. Never the thing that gets plotted.
   final String? address;
 
-  /// City centroid, once geocoded. Null until then: a place that lists but does not yet pin.
+  /// The GeoNames id of the city that was chosen from the search list. Null for a name that was only typed — offline, or imported from a contact book — which is the place the geocoding batch is for. Two places sharing this id are the same city whatever their names look like, which is how two Cambridges stay two pins.
+  final int? cityId;
+
+  /// The IANA zone of that city, e.g. \"Europe/Berlin\".
+  final String? timezone;
+
+  /// City centroid. Present from the start for a chosen city; null for a typed one until the batch resolves it — a place that lists but does not yet pin.
   final num? latitude;
 
   final num? longitude;
@@ -58,6 +67,8 @@ class PersonPlace {
           other.region == region &&
           other.country == country &&
           other.address == address &&
+          other.cityId == cityId &&
+          other.timezone == timezone &&
           other.latitude == latitude &&
           other.longitude == longitude &&
           other.isPrimary == isPrimary &&
@@ -72,6 +83,8 @@ class PersonPlace {
       (region == null ? 0 : region!.hashCode) +
       (country == null ? 0 : country!.hashCode) +
       (address == null ? 0 : address!.hashCode) +
+      (cityId == null ? 0 : cityId!.hashCode) +
+      (timezone == null ? 0 : timezone!.hashCode) +
       (latitude == null ? 0 : latitude!.hashCode) +
       (longitude == null ? 0 : longitude!.hashCode) +
       (isPrimary.hashCode) +
@@ -79,7 +92,7 @@ class PersonPlace {
 
   @override
   String toString() =>
-      'PersonPlace[id=$id, label=$label, city=$city, region=$region, country=$country, address=$address, latitude=$latitude, longitude=$longitude, isPrimary=$isPrimary, source_=$source_]';
+      'PersonPlace[id=$id, label=$label, city=$city, region=$region, country=$country, address=$address, cityId=$cityId, timezone=$timezone, latitude=$latitude, longitude=$longitude, isPrimary=$isPrimary, source_=$source_]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -100,6 +113,16 @@ class PersonPlace {
       json[r'address'] = this.address;
     } else {
       json[r'address'] = null;
+    }
+    if (this.cityId != null) {
+      json[r'cityId'] = this.cityId;
+    } else {
+      json[r'cityId'] = null;
+    }
+    if (this.timezone != null) {
+      json[r'timezone'] = this.timezone;
+    } else {
+      json[r'timezone'] = null;
     }
     if (this.latitude != null) {
       json[r'latitude'] = this.latitude;
@@ -128,6 +151,10 @@ class PersonPlace {
     bool countrySetToNull = false,
     String? address,
     bool addressSetToNull = false,
+    int? cityId,
+    bool cityIdSetToNull = false,
+    String? timezone,
+    bool timezoneSetToNull = false,
     num? latitude,
     bool latitudeSetToNull = false,
     num? longitude,
@@ -142,6 +169,8 @@ class PersonPlace {
         region: regionSetToNull ? null : region ?? this.region,
         country: countrySetToNull ? null : country ?? this.country,
         address: addressSetToNull ? null : address ?? this.address,
+        cityId: cityIdSetToNull ? null : cityId ?? this.cityId,
+        timezone: timezoneSetToNull ? null : timezone ?? this.timezone,
         latitude: latitudeSetToNull ? null : latitude ?? this.latitude,
         longitude: longitudeSetToNull ? null : longitude ?? this.longitude,
         isPrimary: isPrimary ?? this.isPrimary,
@@ -177,6 +206,10 @@ class PersonPlace {
             'Required key "PersonPlace[country]" is missing from JSON.');
         assert(json.containsKey(r'address'),
             'Required key "PersonPlace[address]" is missing from JSON.');
+        assert(json.containsKey(r'cityId'),
+            'Required key "PersonPlace[cityId]" is missing from JSON.');
+        assert(json.containsKey(r'timezone'),
+            'Required key "PersonPlace[timezone]" is missing from JSON.');
         assert(json.containsKey(r'latitude'),
             'Required key "PersonPlace[latitude]" is missing from JSON.');
         assert(json.containsKey(r'longitude'),
@@ -199,6 +232,8 @@ class PersonPlace {
         region: mapValueOfType<String>(json, r'region'),
         country: mapValueOfType<String>(json, r'country'),
         address: mapValueOfType<String>(json, r'address'),
+        cityId: mapValueOfType<int>(json, r'cityId'),
+        timezone: mapValueOfType<String>(json, r'timezone'),
         latitude: json[r'latitude'] == null
             ? null
             : num.parse('${json[r'latitude']}'),
@@ -269,6 +304,8 @@ class PersonPlace {
     'region',
     'country',
     'address',
+    'cityId',
+    'timezone',
     'latitude',
     'longitude',
     'isPrimary',

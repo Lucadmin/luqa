@@ -21,6 +21,7 @@ Method | HTTP request | Description
 [**getPersonProfile**](PeopleApi.md#getpersonprofile) | **GET** /people/{id} | One person, whole profile
 [**listPeopleProfiles**](PeopleApi.md#listpeopleprofiles) | **GET** /people | Everyone, archived included, each with their whole profile
 [**markPersonSeen**](PeopleApi.md#markpersonseen) | **POST** /people/{id}/seen | Record that they were actually seen
+[**searchCities**](PeopleApi.md#searchcities) | **GET** /people/places/search | The cities a name might mean
 [**updatePersonGift**](PeopleApi.md#updatepersongift) | **PATCH** /people/{id}/gifts/{giftId} | Reword an idea, or mark it given
 [**updatePersonNote**](PeopleApi.md#updatepersonnote) | **PATCH** /people/{id}/notes/{noteId} | Edit or pin a note
 [**updatePersonProfile**](PeopleApi.md#updatepersonprofile) | **PATCH** /people/{id} | Rename, restyle, or change the profile
@@ -606,6 +607,57 @@ Name | Type | Description  | Notes
 ### HTTP request headers
 
  - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **searchCities**
+> CitySearchResponse searchCities(q, limit)
+
+The cities a name might mean
+
+So that the owner decides which Springfield, rather than a geocoder deciding for them. Each candidate carries its administrative area, its country and its population — the fields that make two rows both reading \"Springfield\" tellable apart — and a stable id, which is what the place then stores.  Answering also fills the server's city cache, which is what lets the subsequent `POST /people/{id}/places` resolve that id without touching a third party.  Safe to call per keystroke behind a short debounce: repeated queries are answered from the cache.
+
+### Example
+```dart
+import 'package:luqa_api/api.dart';
+// TODO Configure HTTP Bearer authorization: mobileBearer
+// Case 1. Use String Token
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken('YOUR_ACCESS_TOKEN');
+// Case 2. Use Function which generate token.
+// String yourTokenGeneratorFunction() { ... }
+//defaultApiClient.getAuthentication<HttpBearerAuth>('mobileBearer').setAccessToken(yourTokenGeneratorFunction);
+
+final api_instance = PeopleApi();
+final q = q_example; // String | What has been typed so far. Under two characters answers with nothing.
+final limit = 56; // int |
+
+try {
+    final result = api_instance.searchCities(q, limit);
+    print(result);
+} catch (e) {
+    print('Exception when calling PeopleApi->searchCities: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **q** | **String**| What has been typed so far. Under two characters answers with nothing. |
+ **limit** | **int**|  | [optional]
+
+### Return type
+
+[**CitySearchResponse**](CitySearchResponse.md)
+
+### Authorization
+
+[mobileBearer](../README.md#mobileBearer)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
  - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

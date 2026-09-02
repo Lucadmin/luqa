@@ -1,3 +1,4 @@
+import 'package:luqa/features/people/domain/city_candidate.dart';
 import 'package:luqa/features/people/domain/person.dart';
 
 /// The fields a person can be created or edited with in one go.
@@ -96,12 +97,31 @@ abstract interface class PeopleRepository {
 
   Future<Person> removeGift(String personId, String giftId);
 
+  /// The cities [query] might mean, best match first.
+  ///
+  /// Online only, and it says so by throwing rather than by answering with an
+  /// empty list: "no connection" and "no such city" lead somewhere different
+  /// in the picker, and a caller that cannot tell them apart shows the wrong
+  /// one.
+  Future<List<CityCandidate>> searchCities(String query);
+
+  /// [cityId] is the city that was chosen, from [searchCities]. With one, the
+  /// server resolves the point itself and the place pins immediately; without
+  /// one — offline, most likely — the name is taken as typed and the geocoding
+  /// batch guesses at it later.
+  ///
+  /// [latitude] and [longitude] are the chosen city's, used only to draw this
+  /// device's own copy before the server has answered. The server never reads
+  /// them; its answer replaces them.
   Future<Person> addPlace(
     String personId, {
     String? id,
     required String label,
     required String city,
     String? country,
+    int? cityId,
+    double? latitude,
+    double? longitude,
     bool isPrimary = false,
   });
 
@@ -109,9 +129,10 @@ abstract interface class PeopleRepository {
 
   /// Asks the server to put points on the cities that have none.
   ///
-  /// Its own call rather than part of a read: it is bounded, it costs a second
-  /// of wall clock per city against a rate-limited geocoder, and the map is
-  /// perfectly usable — as a list — before it has run.
+  /// Only cities that were typed rather than chosen end up needing this: one
+  /// added through the picker arrives with its point already on it. Still its
+  /// own call rather than part of a read — it is bounded, it talks to a third
+  /// party, and the map is perfectly usable as a list before it has run.
   ///
   /// Returns true while cities are still waiting, so a caller can ask again.
   Future<bool> geocodePendingPlaces();

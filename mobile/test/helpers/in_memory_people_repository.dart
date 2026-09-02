@@ -1,5 +1,6 @@
 import 'package:luqa/core/id/local_id.dart';
 import 'package:luqa/features/people/data/people_repository.dart';
+import 'package:luqa/features/people/domain/city_candidate.dart';
 import 'package:luqa/features/people/domain/person.dart';
 
 /// People held in memory, for tests.
@@ -203,6 +204,28 @@ class InMemoryPeopleRepository implements PeopleRepository {
     );
   }
 
+  /// What a city search will answer with. Empty by default, because most
+  /// tests never open the picker; set it to make one that does.
+  List<CityCandidate> cities = const [];
+
+  /// Set to make every search fail the way no connection does, which is the
+  /// state the picker offers the typed name from.
+  bool searchFails = false;
+
+  /// What was asked for, in order, so a test can prove the debounce collapsed
+  /// a burst of keystrokes into one lookup.
+  final List<String> searches = [];
+
+  @override
+  Future<List<CityCandidate>> searchCities(String query) async {
+    searches.add(query);
+    if (searchFails) throw StateError('offline');
+    return [
+      for (final city in cities)
+        if (city.name.toLowerCase().startsWith(query.toLowerCase())) city,
+    ];
+  }
+
   @override
   Future<Person> addPlace(
     String personId, {
@@ -210,6 +233,9 @@ class InMemoryPeopleRepository implements PeopleRepository {
     required String label,
     required String city,
     String? country,
+    int? cityId,
+    double? latitude,
+    double? longitude,
     bool isPrimary = false,
   }) async {
     final person = _require(personId);
@@ -218,6 +244,9 @@ class InMemoryPeopleRepository implements PeopleRepository {
       label: label,
       city: city,
       country: country,
+      cityId: cityId,
+      latitude: latitude,
+      longitude: longitude,
       isPrimary: isPrimary || person.places.isEmpty,
     );
     return _save(
@@ -234,6 +263,8 @@ class InMemoryPeopleRepository implements PeopleRepository {
                     region: place.region,
                     country: place.country,
                     address: place.address,
+                    cityId: place.cityId,
+                    timezone: place.timezone,
                     latitude: place.latitude,
                     longitude: place.longitude,
                     source: place.source,

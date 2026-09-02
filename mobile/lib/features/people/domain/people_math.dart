@@ -180,14 +180,25 @@ PeopleFocus peopleFocus(
 /// arguably the better surface anyway.
 class PeopleInCity {
   const PeopleInCity({
+    required this.key,
     required this.city,
+    required this.region,
     required this.country,
     required this.people,
     required this.latitude,
     required this.longitude,
+    this.nameIsShared = false,
   });
 
+  /// What made these places one city — a chosen city's id, or a name. Stable
+  /// enough to key a widget by, which a name alone is not once two cities can
+  /// share one.
+  final String key;
+
   final String city;
+
+  /// The state, province or Land, when the city was chosen rather than typed.
+  final String? region;
   final String? country;
   final List<Person> people;
 
@@ -196,9 +207,22 @@ class PeopleInCity {
   final double? latitude;
   final double? longitude;
 
+  /// Whether another city in the same list reads the same way. Set by
+  /// [peopleByCity], because no single group can know it.
+  final bool nameIsShared;
+
   bool get isMappable => latitude != null && longitude != null;
 
-  String get label => country == null ? city : '$city, $country';
+  /// "Munich, DE", and "Springfield, Illinois, US" when there is a second
+  /// Springfield on screen.
+  ///
+  /// The region is spent only where it is needed: it is the difference between
+  /// two identical-looking rows and a list that is merely longer.
+  String get label => [
+    city,
+    if (nameIsShared && region != null && region!.isNotEmpty) region,
+    if (country != null) country,
+  ].join(', ');
 }
 
 List<PeopleInCity> peopleByCity(Iterable<Person> people) {
@@ -210,8 +234,11 @@ List<PeopleInCity> peopleByCity(Iterable<Person> people) {
     // Everywhere they can be found, not only where they mostly are: the
     // parents' city is exactly the kind of place this is for.
     for (final place in person.places) {
-      final key = place.city.trim().toLowerCase();
-      if (key.isEmpty) continue;
+      if (place.city.trim().isEmpty) continue;
+      // The chosen city's id when there is one, the name otherwise. Grouping
+      // by name alone put Cambridge, England and Cambridge, Massachusetts on
+      // one pin, at whichever centroid happened to be resolved first.
+      final key = place.cityKey;
       byKey.putIfAbsent(key, () => <Person>[]);
       if (!byKey[key]!.any((existing) => existing.id == person.id)) {
         byKey[key]!.add(person);
@@ -223,22 +250,38 @@ List<PeopleInCity> peopleByCity(Iterable<Person> people) {
     }
   }
 
+  // How many groups would read the same way without their region. Two
+  // Springfields in the US are the case this exists for.
+  final nameCounts = <String, int>{};
+  for (final place in places.values) {
+    final name = '${place.city.trim().toLowerCase()}|${place.country ?? ''}';
+    nameCounts[name] = (nameCounts[name] ?? 0) + 1;
+  }
+
   final cities = <PeopleInCity>[];
   for (final entry in byKey.entries) {
     final place = places[entry.key]!;
+    final name = '${place.city.trim().toLowerCase()}|${place.country ?? ''}';
     cities.add(
       PeopleInCity(
+        key: entry.key,
         city: place.city,
+        region: place.region,
         country: place.country,
         people: entry.value..sort((a, b) => a.name.compareTo(b.name)),
         latitude: place.latitude,
         longitude: place.longitude,
+        nameIsShared: (nameCounts[name] ?? 0) > 1,
       ),
     );
   }
   cities.sort((a, b) {
     final byCount = b.people.length.compareTo(a.people.length);
-    return byCount != 0 ? byCount : a.city.compareTo(b.city);
+    if (byCount != 0) return byCount;
+    final byCity = a.city.compareTo(b.city);
+    // Two cities of the same name and size still need a settled order, or the
+    // list reshuffles itself between reads.
+    return byCity != 0 ? byCity : a.key.compareTo(b.key);
   });
   return cities;
 }

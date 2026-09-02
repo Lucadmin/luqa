@@ -440,6 +440,13 @@ export const personPlaceSchema = z.object({
   region: z.string().trim().max(120).nullish(),
   country: z.string().trim().max(120).nullish(),
   address: z.string().trim().max(300).nullish(),
+  // The city the owner picked, as a GeoNames id. Present means the server
+  // resolves the point itself and the place pins on write; absent is a name
+  // that was only typed, which the geocoding batch picks up later.
+  //
+  // Note what is not here: coordinates. The client says which city, never
+  // where it is — one place decides that, and it is the one holding the cache.
+  cityId: z.number().int().positive().nullish(),
   isPrimary: z.boolean().optional().default(false),
 });
 

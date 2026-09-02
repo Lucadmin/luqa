@@ -111,6 +111,41 @@ class FakeGymRepository implements GymRepository {
         totalSessions: 2,
       ),
       histories: {
+        // What the exercise overview opens on: every gym, oldest first, with
+        // the record marked where the Luqa session beat the McFit one.
+        'lat-pulldown:all': GymExerciseHistory(
+          exercise: exercise,
+          points: const [
+            GymExercisePoint(
+              sessionId: 'mcfit-workout',
+              dateKey: '2026-08-20',
+              locationId: 'mcfit',
+              raw: '65-12 65-10',
+              notes: '',
+              sets: mcFitSets,
+              topWeight: 65,
+              bestOneRepMax: 91,
+              totalReps: 22,
+              volume: 1430,
+              isPersonalRecord: false,
+            ),
+            GymExercisePoint(
+              sessionId: 'previous-workout',
+              dateKey: '2026-08-25',
+              locationId: 'luqa-gym',
+              raw: '72.5-10 72.5-9 70-11',
+              notes: '',
+              sets: luqaSets,
+              topWeight: 72.5,
+              bestOneRepMax: 96.67,
+              totalReps: 30,
+              volume: 2165,
+              isPersonalRecord: true,
+            ),
+          ],
+          bestEver: 96.67,
+          heaviest: 72.5,
+        ),
         'lat-pulldown:luqa-gym': GymExerciseHistory(
           exercise: exercise,
           points: const [

@@ -20,7 +20,7 @@ class GeocodeResponse {
   /// Places given a point by this call.
   final int resolved;
 
-  /// Places still without one. Above zero means the map is worth asking again; each call is bounded because every miss costs a second of wall clock against the geocoder's rate limit.
+  /// Places still without one. Above zero means the map is worth asking again; each call is bounded so that a long-neglected address book cannot make one request run past a serverless timeout.
   final int remaining;
 
   @override

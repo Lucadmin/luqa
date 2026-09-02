@@ -180,6 +180,158 @@ void main() {
     expect((await local.people()).single.notes.single.body, 'Ceramics course');
   });
 
+  /// A database as version 9 left it: `person_place` exists, and its rows are
+  /// cities that were typed rather than chosen.
+  ///
+  /// Only the one table, and only the columns the migration under test cares
+  /// about — a version-4 fixture cannot exercise this path at all, because on
+  /// the way up from 4 the table is created fresh with the new columns already
+  /// on it.
+  Future<void> seedVersion9(String path) async {
+    await databaseFactoryFfi.deleteDatabase(path);
+    final db = await databaseFactoryFfi.openDatabase(
+      path,
+      options: OpenDatabaseOptions(
+        version: 9,
+        onCreate: (db, version) async {
+          await db.execute('''
+            CREATE TABLE person (
+              namespace TEXT NOT NULL,
+              id TEXT NOT NULL,
+              name TEXT NOT NULL,
+              color INTEGER NOT NULL,
+              emoji TEXT,
+              default_percent INTEGER,
+              ord INTEGER NOT NULL DEFAULT 0,
+              archived INTEGER NOT NULL DEFAULT 0,
+              pending INTEGER NOT NULL DEFAULT 0,
+              removed INTEGER NOT NULL DEFAULT 0,
+              nickname TEXT,
+              photo_url TEXT,
+              birthday_year INTEGER,
+              birthday_month INTEGER,
+              birthday_day INTEGER,
+              cadence_days INTEGER,
+              last_seen_at INTEGER,
+              google_resource_name TEXT,
+              PRIMARY KEY (namespace, id)
+            )
+          ''');
+          // Version 9's shape: no city_id, no timezone.
+          await db.execute('''
+            CREATE TABLE person_place (
+              namespace TEXT NOT NULL,
+              id TEXT NOT NULL,
+              person_id TEXT NOT NULL,
+              label TEXT NOT NULL,
+              city TEXT NOT NULL,
+              region TEXT,
+              country TEXT,
+              address TEXT,
+              latitude REAL,
+              longitude REAL,
+              is_primary INTEGER NOT NULL DEFAULT 0,
+              source TEXT NOT NULL DEFAULT 'MANUAL',
+              ord INTEGER NOT NULL DEFAULT 0,
+              PRIMARY KEY (namespace, id)
+            )
+          ''');
+          for (final table in const [
+            'person_channel',
+            'person_note',
+            'person_gift',
+          ]) {
+            await db.execute('''
+              CREATE TABLE $table (
+                namespace TEXT NOT NULL,
+                id TEXT NOT NULL,
+                person_id TEXT NOT NULL,
+                ord INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (namespace, id)
+              )
+            ''');
+          }
+          await db.insert('person', {
+            'namespace': 'user-a',
+            'id': 'jonas',
+            'name': 'Jonas Weber',
+            'color': 0xFF6366F1,
+            'ord': 0,
+            'archived': 0,
+            'pending': 0,
+            'removed': 0,
+          });
+          await db.insert('person_place', {
+            'namespace': 'user-a',
+            'id': 'p1',
+            'person_id': 'jonas',
+            'label': 'Home',
+            'city': 'Hamburg',
+            'country': 'DE',
+            'latitude': 53.55,
+            'longitude': 9.99,
+            'is_primary': 1,
+            'source': 'MANUAL',
+            'ord': 0,
+          });
+        },
+      ),
+    );
+    await db.close();
+  }
+
+  test('a city typed before anyone could choose one keeps its pin', () async {
+    final path = 'person_migration_e.db';
+    await seedVersion9(path);
+
+    final store = LuqaStore(factory: databaseFactoryFfi, path: path);
+    addTearDown(store.close);
+    final local = MoneyLocalStore(namespace: 'user-a', store: store);
+
+    final place = (await local.people()).single.places.single;
+    expect(place.city, 'Hamburg');
+    expect(place.latitude, 53.55);
+    // Null rather than guessed: nothing already on this device was picked from
+    // a list, and saying otherwise would claim a choice nobody made.
+    expect(place.cityId, isNull);
+    expect(place.timezone, isNull);
+    // Which means it still groups by name, as it did before.
+    expect(place.cityKey, 'name:hamburg');
+  });
+
+  test('a chosen city can be written into the upgraded table', () async {
+    final path = 'person_migration_f.db';
+    await seedVersion9(path);
+
+    final store = LuqaStore(factory: databaseFactoryFfi, path: path);
+    addTearDown(store.close);
+    final local = MoneyLocalStore(namespace: 'user-a', store: store);
+
+    final jonas = (await local.people()).single;
+    await local.putPerson(
+      jonas.copyWith(
+        places: [
+          const PersonPlace(
+            id: 'p2',
+            label: 'Parents',
+            city: 'Cambridge',
+            region: 'Massachusetts',
+            country: 'US',
+            cityId: 4931972,
+            timezone: 'America/New_York',
+            latitude: 42.3751,
+            longitude: -71.1056,
+          ),
+        ],
+      ),
+    );
+
+    final place = (await local.people()).single.places.single;
+    expect(place.cityId, 4931972);
+    expect(place.timezone, 'America/New_York');
+    expect(place.cityKey, 'id:4931972');
+  });
+
   test('blocks of time logged before tagging existed keep no tags', () async {
     final path = 'person_migration_d.db';
     await seedVersion4(path);

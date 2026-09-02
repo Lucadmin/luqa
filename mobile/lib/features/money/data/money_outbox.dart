@@ -164,6 +164,9 @@ sealed class MoneyMutation implements PendingMutation {
         label: json['label']! as String,
         city: json['city']! as String,
         country: json['country'] as String?,
+        // Absent in anything queued before cities could be chosen, which
+        // decodes as a typed name — exactly what it was.
+        cityId: (json['cityId'] as num?)?.toInt(),
         isPrimary: json['isPrimary']! as bool,
         queuedAt: queuedAt,
       ),
@@ -631,6 +634,7 @@ final class AddPersonPlace extends MoneyMutation {
     required this.country,
     required this.isPrimary,
     required super.queuedAt,
+    this.cityId,
   });
 
   final String personId;
@@ -640,6 +644,14 @@ final class AddPersonPlace extends MoneyMutation {
   final String city;
   final String? country;
   final bool isPrimary;
+
+  /// The city that was chosen, if one was. Null for a name typed offline,
+  /// which is the case this queue exists for — the server takes the name as
+  /// given and its geocoding batch guesses at it later.
+  ///
+  /// Nullable rather than required because anything already sitting in a
+  /// device's queue was written before this field existed.
+  final int? cityId;
 
   @override
   String get subjectId => placeId;
@@ -654,6 +666,7 @@ final class AddPersonPlace extends MoneyMutation {
     'label': label,
     'city': city,
     'country': country,
+    'cityId': cityId,
     'isPrimary': isPrimary,
   };
 }

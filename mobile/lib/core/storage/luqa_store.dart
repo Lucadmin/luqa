@@ -33,7 +33,7 @@ class LuqaStore {
   /// providers build them eagerly and signed-out ones never read anything.
   static final LuqaStore shared = LuqaStore();
 
-  static const _version = 9;
+  static const _version = 10;
 
   final DatabaseFactory? _injectedFactory;
   final String? _path;
@@ -113,6 +113,7 @@ class LuqaStore {
         if (oldVersion < 7) _createHabitTables(batch);
         if (oldVersion < 8) _addRollingInterval(batch, oldVersion);
         if (oldVersion < 9) _addSessionEnd(batch, oldVersion);
+        if (oldVersion < 10) _addPlaceCity(batch, oldVersion);
         await batch.commit();
       },
       // Going backwards means an older build opened a newer file. There is
@@ -184,6 +185,8 @@ class LuqaStore {
         region TEXT,
         country TEXT,
         address TEXT,
+        city_id INTEGER,
+        timezone TEXT,
         latitude REAL,
         longitude REAL,
         is_primary INTEGER NOT NULL DEFAULT 0,
@@ -618,6 +621,22 @@ class LuqaStore {
     batch.execute(
       "UPDATE gym_session SET updated_at = created_at WHERE updated_at = ''",
     );
+  }
+
+  /// A place now remembers which city was chosen, not just what was typed.
+  ///
+  /// Both columns stay null on every cached row, which is the honest answer:
+  /// nothing already on this device was picked from a list. The next pull
+  /// brings the server's copy, and a place typed before this existed keeps
+  /// grouping by name until somebody picks a city for it.
+  ///
+  /// Only for a database that already had `person_place`. Below version 5 it
+  /// is `_createPersonChildTables` that makes that table — on the way up from
+  /// either 1 or 4 — and it makes it with these columns already on it.
+  static void _addPlaceCity(Batch batch, int oldVersion) {
+    if (oldVersion < 5) return;
+    batch.execute('ALTER TABLE person_place ADD COLUMN city_id INTEGER');
+    batch.execute('ALTER TABLE person_place ADD COLUMN timezone TEXT');
   }
 
   /// Ids this device invented that the server replaced with its own.

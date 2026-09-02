@@ -194,6 +194,8 @@ export function toPersonPlaceDTO(place: PersonPlace): PersonPlaceDTO {
     region: place.region,
     country: place.country,
     address: place.address,
+    cityId: place.cityId,
+    timezone: place.timezone,
     latitude: place.latitude,
     longitude: place.longitude,
     isPrimary: place.isPrimary,

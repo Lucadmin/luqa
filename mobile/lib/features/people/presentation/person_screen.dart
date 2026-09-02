@@ -12,6 +12,7 @@ import 'package:luqa/features/people/domain/person.dart';
 import 'package:luqa/features/people/presentation/people_screen.dart'
     show describeCadence;
 import 'package:luqa/features/people/presentation/person_editor_sheet.dart';
+import 'package:luqa/features/people/presentation/widgets/city_picker_sheet.dart';
 
 /// One person, and everything about them.
 ///
@@ -707,52 +708,21 @@ class _Places extends ConsumerWidget {
   }
 
   Future<void> _addPlace(BuildContext context, WidgetRef ref) async {
-    final city = TextEditingController();
-    final label = TextEditingController(text: 'Home');
-    final added = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add a city'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              key: const ValueKey('place-city'),
-              controller: city,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'City'),
-            ),
-            const SizedBox(height: LuqaSpacing.md),
-            TextField(
-              controller: label,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'What it is',
-                helperText: 'Home, parents, where they summer',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
+    final choice = await showCityPickerSheet(
+      context,
+      // The first city is primary whether or not anybody asks, so there is
+      // nothing to offer until there is a second one.
+      canChoosePrimary: person.places.isNotEmpty,
     );
-    if (added != true || city.text.trim().isEmpty) return;
+    if (choice == null || choice.name.trim().isEmpty) return;
     await ref
         .read(peopleControllerProvider.notifier)
         .addPlace(
           person.id,
-          label: label.text.trim().isEmpty ? 'Home' : label.text.trim(),
-          city: city.text.trim(),
+          label: choice.label,
+          city: choice.name,
+          chosen: choice.city,
+          isPrimary: choice.isPrimary,
         );
   }
 }

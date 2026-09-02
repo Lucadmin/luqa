@@ -44,6 +44,8 @@ part 'model/category.dart';
 part 'model/category_delta.dart';
 part 'model/category_list_response.dart';
 part 'model/category_response.dart';
+part 'model/city_candidate.dart';
+part 'model/city_search_response.dart';
 part 'model/create_category_request.dart';
 part 'model/create_expense_request.dart';
 part 'model/create_group_request.dart';

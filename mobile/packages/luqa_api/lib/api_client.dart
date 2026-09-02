@@ -212,6 +212,10 @@ class ApiClient {
           return CategoryListResponse.fromJson(value);
         case 'CategoryResponse':
           return CategoryResponse.fromJson(value);
+        case 'CityCandidate':
+          return CityCandidate.fromJson(value);
+        case 'CitySearchResponse':
+          return CitySearchResponse.fromJson(value);
         case 'CreateCategoryRequest':
           return CreateCategoryRequest.fromJson(value);
         case 'CreateExpenseRequest':

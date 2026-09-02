@@ -286,6 +286,8 @@ Person personFromApi(api.Person person) => Person(
         region: place.region,
         country: place.country,
         address: place.address,
+        cityId: place.cityId,
+        timezone: place.timezone,
         latitude: place.latitude?.toDouble(),
         longitude: place.longitude?.toDouble(),
         isPrimary: place.isPrimary,

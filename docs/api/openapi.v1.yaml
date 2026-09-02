@@ -1105,6 +1105,50 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /people/places/search:
+    get:
+      operationId: searchCities
+      tags: [People]
+      summary: The cities a name might mean
+      description: >-
+        So that the owner decides which Springfield, rather than a geocoder
+        deciding for them. Each candidate carries its administrative area, its
+        country and its population — the fields that make two rows both reading
+        "Springfield" tellable apart — and a stable id, which is what the place
+        then stores.
+
+
+        Answering also fills the server's city cache, which is what lets the
+        subsequent `POST /people/{id}/places` resolve that id without touching
+        a third party.
+
+
+        Safe to call per keystroke behind a short debounce: repeated queries
+        are answered from the cache.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: What has been typed so far. Under two characters answers with nothing.
+          schema:
+            type: string
+            maxLength: 120
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+      responses:
+        "200":
+          description: Matching cities, best first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CitySearchResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /people/places/geocode:
     post:
       operationId: geocodePendingPlaces
@@ -2962,6 +3006,8 @@ components:
         - region
         - country
         - address
+        - cityId
+        - timezone
         - latitude
         - longitude
         - isPrimary
@@ -2976,16 +3022,31 @@ components:
           type: string
         region:
           type: [string, "null"]
+          description: >-
+            The first-level administrative area — state, province, Land. What
+            tells two cities of the same name apart in a list.
         country:
           type: [string, "null"]
         address:
           type: [string, "null"]
           description: Kept for reference. Never the thing that gets plotted.
+        cityId:
+          type: [integer, "null"]
+          description: >-
+            The GeoNames id of the city that was chosen from the search list.
+            Null for a name that was only typed — offline, or imported from a
+            contact book — which is the place the geocoding batch is for. Two
+            places sharing this id are the same city whatever their names look
+            like, which is how two Cambridges stay two pins.
+        timezone:
+          type: [string, "null"]
+          description: The IANA zone of that city, e.g. "Europe/Berlin".
         latitude:
           type: [number, "null"]
           description: >-
-            City centroid, once geocoded. Null until then: a place that lists
-            but does not yet pin.
+            City centroid. Present from the start for a chosen city; null for a
+            typed one until the batch resolves it — a place that lists but does
+            not yet pin.
         longitude:
           type: [number, "null"]
         isPrimary:
@@ -3695,12 +3756,89 @@ components:
         address:
           type: [string, "null"]
           maxLength: 300
+        cityId:
+          type: [integer, "null"]
+          minimum: 1
+          description: >-
+            The city the owner picked, as a GeoNames id from
+            `GET /people/places/search`. Sending it is what makes the place pin
+            on write: the server resolves the point from the cache that search
+            filled, so no third party is on this path. Leave it out for a city
+            that was only typed — offline, say — and the place lands unlocated
+            for the geocoding batch to guess at.
+
+
+            Note what this request cannot carry: coordinates. The client says
+            which city, never where it is.
         isPrimary:
           type: boolean
           description: >-
             The first place is primary whether or not this is set: a person
             with exactly one city and no primary has no answer to "where are
             they".
+    CityCandidate:
+      type: object
+      additionalProperties: false
+      description: >-
+        A settlement the geocoder knows about, with enough context to choose
+        between two of the same name.
+      required:
+        - id
+        - name
+        - admin1
+        - country
+        - countryCode
+        - latitude
+        - longitude
+        - timezone
+        - population
+        - featureCode
+      properties:
+        id:
+          type: integer
+          description: >-
+            The GeoNames id. Stable, and the only thing the client sends back
+            when this candidate is chosen.
+        name:
+          type: string
+        admin1:
+          type: [string, "null"]
+          description: >-
+            State, province or Land. The single most useful field for telling
+            Springfield, Illinois from Springfield, Missouri.
+        country:
+          type: [string, "null"]
+        countryCode:
+          type: [string, "null"]
+        latitude:
+          type: number
+        longitude:
+          type: number
+        timezone:
+          type: [string, "null"]
+        population:
+          type: [integer, "null"]
+          description: >-
+            Shown beside each candidate, because size is how a person actually
+            recognises which city was meant.
+        featureCode:
+          type: [string, "null"]
+          description: >-
+            GeoNames' kind: PPLC for a national capital, PPLA for a regional
+            one, PPL for an ordinary settlement.
+    CitySearchResponse:
+      type: object
+      additionalProperties: false
+      required: [results]
+      properties:
+        results:
+          type: array
+          description: >-
+            Best match first, in the geocoder's own ranking. Empty when the
+            query is too short, matches nothing, or could not be asked — all
+            three leave the client offering the typed name as it stands.
+          items:
+            $ref: "#/components/schemas/CityCandidate"
     GeocodeResponse:
       type: object
       additionalProperties: false
@@ -3713,8 +3851,8 @@ components:
           type: integer
           description: >-
             Places still without one. Above zero means the map is worth asking
-            again; each call is bounded because every miss costs a second of
-            wall clock against the geocoder's rate limit.
+            again; each call is bounded so that a long-neglected address book
+            cannot make one request run past a serverless timeout.
     MarkSeenRequest:
       type: object
       additionalProperties: false

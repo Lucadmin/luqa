@@ -248,6 +248,62 @@ void main() {
       expect(left.places, hasLength(1));
       expect(left.primaryPlace!.city, 'Hamburg');
     });
+
+    test('a chosen city pins before the server has heard of it', () async {
+      // The point comes from the candidate that was tapped, so the map is
+      // right on this device immediately. The server resolves the same point
+      // from the id and its answer replaces this one on the next pull.
+      final person = await givenPerson('Mira');
+      final withPlace = await repository.addPlace(
+        person.id,
+        label: 'Home',
+        city: 'Munich',
+        cityId: 2867714,
+        latitude: 48.13743,
+        longitude: 11.57549,
+      );
+
+      final place = withPlace.places.single;
+      expect(place.cityId, 2867714);
+      expect(place.isMappable, isTrue);
+      expect(
+        (await repository.loadPerson(person.id)).places.single.cityId,
+        2867714,
+      );
+    });
+
+    test('the chosen city travels with the queued write', () async {
+      // Without the id on the mutation, a city picked offline would reach the
+      // server as a bare name and be guessed at — which is exactly what the
+      // picker exists to stop.
+      final person = await givenPerson('Mira');
+      await repository.addPlace(
+        person.id,
+        label: 'Home',
+        city: 'Munich',
+        cityId: 2867714,
+        latitude: 48.13743,
+        longitude: 11.57549,
+      );
+
+      final queued = queue.pending.whereType<AddPersonPlace>().single;
+      expect(queued.cityId, 2867714);
+    });
+
+    test('a city typed with no connection queues without one', () async {
+      // The offline path, unchanged: the place lists straight away, unpinned,
+      // and the server's geocoding batch puts a point on it later.
+      final person = await givenPerson('Jonas');
+      final withPlace = await repository.addPlace(
+        person.id,
+        label: 'Home',
+        city: 'Hamburg',
+      );
+
+      expect(withPlace.places.single.cityId, isNull);
+      expect(withPlace.places.single.isMappable, isFalse);
+      expect(queue.pending.whereType<AddPersonPlace>().single.cityId, isNull);
+    });
   });
 
   group('gifts', () {

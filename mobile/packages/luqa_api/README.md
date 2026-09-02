@@ -114,6 +114,7 @@ Class | Method | HTTP request | Description
 *PeopleApi* | [**getPersonProfile**](doc//PeopleApi.md#getpersonprofile) | **GET** /people/{id} | One person, whole profile
 *PeopleApi* | [**listPeopleProfiles**](doc//PeopleApi.md#listpeopleprofiles) | **GET** /people | Everyone, archived included, each with their whole profile
 *PeopleApi* | [**markPersonSeen**](doc//PeopleApi.md#markpersonseen) | **POST** /people/{id}/seen | Record that they were actually seen
+*PeopleApi* | [**searchCities**](doc//PeopleApi.md#searchcities) | **GET** /people/places/search | The cities a name might mean
 *PeopleApi* | [**updatePersonGift**](doc//PeopleApi.md#updatepersongift) | **PATCH** /people/{id}/gifts/{giftId} | Reword an idea, or mark it given
 *PeopleApi* | [**updatePersonNote**](doc//PeopleApi.md#updatepersonnote) | **PATCH** /people/{id}/notes/{noteId} | Edit or pin a note
 *PeopleApi* | [**updatePersonProfile**](doc//PeopleApi.md#updatepersonprofile) | **PATCH** /people/{id} | Rename, restyle, or change the profile
@@ -131,6 +132,8 @@ Class | Method | HTTP request | Description
  - [CategoryDelta](doc//CategoryDelta.md)
  - [CategoryListResponse](doc//CategoryListResponse.md)
  - [CategoryResponse](doc//CategoryResponse.md)
+ - [CityCandidate](doc//CityCandidate.md)
+ - [CitySearchResponse](doc//CitySearchResponse.md)
  - [CreateCategoryRequest](doc//CreateCategoryRequest.md)
  - [CreateExpenseRequest](doc//CreateExpenseRequest.md)
  - [CreateGroupRequest](doc//CreateGroupRequest.md)

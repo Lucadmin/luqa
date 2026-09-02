@@ -299,6 +299,12 @@ export interface PersonPlaceDTO {
   region: string | null;
   country: string | null;
   address: string | null;
+  /** The GeoNames id of the city that was chosen. Null for a name that was
+   *  only typed. Two places with the same id are the same city, whatever their
+   *  names look like — which is how the map keeps two Cambridges apart. */
+  cityId: number | null;
+  /** The IANA zone of that city, e.g. "Europe/Berlin". */
+  timezone: string | null;
   /** City centroid once geocoded — never the street coordinate. Null until
    *  then: a place that lists but does not yet pin. */
   latitude: number | null;

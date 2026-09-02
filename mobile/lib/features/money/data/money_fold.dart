@@ -376,6 +376,7 @@ List<MoneyMutation> remapPersonId(
           label: pending.label,
           city: pending.city,
           country: pending.country,
+          cityId: pending.cityId,
           isPrimary: pending.isPrimary,
           queuedAt: pending.queuedAt,
         ),

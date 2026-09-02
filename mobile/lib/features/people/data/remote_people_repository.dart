@@ -2,6 +2,7 @@ import 'package:luqa/core/network/luqa_api_client.dart';
 import 'package:luqa/features/money/data/remote_money_repository.dart'
     show hexColor, personFromApi;
 import 'package:luqa/features/people/data/people_repository.dart';
+import 'package:luqa/features/people/domain/city_candidate.dart';
 import 'package:luqa/features/people/domain/person.dart';
 import 'package:luqa_api/api.dart' as api;
 
@@ -192,12 +193,33 @@ class RemotePeopleRepository implements PeopleRepository {
       personFromApi(await client.deletePersonGift(personId, giftId));
 
   @override
+  Future<List<CityCandidate>> searchCities(String query) async => [
+    for (final result in await client.searchCities(query))
+      CityCandidate(
+        id: result.id,
+        name: result.name,
+        admin1: result.admin1,
+        country: result.country,
+        countryCode: result.countryCode,
+        latitude: result.latitude.toDouble(),
+        longitude: result.longitude.toDouble(),
+        timezone: result.timezone,
+        population: result.population,
+      ),
+  ];
+
+  @override
   Future<Person> addPlace(
     String personId, {
     String? id,
     required String label,
     required String city,
     String? country,
+    int? cityId,
+    // The server resolves the point from `cityId` and ignores anything this
+    // device thinks it knows about where the city is, so neither is sent.
+    double? latitude,
+    double? longitude,
     bool isPrimary = false,
   }) async => personFromApi(
     await client.addPersonPlace(
@@ -207,6 +229,7 @@ class RemotePeopleRepository implements PeopleRepository {
         label: label,
         city: city,
         country: api.Optional.present(country),
+        cityId: api.Optional.present(cityId),
         isPrimary: api.Optional.present(isPrimary),
       ),
     ),

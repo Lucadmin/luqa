@@ -594,6 +594,58 @@ model GeocodeCache {
   @@map("geocode_cache")
 }
 
+// A settlement the geocoder knows about, kept so that choosing one costs
+// nothing to write down and nothing to read back.
+//
+// Not per user, for the same reason `geocode_cache` is not: a city is the same
+// city whoever asked, and nothing in here is personal. The search endpoint
+// fills this in as a side effect of answering, which is what lets adding a
+// place resolve its city from the database instead of from the network.
+model GeoCity {
+  // GeoNames' id, not one of ours. It is stable, it is what the source data is
+  // keyed by, and a place that stores it can be grouped with every other place
+  // in the same city without comparing strings.
+  geonameId Int @id
+
+  name String
+  // The first-level administrative area — state, province, Land. The single
+  // most useful field for telling two cities of the same name apart.
+  admin1      String?
+  country     String?
+  countryCode String?
+
+  latitude  Float
+  longitude Float
+
+  // The IANA zone, e.g. "Europe/Berlin". Free with every result and the
+  // obvious basis for saying what time it is where somebody is.
+  timezone String?
+
+  // Population and feature code are how a bare name that nobody picked from a
+  // list is resolved: the biggest settlement wins, capitals break ties.
+  population  Int?
+  featureCode String?
+
+  fetchedAt DateTime @default(now())
+
+  @@map("geo_cities")
+}
+
+// What a search-as-you-type query answered with, so the second person to type
+// "cam" is answered from here.
+model GeoSearch {
+  // The normalised query, e.g. "cambridge".
+  query String @id
+
+  // The matching cities, best first, as `GeoCity.geonameId`s. Order is the
+  // geocoder's ranking and is worth keeping: it is better than ours.
+  geonameIds Int[]
+
+  searchedAt DateTime @default(now())
+
+  @@map("geo_searches")
+}
+
 // Somewhere a person can be found.
 //
 // City-level on purpose. "I am in Hamburg on Thursday, who is here" is
@@ -609,12 +661,23 @@ model PersonPlace {
   region  String?
   country String?
 
+  // The city that was chosen, as a `GeoCity.geonameId`. Set when the owner
+  // picked it from the search list, which is the normal path and the one that
+  // decides between the two Cambridges. Null for a city that was only typed —
+  // offline, or imported from a contact book — which is the row the geocoding
+  // batch is for. No relation on purpose: `geo_cities` is a cache, and a place
+  // must not stop existing because a cache row was pruned.
+  cityId Int?
+
+  // The IANA zone of that city, e.g. "Europe/Berlin".
+  timezone String?
+
   // The address as the contact book had it, kept for reference. Never the
   // thing that gets plotted.
   address String?
 
   // The city centroid, once geocoded. Null until then: a place that lists but
-  // does not yet pin.
+  // does not yet pin. A place added through the picker has it from the start.
   latitude  Float?
   longitude Float?
 

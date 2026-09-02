@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:luqa/features/people/domain/city_candidate.dart';
 import 'package:luqa/features/people/presentation/widgets/people_map.dart';
 import 'package:luqa/features/today/presentation/widgets/timeline_view.dart';
 
@@ -145,6 +146,136 @@ void main() {
     expect(find.byKey(const ValueKey('person-mira')), findsNothing);
   });
 
+  /// The two Cambridges, as the search would offer them.
+  const cambridges = [
+    CityCandidate(
+      id: 2653941,
+      name: 'Cambridge',
+      admin1: 'England',
+      country: 'United Kingdom',
+      countryCode: 'GB',
+      latitude: 52.2,
+      longitude: 0.11,
+      timezone: 'Europe/London',
+      population: 145700,
+    ),
+    CityCandidate(
+      id: 4931972,
+      name: 'Cambridge',
+      admin1: 'Massachusetts',
+      country: 'United States',
+      countryCode: 'US',
+      latitude: 42.3751,
+      longitude: -71.1056,
+      timezone: 'America/New_York',
+      population: 118403,
+    ),
+  ];
+
+  /// Opens the city picker on somebody and types [query] into it, waiting out
+  /// the debounce so the search has actually run.
+  Future<void> openCityPicker(
+    WidgetTester tester, {
+    required String personId,
+    required String query,
+  }) async {
+    await openPeople(tester);
+    await openPerson(tester, personId);
+    await scrollSheetTo(tester, find.byKey(const ValueKey('person-add-place')));
+    await tester.tap(find.byKey(const ValueKey('person-add-place')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('place-city')), query);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('the owner picks which Cambridge, and it pins on the spot', (
+    tester,
+  ) async {
+    // The whole point of the feature. Typed and handed to a geocoder, this
+    // name resolves to whichever Cambridge came back first; here it is asked.
+    final repository = fakePeopleRepository(now: fixedNow)..cities = cambridges;
+    await pumpLuqa(tester, peopleRepository: repository);
+    await openCityPicker(tester, personId: 'alina', query: 'Cambridge');
+
+    // Two rows that would read identically without their region.
+    expect(find.text('England, United Kingdom · 146k'), findsOneWidget);
+    expect(find.text('Massachusetts, United States · 118k'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('city-candidate-4931972')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('place-add')));
+    await tester.pumpAndSettle();
+
+    final place = (await repository.loadPerson('alina')).places.single;
+    expect(place.cityId, 4931972);
+    expect(place.city, 'Cambridge');
+    // Pinned on the way in, rather than waiting for the geocoding batch.
+    expect(place.isMappable, isTrue);
+    expect(place.latitude, 42.3751);
+  });
+
+  testWidgets('with no connection the typed name is offered as it stands', (
+    tester,
+  ) async {
+    // Local-first is the rule the People tab is built on, so a city added on a
+    // train still has to land. It lists without a pin and the server's batch
+    // resolves it later — which the sheet says out loud rather than failing.
+    final repository = fakePeopleRepository(now: fixedNow)..searchFails = true;
+    await pumpLuqa(tester, peopleRepository: repository);
+    await openCityPicker(tester, personId: 'alina', query: 'Cambridge');
+
+    expect(
+      find.text('No connection, so the city list is not available.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('place-as-typed')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('place-add')));
+    await tester.pumpAndSettle();
+
+    final place = (await repository.loadPerson('alina')).places.single;
+    expect(place.city, 'Cambridge');
+    expect(place.cityId, isNull);
+    expect(place.isMappable, isFalse);
+  });
+
+  testWidgets('a name that matches nothing is a different sentence', (
+    tester,
+  ) async {
+    // "Could not ask" and "there is no such place" send a person to two
+    // different fixes, so they must not share a message.
+    final repository = fakePeopleRepository(now: fixedNow)..cities = cambridges;
+    await pumpLuqa(tester, peopleRepository: repository);
+    await openCityPicker(tester, personId: 'alina', query: 'Cambrdige');
+
+    expect(find.text('No city called “Cambrdige”.'), findsOneWidget);
+  });
+
+  testWidgets('typing a city name is one lookup, not one per keystroke', (
+    tester,
+  ) async {
+    // Every keystroke reaching the server would be nine requests to walk to
+    // "Cambridge", eight of them already stale by the time they answered.
+    final repository = fakePeopleRepository(now: fixedNow)..cities = cambridges;
+    await pumpLuqa(tester, peopleRepository: repository);
+    await openPeople(tester);
+    await openPerson(tester, 'alina');
+    await scrollSheetTo(tester, find.byKey(const ValueKey('person-add-place')));
+    await tester.tap(find.byKey(const ValueKey('person-add-place')));
+    await tester.pumpAndSettle();
+
+    for (final prefix in const ['Cam', 'Camb', 'Cambr', 'Cambridge']) {
+      await tester.enterText(find.byKey(const ValueKey('place-city')), prefix);
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(repository.searches, ['Cambridge']);
+  });
+
   testWidgets('a note is written and stays on the person', (tester) async {
     final repository = fakePeopleRepository(now: fixedNow);
     await pumpLuqa(tester, peopleRepository: repository);
@@ -222,8 +353,14 @@ void main() {
     expect(find.text('Munich, DE'), findsOneWidget);
     // Jonas's parents put him in Hamburg as well as Berlin: being findable in
     // a city you sometimes are in is the whole point of the screen.
-    expect(find.byKey(const ValueKey('city-Hamburg-jonas')), findsOneWidget);
-    expect(find.byKey(const ValueKey('city-Berlin-jonas')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('city-name:hamburg-jonas')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('city-name:berlin-jonas')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the birthday list shows a contact with no birth year', (
@@ -296,8 +433,11 @@ void main() {
     await tester.tap(find.text('Hamburg'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('map-Hamburg-tessa')), findsOneWidget);
-    expect(find.byKey(const ValueKey('map-Hamburg-piet')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('map-name:hamburg-tessa')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('map-name:hamburg-piet')), findsOneWidget);
   });
 
   testWidgets('a city with no point is counted rather than silently dropped', (
@@ -316,7 +456,10 @@ void main() {
     // And it is still on the list, where it is just as useful.
     await tester.tap(find.byKey(const ValueKey('places-view-toggle')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('city-Berlin-jonas')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('city-name:berlin-jonas')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a fully pinned map invites the tap instead', (tester) async {
@@ -341,7 +484,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hamburg, DE'), findsOneWidget);
-    expect(find.byKey(const ValueKey('city-Hamburg-tessa')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('city-name:hamburg-tessa')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('places-view-toggle')));
     await tester.pumpAndSettle();

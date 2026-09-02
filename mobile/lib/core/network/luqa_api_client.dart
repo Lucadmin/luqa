@@ -162,8 +162,13 @@ abstract interface class LuqaApi {
 
   Future<api.Person> deletePersonPlace(String personId, String placeId);
 
-  /// Resolves cities that have no point yet. Bounded per call; `remaining`
-  /// says whether it is worth asking again.
+  /// The cities a typed name might mean, so the owner can say which one.
+  /// Cached server-side, which is what makes calling it per keystroke sane.
+  Future<List<api.CityCandidate>> searchCities(String query);
+
+  /// Resolves cities that have no point yet — the ones that were typed rather
+  /// than chosen. Bounded per call; `remaining` says whether it is worth
+  /// asking again.
   Future<api.GeocodeResponse> geocodePendingPlaces();
 
   Future<api.PersonGroup> createGroup(api.CreateGroupRequest request);
@@ -833,6 +838,15 @@ class LuqaApiClient implements LuqaApi {
   @override
   Future<api.Person> deletePersonPlace(String personId, String placeId) =>
       _person((people) => people.deletePersonPlace(personId, placeId));
+
+  @override
+  Future<List<api.CityCandidate>> searchCities(String query) =>
+      _authorized((client) async {
+        final response = await api.PeopleApi(
+          client,
+        ).searchCities(query).timeout(_requestTimeout);
+        return response?.results ?? const [];
+      });
 
   @override
   Future<api.GeocodeResponse> geocodePendingPlaces() =>

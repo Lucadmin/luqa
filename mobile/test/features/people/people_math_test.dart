@@ -214,6 +214,116 @@ void main() {
       expect(cities.length, 1);
       expect(cities.single.people.length, 2);
     });
+
+    const cambridgeUk = PersonPlace(
+      id: 'p5',
+      label: 'Home',
+      city: 'Cambridge',
+      region: 'England',
+      country: 'GB',
+      cityId: 2653941,
+      latitude: 52.2,
+      longitude: 0.11,
+    );
+    const cambridgeUs = PersonPlace(
+      id: 'p6',
+      label: 'Home',
+      city: 'Cambridge',
+      region: 'Massachusetts',
+      country: 'US',
+      cityId: 4931972,
+      latitude: 42.37,
+      longitude: -71.1,
+    );
+
+    test('two cities of the same name stay two cities', () {
+      // The bug this whole feature exists for: grouped by name, these were one
+      // pin, sitting at whichever centroid was resolved first.
+      final cities = peopleByCity([
+        person('a', places: const [cambridgeUk]),
+        person('b', places: const [cambridgeUs]),
+      ]);
+
+      expect(cities.length, 2);
+      expect(cities.map((c) => c.latitude).toSet(), {52.2, 42.37});
+    });
+
+    test('a chosen city and a typed one of the same name do not merge', () {
+      // Honest rather than clever: nobody said the typed "Cambridge" is the
+      // one that was picked, and quietly deciding it is would put somebody in
+      // the wrong country.
+      final cities = peopleByCity([
+        person('a', places: const [cambridgeUk]),
+        person(
+          'b',
+          places: const [
+            PersonPlace(id: 'p7', label: 'Home', city: 'Cambridge'),
+          ],
+        ),
+      ]);
+
+      expect(cities.length, 2);
+    });
+
+    test('the region separates two rows that would otherwise read alike', () {
+      // Springfield, Illinois and Springfield, Missouri are both "Springfield,
+      // US" without it — two identical rows and no way to tell which is which.
+      final cities = peopleByCity([
+        person(
+          'a',
+          places: const [
+            PersonPlace(
+              id: 'p8',
+              label: 'Home',
+              city: 'Springfield',
+              region: 'Illinois',
+              country: 'US',
+              cityId: 4250542,
+            ),
+          ],
+        ),
+        person(
+          'b',
+          places: const [
+            PersonPlace(
+              id: 'p9',
+              label: 'Home',
+              city: 'Springfield',
+              region: 'Missouri',
+              country: 'US',
+              cityId: 4409896,
+            ),
+          ],
+        ),
+      ]);
+
+      expect(cities.map((c) => c.label).toSet(), {
+        'Springfield, Illinois, US',
+        'Springfield, Missouri, US',
+      });
+    });
+
+    test('the region is spent only where it is needed', () {
+      // One Munich on screen needs no qualifying, and adding it everywhere
+      // would make every row longer to solve a problem one row has.
+      final cities = peopleByCity([
+        person(
+          'a',
+          places: const [
+            PersonPlace(
+              id: 'p10',
+              label: 'Home',
+              city: 'Munich',
+              region: 'Bavaria',
+              country: 'DE',
+              cityId: 2867714,
+            ),
+          ],
+        ),
+      ]);
+
+      expect(cities.single.label, 'Munich, DE');
+    });
   });
 
   group('describeElapsed', () {

@@ -6,6 +6,7 @@ import 'package:luqa/features/money/data/money_local_store.dart';
 import 'package:luqa/features/money/data/money_outbox.dart';
 import 'package:luqa/features/people/data/people_repository.dart';
 import 'package:luqa/features/people/data/people_sync_service.dart';
+import 'package:luqa/features/people/domain/city_candidate.dart';
 import 'package:luqa/features/people/domain/person.dart';
 
 /// The People tab, answered from this device.
@@ -377,58 +378,77 @@ class LocalFirstPeopleRepository implements PeopleRepository {
   );
 
   @override
+  Future<List<CityCandidate>> searchCities(String query) =>
+      // Online-only, and it throws when there is no signal rather than
+      // answering with nothing: the picker turns "could not ask" into an
+      // offer to use the name as typed, which is not what it should do to
+      // "there is no city called that".
+      remote.searchCities(query);
+
+  @override
   Future<Person> addPlace(
     String personId, {
     String? id,
     required String label,
     required String city,
     String? country,
+    int? cityId,
+    double? latitude,
+    double? longitude,
     bool isPrimary = false,
   }) {
     final placeId = id ?? _mintId();
-    return _edit(personId, (person) {
-      // The first place is primary whether or not anyone asked, matching the
-      // server: a person with one city and no primary has no answer to "where
-      // are they".
-      final primary = isPrimary || person.places.isEmpty;
-      return AddPersonPlace(
-        personId: personId,
-        personName: person.displayName,
-        placeId: placeId,
-        label: label,
-        city: city,
-        country: country,
-        isPrimary: primary,
-        queuedAt: _now(),
-      );
-    }, (person) => _withPlace(person, placeId, label, city, country, isPrimary));
-  }
-
-  Person _withPlace(
-    Person person,
-    String placeId,
-    String label,
-    String city,
-    String? country,
-    bool isPrimary,
-  ) {
-    final primary = isPrimary || person.places.isEmpty;
-    return person.copyWith(
-      places: [
-        // Exactly one primary: a second one marked primary demotes the first,
-        // rather than leaving the row with two answers.
-        for (final place in person.places)
-          primary && place.isPrimary ? _demoted(place) : place,
-        PersonPlace(
-          id: placeId,
+    return _edit(
+      personId,
+      (person) {
+        // The first place is primary whether or not anyone asked, matching the
+        // server: a person with one city and no primary has no answer to "where
+        // are they".
+        final primary = isPrimary || person.places.isEmpty;
+        return AddPersonPlace(
+          personId: personId,
+          personName: person.displayName,
+          placeId: placeId,
           label: label,
           city: city,
           country: country,
+          cityId: cityId,
           isPrimary: primary,
-        ),
-      ],
+          queuedAt: _now(),
+        );
+      },
+      (person) {
+        final primary = isPrimary || person.places.isEmpty;
+        return _withPlace(
+          person,
+          PersonPlace(
+            id: placeId,
+            label: label,
+            city: city,
+            country: country,
+            cityId: cityId,
+            // The chosen city's centroid, so a place picked from the list pins
+            // on this device the instant it is added. The server resolves the
+            // same point from `cityId` and its answer replaces this one; nothing
+            // here is ever sent.
+            latitude: latitude,
+            longitude: longitude,
+            isPrimary: primary,
+          ),
+        );
+      },
     );
   }
+
+  Person _withPlace(Person person, PersonPlace added) => person.copyWith(
+    places: [
+      // Exactly one primary: a second one marked primary demotes the first,
+      // rather than leaving the row with two answers.
+      for (final place in person.places)
+        added.isPrimary && place.isPrimary ? _demoted(place) : place,
+      added,
+    ],
+  );
 
   PersonPlace _demoted(PersonPlace place) => PersonPlace(
     id: place.id,
@@ -437,6 +457,8 @@ class LocalFirstPeopleRepository implements PeopleRepository {
     region: place.region,
     country: place.country,
     address: place.address,
+    cityId: place.cityId,
+    timezone: place.timezone,
     latitude: place.latitude,
     longitude: place.longitude,
     source: place.source,

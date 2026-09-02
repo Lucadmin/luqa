@@ -19,6 +19,7 @@ class CreatePersonPlaceRequest {
     this.region = const Optional.absent(),
     this.country = const Optional.absent(),
     this.address = const Optional.absent(),
+    this.cityId = const Optional.absent(),
     this.isPrimary = const Optional.absent(),
   });
 
@@ -58,6 +59,17 @@ class CreatePersonPlaceRequest {
   ///
   final Optional<String?> address;
 
+  /// The city the owner picked, as a GeoNames id from `GET /people/places/search`. Sending it is what makes the place pin on write: the server resolves the point from the cache that search filled, so no third party is on this path. Leave it out for a city that was only typed — offline, say — and the place lands unlocated for the geocoding batch to guess at.  Note what this request cannot carry: coordinates. The client says which city, never where it is.
+  ///
+  /// Minimum value: 1
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<int?> cityId;
+
   /// The first place is primary whether or not this is set: a person with exactly one city and no primary has no answer to \"where are they\".
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
@@ -77,6 +89,7 @@ class CreatePersonPlaceRequest {
           other.region == region &&
           other.country == country &&
           other.address == address &&
+          other.cityId == cityId &&
           other.isPrimary == isPrimary;
 
   @override
@@ -88,11 +101,12 @@ class CreatePersonPlaceRequest {
       (region == null ? 0 : region!.hashCode) +
       (country == null ? 0 : country!.hashCode) +
       (address == null ? 0 : address!.hashCode) +
+      (cityId == null ? 0 : cityId!.hashCode) +
       (isPrimary == null ? 0 : isPrimary!.hashCode);
 
   @override
   String toString() =>
-      'CreatePersonPlaceRequest[id=$id, label=$label, city=$city, region=$region, country=$country, address=$address, isPrimary=$isPrimary]';
+      'CreatePersonPlaceRequest[id=$id, label=$label, city=$city, region=$region, country=$country, address=$address, cityId=$cityId, isPrimary=$isPrimary]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -114,6 +128,10 @@ class CreatePersonPlaceRequest {
       final value = this.address.value;
       json[r'address'] = value;
     }
+    if (this.cityId.isPresent) {
+      final value = this.cityId.value;
+      json[r'cityId'] = value;
+    }
     if (this.isPrimary.isPresent) {
       final value = this.isPrimary.value;
       json[r'isPrimary'] = value;
@@ -130,6 +148,7 @@ class CreatePersonPlaceRequest {
     Optional<String?>? region,
     Optional<String?>? country,
     Optional<String?>? address,
+    Optional<int?>? cityId,
     Optional<bool?>? isPrimary,
   }) =>
       CreatePersonPlaceRequest(
@@ -139,6 +158,7 @@ class CreatePersonPlaceRequest {
         region: region ?? this.region,
         country: country ?? this.country,
         address: address ?? this.address,
+        cityId: cityId ?? this.cityId,
         isPrimary: isPrimary ?? this.isPrimary,
       );
 
@@ -178,6 +198,11 @@ class CreatePersonPlaceRequest {
             : const Optional.absent(),
         address: json.containsKey(r'address')
             ? Optional.present(mapValueOfType<String>(json, r'address'))
+            : const Optional.absent(),
+        cityId: json.containsKey(r'cityId')
+            ? Optional.present(json[r'cityId'] == null
+                ? null
+                : int.parse('${json[r'cityId']}'))
             : const Optional.absent(),
         isPrimary: json.containsKey(r'isPrimary')
             ? Optional.present(mapValueOfType<bool>(json, r'isPrimary'))

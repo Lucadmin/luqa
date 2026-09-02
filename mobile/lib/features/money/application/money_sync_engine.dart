@@ -171,6 +171,7 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
             label: mutation.label,
             city: mutation.city,
             country: mutation.country,
+            cityId: mutation.cityId,
             isPrimary: mutation.isPrimary,
           ),
         );

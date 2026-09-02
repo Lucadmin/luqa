@@ -254,13 +254,29 @@ write.
 The question the map answers is "I am in Hamburg on Thursday — who is here?".
 That question is city-level, so Luqa stores city-level.
 
-- Addresses from Google are geocoded **server-side** through Nominatim, cached
-  in `GeocodeCache` by normalised query, rate-limited to 1 req/s with a real
-  User-Agent per its usage policy.
+- **A city is chosen, not typed.** `GET /v1/people/places/search` offers
+  candidates from Open-Meteo's geocoding API — GeoNames data — each with its
+  region, country, population and a stable id. The owner picks one, and the
+  place is written with that id and pins immediately. Before this, a typed name
+  went to a geocoder that kept whatever it ranked first: nobody could say which
+  Springfield they meant, and two people in two different Cambridges shared one
+  pin.
+- **Search fills a shared cache**, `GeoCity` keyed by GeoNames id and
+  `GeoSearch` keyed by normalised query. That is what lets the write path
+  resolve a chosen id with a primary-key read and no third-party call, which is
+  the constraint the pull-based design exists to satisfy.
+- **A typed name still works**, because offline is a real state here. It lands
+  unlocated, and `POST /v1/people/places/geocode` resolves a bounded batch of
+  them later, guessing the biggest settlement of that name. The same path
+  serves addresses imported from Google. Misses are cached in `GeocodeCache`,
+  so a misspelt city is not retried for ever.
 - Only the **city centroid** is stored, never the street coordinate. It answers
   the question exactly as well, and it keeps a file of friends' home addresses
   from becoming a map of friends' front doors.
 - A person may have several places (`Home`, `Parents`, `Summer`), one primary.
+- Cities are grouped by chosen id where there is one and by name otherwise, so
+  two Cambridges are two pins and places typed before any of this still group
+  as they did.
 
 **Map route** `/people/map`, opened from a header action rather than a
 segmented control, matching `/money/groups` and `/gym/locations`.
@@ -368,13 +384,13 @@ design could be argued with before a migration was committed to — the same way
    `test/helpers/` as the widget and golden fixture.
 5. **Map layer** — ✅ done. `flutter_map` + `latlong2`, OSM raster tiles
    desaturated through a `TileBuilder` so the markers carry the only colour on
-   screen, one pin per city with a count. Geocoding is **pull, not push**:
-   `POST /v1/people/places/geocode` resolves a bounded batch through Nominatim
-   into a shared `GeocodeCache`, and the client asks when it opens the map.
-   Adding a city stays instant and the pin catches up, because geocoding on the
-   write path would make typing a city name wait on a rate-limited third party
-   and a serverless request cannot finish background work after replying.
-   Misses are cached too, so a misspelt city is not retried for ever.
+   screen, one pin per city with a count. A city added through the picker pins
+   on write, resolved from the shared `GeoCity` cache that the search itself
+   filled. A city that was only typed is **pull, not push**:
+   `POST /v1/people/places/geocode` resolves a bounded batch and the client
+   asks when it opens the map, so adding stays instant and the pin catches up —
+   a serverless request cannot finish background work after replying. Misses
+   are cached too, so a misspelt city is not retried for ever.
 6. **Timeline tagging** — ✅ done. `TimeEntryPerson`, `personIds` inside the
    entry DTO and the delta feed, a `With` row on the entry editor opening a
    multi-select picker, names on the timeline's existing second line, and a
@@ -397,9 +413,12 @@ pass for semantics, contrast, text scaling, and touch targets.
   against bulk consumers; a single-owner app rendering a few dozen tiles is
   well inside it. If Luqa ever has more than one owner, this needs a tile
   provider with a contract behind it.
-- **Nominatim.** Same shape of dependency: free, no key, one request a second,
-  and a request that everyone caches. The `GeocodeCache` is what makes it
-  viable — after the first pass, a city costs a database read.
+- **Open-Meteo geocoding.** Same shape of dependency: free, no key, no
+  contract. `GeoCity` and `GeoSearch` are what keep the app off it — after the
+  first person types a prefix, that prefix costs a database read. If it ever
+  goes away, picking stops working and every place falls back to being a typed
+  name, which is a degraded state the app already handles rather than a broken
+  one.
 - **`MoneyLocalStore` and `MoneyMutation` now carry more than money.** The
   shared store and queue are correct (see above); the names are not. Worth
   renaming when something else touches them.

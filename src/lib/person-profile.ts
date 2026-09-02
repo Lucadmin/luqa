@@ -78,3 +78,69 @@ export function profileUpdateData(
   return data;
 }
 
+/** What arrived on the wire for a place. Only the fields the merge below
+ *  reads; `latitude` and `longitude` are deliberately not among them, because
+ *  the client never sends where a city is. */
+export interface PersonPlacePatch {
+  label: string;
+  city: string;
+  region?: string | null;
+  country?: string | null;
+  address?: string | null;
+}
+
+/** The city the owner chose, as the server read it back out of its own cache.
+ *  Null when nothing was chosen, or when the id meant nothing to us. */
+export interface ChosenCity {
+  id: number;
+  name: string;
+  admin1: string | null;
+  countryCode: string | null;
+  timezone: string | null;
+  latitude: number;
+  longitude: number;
+}
+
+export interface PersonPlaceFields {
+  label: string;
+  city: string;
+  region: string | null;
+  country: string | null;
+  address: string | null;
+  cityId: number | null;
+  timezone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+/**
+ * The columns a place is written with.
+ *
+ * The whole difference between the two ways of adding a city lives here. With
+ * a [chosen] city the row is complete on arrival — canonical name, region,
+ * country, zone and centroid — and the geocoding batch never sees it. Without
+ * one, the typed name is taken as given and the point stays null, which is a
+ * place that lists but does not yet pin.
+ *
+ * The canonical name wins over the typed one only when something was chosen:
+ * that is what makes two people in the same city read the same way in a list,
+ * and there is nothing to be canonical about when nobody picked.
+ */
+export function placeWriteData(
+  patch: PersonPlacePatch,
+  chosen: ChosenCity | null,
+): PersonPlaceFields {
+  return {
+    label: patch.label,
+    // An empty canonical name would be worse than the typed one, so it has to
+    // be non-empty to win.
+    city: chosen?.name || patch.city,
+    region: chosen?.admin1 ?? patch.region ?? null,
+    country: chosen?.countryCode ?? patch.country ?? null,
+    address: patch.address ?? null,
+    cityId: chosen?.id ?? null,
+    timezone: chosen?.timezone ?? null,
+    latitude: chosen?.latitude ?? null,
+    longitude: chosen?.longitude ?? null,
+  };
+}
