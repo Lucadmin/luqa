@@ -25,12 +25,14 @@ class Person {
     this.photoUrl,
     this.birthday,
     this.cadenceDays,
+    this.closeness,
     this.lastSeenAt,
     this.googleResourceName,
     this.places = const [],
     this.channels = const [],
     this.notes = const [],
     this.gifts = const [],
+    this.connections = const [],
   });
 
   final String id;
@@ -59,6 +61,10 @@ class Person {
   /// everyone is a duty is a contact book nobody opens.
   final int? cadenceDays;
 
+  /// How close this person feels to the owner, deliberately chosen rather
+  /// than inferred from messages, bills, or time spent together.
+  final Closeness? closeness;
+
   /// The last time they were actually seen. Set by hand, or derived from a
   /// tagged timeline entry or a shared bill, whichever is newest.
   final DateTime? lastSeenAt;
@@ -71,6 +77,11 @@ class Person {
   final List<PersonChannel> channels;
   final List<PersonNote> notes;
   final List<GiftIdea> gifts;
+
+  /// Symmetric relationships to other people, stored on one endpoint only.
+  /// Consumers must therefore look at every person's list when drawing the
+  /// graph rather than treating this as an outgoing social-network edge.
+  final List<PersonConnection> connections;
 
   /// The name to show: the nickname when there is one, because that is the
   /// name the owner thinks in.
@@ -122,6 +133,8 @@ class Person {
     bool clearBirthday = false,
     int? cadenceDays,
     bool clearCadence = false,
+    Closeness? closeness,
+    bool clearCloseness = false,
     DateTime? lastSeenAt,
     bool clearLastSeen = false,
     String? googleResourceName,
@@ -129,6 +142,7 @@ class Person {
     List<PersonChannel>? channels,
     List<PersonNote>? notes,
     List<GiftIdea>? gifts,
+    List<PersonConnection>? connections,
   }) => Person(
     id: id,
     name: name ?? this.name,
@@ -143,13 +157,46 @@ class Person {
     photoUrl: photoUrl ?? this.photoUrl,
     birthday: clearBirthday ? null : birthday ?? this.birthday,
     cadenceDays: clearCadence ? null : cadenceDays ?? this.cadenceDays,
+    closeness: clearCloseness ? null : closeness ?? this.closeness,
     lastSeenAt: clearLastSeen ? null : lastSeenAt ?? this.lastSeenAt,
     googleResourceName: googleResourceName ?? this.googleResourceName,
     places: places ?? this.places,
     channels: channels ?? this.channels,
     notes: notes ?? this.notes,
     gifts: gifts ?? this.gifts,
+    connections: connections ?? this.connections,
   );
+}
+
+/// A deliberately coarse description of closeness.
+///
+/// Four named levels are honest enough to arrange a graph without pretending
+/// a friendship can be measured to a percentage point.
+enum Closeness {
+  familiar(1, 'Familiar'),
+  inMyLife(2, 'In my life'),
+  close(3, 'Close'),
+  innerCircle(4, 'Inner circle');
+
+  const Closeness(this.value, this.label);
+
+  final int value;
+  final String label;
+
+  static Closeness? fromValue(int? value) {
+    for (final level in values) {
+      if (level.value == value) return level;
+    }
+    return null;
+  }
+}
+
+@immutable
+class PersonConnection {
+  const PersonConnection({required this.personId, required this.closeness});
+
+  final String personId;
+  final Closeness closeness;
 }
 
 /// A birthday, stored as the parts a contact book actually has.

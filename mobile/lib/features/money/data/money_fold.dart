@@ -64,7 +64,14 @@ List<MoneyMutation> foldMoney(List<MoneyMutation> queue, MoneyMutation next) {
       var absorbed = false;
       for (final pending in queue) {
         switch (pending) {
-          case CreatePerson(:final person) when person.id == personId:
+          // A connection can point at another locally-created person. Keep it
+          // behind both creates rather than burying it inside one create that
+          // the server cannot validate until the other endpoint exists.
+          case CreatePerson(:final person)
+              when person.id == personId &&
+                  next.connections == null &&
+                  next.closeness == null &&
+                  !next.clearCloseness:
             folded.add(
               CreatePerson(
                 person: next.applyTo(person),
@@ -142,11 +149,26 @@ List<MoneyMutation> foldMoney(List<MoneyMutation> queue, MoneyMutation next) {
     // has never seen, which is a discarded write for something the user
     // already undid.
     case RemovePersonNote(:final noteId):
-      return _dropOrQueue(queue, next, noteId, (pending) => pending is AddPersonNote);
+      return _dropOrQueue(
+        queue,
+        next,
+        noteId,
+        (pending) => pending is AddPersonNote,
+      );
     case RemovePersonGift(:final giftId):
-      return _dropOrQueue(queue, next, giftId, (pending) => pending is AddPersonGift);
+      return _dropOrQueue(
+        queue,
+        next,
+        giftId,
+        (pending) => pending is AddPersonGift,
+      );
     case RemovePersonPlace(:final placeId):
-      return _dropOrQueue(queue, next, placeId, (pending) => pending is AddPersonPlace);
+      return _dropOrQueue(
+        queue,
+        next,
+        placeId,
+        (pending) => pending is AddPersonPlace,
+      );
 
     // Only the newest matters: seeing somebody twice before a sync is one
     // sighting, and a note pinned then unpinned is one state.
@@ -218,14 +240,18 @@ List<MoneyMutation> _replaceMatching(
   return absorbed ? folded : [...folded, next];
 }
 
-bool _touchesExpense(MoneyMutation pending, String expenseId) => switch (pending) {
-  CreateExpense(expenseId: final id) => id == expenseId,
-  UpdateExpense(expenseId: final id) => id == expenseId,
-  DeleteExpense(:final previous) => previous.id == expenseId,
-  _ => false,
-};
+bool _touchesExpense(MoneyMutation pending, String expenseId) =>
+    switch (pending) {
+      CreateExpense(expenseId: final id) => id == expenseId,
+      UpdateExpense(expenseId: final id) => id == expenseId,
+      DeleteExpense(:final previous) => previous.id == expenseId,
+      _ => false,
+    };
 
-bool _touchesPerson(MoneyMutation pending, String personId) => switch (pending) {
+bool _touchesPerson(
+  MoneyMutation pending,
+  String personId,
+) => switch (pending) {
   CreatePerson(:final person) => person.id == personId,
   UpdatePerson(personId: final id) => id == personId,
   DeletePerson(personId: final id) => id == personId,
@@ -259,13 +285,12 @@ List<MoneyMutation> remapPersonId(
   return [
     for (final pending in queue)
       switch (pending) {
-        CreateExpense(:final expenseId, :final write) =>
-          CreateExpense(
-            expenseId: expenseId,
-            write: _remapWrite(write, from, to),
-            createdAt: pending.createdAt,
-            queuedAt: pending.queuedAt,
-          ),
+        CreateExpense(:final expenseId, :final write) => CreateExpense(
+          expenseId: expenseId,
+          write: _remapWrite(write, from, to),
+          createdAt: pending.createdAt,
+          queuedAt: pending.queuedAt,
+        ),
         UpdateExpense(:final expenseId, :final write, :final previous) =>
           UpdateExpense(
             expenseId: expenseId,
@@ -293,26 +318,65 @@ List<MoneyMutation> remapPersonId(
             archived: pending.archived,
             queuedAt: pending.queuedAt,
           ),
-        UpdatePerson(:final personId) when personId == from => UpdatePerson(
+        CreatePerson(:final person)
+            when person.connections.any(
+              (connection) => connection.personId == from,
+            ) =>
+          CreatePerson(
+            person: person.copyWith(
+              connections: [
+                for (final connection in person.connections)
+                  PersonConnection(
+                    personId: connection.personId == from
+                        ? to
+                        : connection.personId,
+                    closeness: connection.closeness,
+                  ),
+              ],
+            ),
+            queuedAt: pending.queuedAt,
+          ),
+        UpdatePerson(:final personId, :final connections)
+            when personId == from ||
+                (connections?.any(
+                      (connection) => connection.personId == from,
+                    ) ??
+                    false) =>
+          UpdatePerson(
+            personId: personId == from ? to : personId,
+            name: pending.name,
+            colorValue: pending.colorValue,
+            emoji: pending.emoji,
+            clearEmoji: pending.clearEmoji,
+            defaultPercent: pending.defaultPercent,
+            clearDefaultPercent: pending.clearDefaultPercent,
+            order: pending.order,
+            archived: pending.archived,
+            nickname: pending.nickname,
+            clearNickname: pending.clearNickname,
+            birthday: pending.birthday,
+            clearBirthday: pending.clearBirthday,
+            cadenceDays: pending.cadenceDays,
+            clearCadence: pending.clearCadence,
+            closeness: pending.closeness,
+            clearCloseness: pending.clearCloseness,
+            connections: connections == null
+                ? null
+                : [
+                    for (final connection in connections)
+                      PersonConnection(
+                        personId: connection.personId == from
+                            ? to
+                            : connection.personId,
+                        closeness: connection.closeness,
+                      ),
+                  ],
+            queuedAt: pending.queuedAt,
+          ),
+        DeletePerson(:final personId) when personId == from => DeletePerson(
           personId: to,
-          name: pending.name,
-          colorValue: pending.colorValue,
-          emoji: pending.emoji,
-          clearEmoji: pending.clearEmoji,
-          defaultPercent: pending.defaultPercent,
-          clearDefaultPercent: pending.clearDefaultPercent,
-          order: pending.order,
-          archived: pending.archived,
-          nickname: pending.nickname,
-          clearNickname: pending.clearNickname,
-          birthday: pending.birthday,
-          clearBirthday: pending.clearBirthday,
-          cadenceDays: pending.cadenceDays,
-          clearCadence: pending.clearCadence,
           queuedAt: pending.queuedAt,
         ),
-        DeletePerson(:final personId) when personId == from =>
-          DeletePerson(personId: to, queuedAt: pending.queuedAt),
         // Their record follows them. A note or a gift idea still queued
         // against the id this device made up would otherwise be sent to a
         // person the server has never heard of, and discarded.
@@ -463,8 +527,10 @@ List<MoneyMutation> remapGroupId(
           archived: pending.archived,
           queuedAt: pending.queuedAt,
         ),
-        DeleteGroup(:final groupId) when groupId == from =>
-          DeleteGroup(groupId: to, queuedAt: pending.queuedAt),
+        DeleteGroup(:final groupId) when groupId == from => DeleteGroup(
+          groupId: to,
+          queuedAt: pending.queuedAt,
+        ),
         _ => pending,
       },
   ];

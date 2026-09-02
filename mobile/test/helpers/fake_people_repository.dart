@@ -24,6 +24,11 @@ InMemoryPeopleRepository fakePeopleRepository({DateTime? now}) {
         // 4 September: eight days out, inside the headline window.
         birthday: const Birthday(month: 9, day: 4, year: 1997),
         cadenceDays: 30,
+        closeness: Closeness.innerCircle,
+        connections: const [
+          PersonConnection(personId: 'jonas', closeness: Closeness.close),
+          PersonConnection(personId: 'tessa', closeness: Closeness.inMyLife),
+        ],
         lastSeenAt: today.subtract(const Duration(days: 6)),
         places: const [
           PersonPlace(
@@ -66,6 +71,10 @@ InMemoryPeopleRepository fakePeopleRepository({DateTime? now}) {
         birthday: const Birthday(month: 2, day: 29, year: 1996),
         // Five months against a two-month rhythm: the overdue case.
         cadenceDays: 61,
+        closeness: Closeness.close,
+        connections: const [
+          PersonConnection(personId: 'piet', closeness: Closeness.familiar),
+        ],
         lastSeenAt: today.subtract(const Duration(days: 152)),
         places: const [
           PersonPlace(
@@ -96,6 +105,7 @@ InMemoryPeopleRepository fakePeopleRepository({DateTime? now}) {
         // No birth year, which is most of a real contact book.
         birthday: const Birthday(month: 11, day: 12),
         cadenceDays: 182,
+        closeness: Closeness.inMyLife,
         lastSeenAt: today.subtract(const Duration(days: 341)),
         places: const [
           PersonPlace(
@@ -120,6 +130,7 @@ InMemoryPeopleRepository fakePeopleRepository({DateTime? now}) {
         // A cadence being kept: present in the roster, absent from "been a
         // while", which is the case that proves the list is not just everyone.
         cadenceDays: 91,
+        closeness: Closeness.close,
         lastSeenAt: today.subtract(const Duration(days: 12)),
         places: const [
           PersonPlace(
@@ -141,6 +152,7 @@ InMemoryPeopleRepository fakePeopleRepository({DateTime? now}) {
         defaultPercent: null,
         order: 4,
         archived: false,
+        closeness: Closeness.familiar,
         // Nothing on record beyond a name: a complete person, and the state
         // most of a freshly synced contact book will be in.
       ),

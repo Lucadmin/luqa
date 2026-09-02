@@ -17,7 +17,8 @@ final moneySyncEngineProvider = NotifierProvider<MoneySyncEngine, SyncState>(
   MoneySyncEngine.new,
 );
 
-class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> {
+class MoneySyncEngine extends Notifier<SyncState>
+    with SyncQueue<MoneyMutation> {
   /// Read at the moment of sending rather than held, so an empty queue never
   /// causes a network stack to be built at all.
   MoneyRepository get _remote => ref.read(remoteMoneyRepositoryProvider);
@@ -39,7 +40,10 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
 
   @override
   SyncState build() {
-    adoptOutbox(ref.watch(moneyOutboxProvider), ref.watch(moneyDiscardLogProvider));
+    adoptOutbox(
+      ref.watch(moneyOutboxProvider),
+      ref.watch(moneyDiscardLogProvider),
+    );
     return const SyncState();
   }
 
@@ -85,6 +89,9 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
             colorValue: person.colorValue,
             emoji: person.emoji,
             defaultPercent: person.defaultPercent,
+            nickname: person.nickname,
+            birthday: person.birthday,
+            cadenceDays: person.cadenceDays,
           ),
         );
         // Someone with this name may already exist server-side under another
@@ -100,18 +107,28 @@ class MoneySyncEngine extends Notifier<SyncState> with SyncQueue<MoneyMutation> 
         }
         await _settled('person', saved.id);
       case UpdatePerson(:final personId):
-        await _remote.updatePerson(
-          id: personId,
-          name: mutation.name,
-          colorValue: mutation.colorValue,
-          emoji: mutation.emoji,
-          clearEmoji: mutation.clearEmoji,
-          defaultPercent: mutation.defaultPercent,
-          clearDefaultPercent: mutation.clearDefaultPercent,
-          order: mutation.order,
-          archived: mutation.archived,
+        await _savePerson(
+          await _people.updatePerson(
+            id: personId,
+            name: mutation.name,
+            colorValue: mutation.colorValue,
+            emoji: mutation.emoji,
+            clearEmoji: mutation.clearEmoji,
+            defaultPercent: mutation.defaultPercent,
+            clearDefaultPercent: mutation.clearDefaultPercent,
+            order: mutation.order,
+            nickname: mutation.nickname,
+            clearNickname: mutation.clearNickname,
+            birthday: mutation.birthday,
+            clearBirthday: mutation.clearBirthday,
+            cadenceDays: mutation.cadenceDays,
+            clearCadence: mutation.clearCadence,
+            closeness: mutation.closeness,
+            clearCloseness: mutation.clearCloseness,
+            connections: mutation.connections,
+            archived: mutation.archived,
+          ),
         );
-        await _settled('person', personId);
       case DeletePerson(:final personId):
         await _remote.deletePerson(personId);
         await _forgotten('person', personId);

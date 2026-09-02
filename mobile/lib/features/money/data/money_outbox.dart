@@ -32,10 +32,12 @@ sealed class MoneyMutation implements PendingMutation {
   /// when they are being told the change did not survive.
   @override
   String describe() => switch (this) {
-    CreateExpense(:final write) => 'the ${_amount(write.amountCents)} '
-        '${write.description.isEmpty ? 'expense' : write.description}',
-    UpdateExpense(:final write) => 'your edit to the '
-        '${write.description.isEmpty ? 'expense' : write.description}',
+    CreateExpense(:final write) =>
+      'the ${_amount(write.amountCents)} '
+          '${write.description.isEmpty ? 'expense' : write.description}',
+    UpdateExpense(:final write) =>
+      'your edit to the '
+          '${write.description.isEmpty ? 'expense' : write.description}',
     DeleteExpense(:final previous) => 'deleting ${previous.title}',
     CreatePerson(:final person) => 'adding ${person.name}',
     UpdatePerson(:final name) => 'your edit to ${name ?? 'a person'}',
@@ -43,8 +45,9 @@ sealed class MoneyMutation implements PendingMutation {
     MarkPersonSeen(:final personName) => 'seeing $personName',
     AddPersonNote(:final personName, :final body) =>
       'the note about $personName — "${_short(body)}"',
-    UpdatePersonNote(:final personName) => 'your edit to a note about '
-        '$personName',
+    UpdatePersonNote(:final personName) =>
+      'your edit to a note about '
+          '$personName',
     RemovePersonNote(:final personName) => 'removing a note about $personName',
     AddPersonGift(:final personName, :final idea) =>
       'the gift idea for $personName — "${_short(idea)}"',
@@ -102,6 +105,21 @@ sealed class MoneyMutation implements PendingMutation {
         clearBirthday: (json['clearBirthday'] as bool?) ?? false,
         cadenceDays: json['cadenceDays'] as int?,
         clearCadence: (json['clearCadence'] as bool?) ?? false,
+        closeness: Closeness.fromValue(json['closeness'] as int?),
+        clearCloseness: (json['clearCloseness'] as bool?) ?? false,
+        connections: json['connections'] == null
+            ? null
+            : [
+                for (final raw in json['connections']! as List<Object?>)
+                  if (raw is Map<String, Object?> &&
+                      raw['personId'] is String &&
+                      raw['closeness'] is int &&
+                      Closeness.fromValue(raw['closeness']! as int) != null)
+                    PersonConnection(
+                      personId: raw['personId']! as String,
+                      closeness: Closeness.fromValue(raw['closeness']! as int)!,
+                    ),
+              ],
         queuedAt: queuedAt,
       ),
       'markPersonSeen' => MarkPersonSeen(
@@ -208,9 +226,7 @@ sealed class MoneyMutation implements PendingMutation {
         queuedAt: queuedAt,
       ),
       'deleteSettlement' => DeleteSettlement(
-        previous: settlementFromJson(
-          json['previous']! as Map<String, Object?>,
-        ),
+        previous: settlementFromJson(json['previous']! as Map<String, Object?>),
         queuedAt: queuedAt,
       ),
       // An op written by a newer build is not something this one can replay.
@@ -328,6 +344,9 @@ final class UpdatePerson extends MoneyMutation {
     this.clearBirthday = false,
     this.cadenceDays,
     this.clearCadence = false,
+    this.closeness,
+    this.clearCloseness = false,
+    this.connections,
     required super.queuedAt,
   });
 
@@ -346,6 +365,9 @@ final class UpdatePerson extends MoneyMutation {
   final bool clearBirthday;
   final int? cadenceDays;
   final bool clearCadence;
+  final Closeness? closeness;
+  final bool clearCloseness;
+  final List<PersonConnection>? connections;
 
   @override
   String get subjectId => personId;
@@ -370,6 +392,10 @@ final class UpdatePerson extends MoneyMutation {
     clearBirthday: clearBirthday || (birthday == null && earlier.clearBirthday),
     cadenceDays: clearCadence ? null : cadenceDays ?? earlier.cadenceDays,
     clearCadence: clearCadence || (cadenceDays == null && earlier.clearCadence),
+    closeness: clearCloseness ? null : closeness ?? earlier.closeness,
+    clearCloseness:
+        clearCloseness || (closeness == null && earlier.clearCloseness),
+    connections: connections ?? earlier.connections,
     queuedAt: earlier.queuedAt,
   );
 
@@ -388,6 +414,9 @@ final class UpdatePerson extends MoneyMutation {
     clearBirthday: clearBirthday,
     cadenceDays: cadenceDays,
     clearCadence: clearCadence,
+    closeness: closeness,
+    clearCloseness: clearCloseness,
+    connections: connections,
   );
 
   @override
@@ -409,6 +438,17 @@ final class UpdatePerson extends MoneyMutation {
     'clearBirthday': clearBirthday,
     'cadenceDays': cadenceDays,
     'clearCadence': clearCadence,
+    'closeness': closeness?.value,
+    'clearCloseness': clearCloseness,
+    'connections': connections == null
+        ? null
+        : [
+            for (final connection in connections!)
+              {
+                'personId': connection.personId,
+                'closeness': connection.closeness.value,
+              },
+          ],
   };
 }
 

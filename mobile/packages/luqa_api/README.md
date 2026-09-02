@@ -210,6 +210,7 @@ Class | Method | HTTP request | Description
  - [Person](doc//Person.md)
  - [PersonBalance](doc//PersonBalance.md)
  - [PersonChannel](doc//PersonChannel.md)
+ - [PersonConnection](doc//PersonConnection.md)
  - [PersonDelta](doc//PersonDelta.md)
  - [PersonGiftIdea](doc//PersonGiftIdea.md)
  - [PersonGroup](doc//PersonGroup.md)

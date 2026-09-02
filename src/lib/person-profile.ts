@@ -30,6 +30,7 @@ export interface PersonProfilePatch {
   birthdayMonth?: number | null;
   birthdayDay?: number | null;
   cadenceDays?: number | null;
+  closeness?: number | null;
   lastSeenAt?: string | null;
 }
 
@@ -42,6 +43,7 @@ export interface PersonProfileFields {
   birthdayMonth?: number | null;
   birthdayDay?: number | null;
   cadenceDays?: number | null;
+  closeness?: number | null;
   lastSeenAt?: Date | null;
 }
 
@@ -72,6 +74,7 @@ export function profileUpdateData(
   }
 
   if (patch.cadenceDays !== undefined) data.cadenceDays = patch.cadenceDays;
+  if (patch.closeness !== undefined) data.closeness = patch.closeness;
   if (patch.lastSeenAt !== undefined) {
     data.lastSeenAt = patch.lastSeenAt ? new Date(patch.lastSeenAt) : null;
   }

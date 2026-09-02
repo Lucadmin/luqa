@@ -1,0 +1,3 @@
+ALTER TABLE "people"
+ADD COLUMN "closeness" INTEGER,
+ADD COLUMN "connections" JSONB NOT NULL DEFAULT '[]';

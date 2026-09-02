@@ -26,12 +26,14 @@ class Person {
     required this.birthdayMonth,
     required this.birthdayDay,
     required this.cadenceDays,
+    required this.closeness,
     required this.lastSeenAt,
     required this.googleResourceName,
     this.places = const [],
     this.channels = const [],
     this.notes = const [],
     this.gifts = const [],
+    this.connections = const [],
   });
 
   final String id;
@@ -73,6 +75,12 @@ class Person {
   /// How often being in touch is worth aiming for. Null for most people, and null means they are never reported as overdue.
   final int? cadenceDays;
 
+  /// Explicitly chosen by the owner: 1 familiar, 2 in my life, 3 close, 4 inner circle. Never inferred from activity.
+  ///
+  /// Minimum value: 1
+  /// Maximum value: 4
+  final int? closeness;
+
   final DateTime? lastSeenAt;
 
   /// The People API resource this row is linked to. Null for someone who exists only in Luqa.
@@ -85,6 +93,9 @@ class Person {
   final List<PersonNote> notes;
 
   final List<PersonGiftIdea> gifts;
+
+  /// Symmetric links to other people. A link is stored on one endpoint only, so clients build the graph from every person's list.
+  final List<PersonConnection> connections;
 
   @override
   bool operator ==(Object other) =>
@@ -103,12 +114,14 @@ class Person {
           other.birthdayMonth == birthdayMonth &&
           other.birthdayDay == birthdayDay &&
           other.cadenceDays == cadenceDays &&
+          other.closeness == closeness &&
           other.lastSeenAt == lastSeenAt &&
           other.googleResourceName == googleResourceName &&
           _deepEquality.equals(other.places, places) &&
           _deepEquality.equals(other.channels, channels) &&
           _deepEquality.equals(other.notes, notes) &&
-          _deepEquality.equals(other.gifts, gifts);
+          _deepEquality.equals(other.gifts, gifts) &&
+          _deepEquality.equals(other.connections, connections);
 
   @override
   int get hashCode =>
@@ -126,16 +139,18 @@ class Person {
       (birthdayMonth == null ? 0 : birthdayMonth!.hashCode) +
       (birthdayDay == null ? 0 : birthdayDay!.hashCode) +
       (cadenceDays == null ? 0 : cadenceDays!.hashCode) +
+      (closeness == null ? 0 : closeness!.hashCode) +
       (lastSeenAt == null ? 0 : lastSeenAt!.hashCode) +
       (googleResourceName == null ? 0 : googleResourceName!.hashCode) +
       (places.hashCode) +
       (channels.hashCode) +
       (notes.hashCode) +
-      (gifts.hashCode);
+      (gifts.hashCode) +
+      (connections.hashCode);
 
   @override
   String toString() =>
-      'Person[id=$id, name=$name, color=$color, emoji=$emoji, defaultPercent=$defaultPercent, order=$order, archived=$archived, nickname=$nickname, photoUrl=$photoUrl, birthdayYear=$birthdayYear, birthdayMonth=$birthdayMonth, birthdayDay=$birthdayDay, cadenceDays=$cadenceDays, lastSeenAt=$lastSeenAt, googleResourceName=$googleResourceName, places=$places, channels=$channels, notes=$notes, gifts=$gifts]';
+      'Person[id=$id, name=$name, color=$color, emoji=$emoji, defaultPercent=$defaultPercent, order=$order, archived=$archived, nickname=$nickname, photoUrl=$photoUrl, birthdayYear=$birthdayYear, birthdayMonth=$birthdayMonth, birthdayDay=$birthdayDay, cadenceDays=$cadenceDays, closeness=$closeness, lastSeenAt=$lastSeenAt, googleResourceName=$googleResourceName, places=$places, channels=$channels, notes=$notes, gifts=$gifts, connections=$connections]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -184,6 +199,11 @@ class Person {
     } else {
       json[r'cadenceDays'] = null;
     }
+    if (this.closeness != null) {
+      json[r'closeness'] = this.closeness;
+    } else {
+      json[r'closeness'] = null;
+    }
     if (this.lastSeenAt != null) {
       json[r'lastSeenAt'] = this.lastSeenAt!.toUtc().toIso8601String();
     } else {
@@ -198,6 +218,7 @@ class Person {
     json[r'channels'] = this.channels;
     json[r'notes'] = this.notes;
     json[r'gifts'] = this.gifts;
+    json[r'connections'] = this.connections;
     return json;
   }
 
@@ -225,6 +246,8 @@ class Person {
     bool birthdayDaySetToNull = false,
     int? cadenceDays,
     bool cadenceDaysSetToNull = false,
+    int? closeness,
+    bool closenessSetToNull = false,
     DateTime? lastSeenAt,
     bool lastSeenAtSetToNull = false,
     String? googleResourceName,
@@ -233,6 +256,7 @@ class Person {
     List<PersonChannel>? channels,
     List<PersonNote>? notes,
     List<PersonGiftIdea>? gifts,
+    List<PersonConnection>? connections,
   }) =>
       Person(
         id: id ?? this.id,
@@ -254,6 +278,7 @@ class Person {
             birthdayDaySetToNull ? null : birthdayDay ?? this.birthdayDay,
         cadenceDays:
             cadenceDaysSetToNull ? null : cadenceDays ?? this.cadenceDays,
+        closeness: closenessSetToNull ? null : closeness ?? this.closeness,
         lastSeenAt: lastSeenAtSetToNull ? null : lastSeenAt ?? this.lastSeenAt,
         googleResourceName: googleResourceNameSetToNull
             ? null
@@ -262,6 +287,7 @@ class Person {
         channels: channels ?? this.channels,
         notes: notes ?? this.notes,
         gifts: gifts ?? this.gifts,
+        connections: connections ?? this.connections,
       );
 
   /// Returns a new [Person] instance and imports its values from
@@ -311,6 +337,8 @@ class Person {
             'Required key "Person[birthdayDay]" is missing from JSON.');
         assert(json.containsKey(r'cadenceDays'),
             'Required key "Person[cadenceDays]" is missing from JSON.');
+        assert(json.containsKey(r'closeness'),
+            'Required key "Person[closeness]" is missing from JSON.');
         assert(json.containsKey(r'lastSeenAt'),
             'Required key "Person[lastSeenAt]" is missing from JSON.');
         assert(json.containsKey(r'googleResourceName'),
@@ -331,6 +359,10 @@ class Person {
             'Required key "Person[gifts]" is missing from JSON.');
         assert(json[r'gifts'] != null,
             'Required key "Person[gifts]" has a null value in JSON.');
+        assert(json.containsKey(r'connections'),
+            'Required key "Person[connections]" is missing from JSON.');
+        assert(json[r'connections'] != null,
+            'Required key "Person[connections]" has a null value in JSON.');
         return true;
       }());
 
@@ -348,12 +380,14 @@ class Person {
         birthdayMonth: mapValueOfType<int>(json, r'birthdayMonth'),
         birthdayDay: mapValueOfType<int>(json, r'birthdayDay'),
         cadenceDays: mapValueOfType<int>(json, r'cadenceDays'),
+        closeness: mapValueOfType<int>(json, r'closeness'),
         lastSeenAt: mapDateTime(json, r'lastSeenAt', r''),
         googleResourceName: mapValueOfType<String>(json, r'googleResourceName'),
         places: PersonPlace.listFromJson(json[r'places']),
         channels: PersonChannel.listFromJson(json[r'channels']),
         notes: PersonNote.listFromJson(json[r'notes']),
         gifts: PersonGiftIdea.listFromJson(json[r'gifts']),
+        connections: PersonConnection.listFromJson(json[r'connections']),
       );
     }
     return null;
@@ -423,11 +457,13 @@ class Person {
     'birthdayMonth',
     'birthdayDay',
     'cadenceDays',
+    'closeness',
     'lastSeenAt',
     'googleResourceName',
     'places',
     'channels',
     'notes',
     'gifts',
+    'connections',
   };
 }

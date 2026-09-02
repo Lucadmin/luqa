@@ -67,6 +67,26 @@ export const PATCH = moneyRoute<[Params]>(
     if (d.archived !== undefined) {
       data.archivedAt = d.archived ? new Date() : null;
     }
+    if (d.connections !== undefined) {
+      const relatedIds = d.connections.map((connection) => connection.personId);
+      if (relatedIds.includes(id)) {
+        return rejected("A person cannot be connected to themselves");
+      }
+      if (new Set(relatedIds).size !== relatedIds.length) {
+        return rejected("A person can only be connected once");
+      }
+      const owned = await db.person.count({
+        where: {
+          userId: session.userId,
+          deletedAt: null,
+          id: { in: relatedIds },
+        },
+      });
+      if (owned !== relatedIds.length) {
+        return rejected("Every connection must point to one of your people");
+      }
+      data.connections = d.connections;
+    }
 
     return mobileJson({ person: await updatePersonRow(id, data) });
   },

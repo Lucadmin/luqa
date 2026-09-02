@@ -22,6 +22,7 @@ Map<String, Object?> personToJson(Person value) => {
   'photoUrl': value.photoUrl,
   'birthday': birthdayToJson(value.birthday),
   'cadenceDays': value.cadenceDays,
+  'closeness': value.closeness?.value,
   'lastSeenAt': value.lastSeenAt?.toUtc().toIso8601String(),
   'googleResourceName': value.googleResourceName,
   'places': [
@@ -69,6 +70,13 @@ Map<String, Object?> personToJson(Person value) => {
         'givenAt': gift.givenAt?.toUtc().toIso8601String(),
       },
   ],
+  'connections': [
+    for (final connection in value.connections)
+      {
+        'personId': connection.personId,
+        'closeness': connection.closeness.value,
+      },
+  ],
 };
 
 Person personFromJson(Map<String, Object?> value) => Person(
@@ -83,6 +91,7 @@ Person personFromJson(Map<String, Object?> value) => Person(
   photoUrl: value['photoUrl'] as String?,
   birthday: birthdayFromJson(value['birthday']),
   cadenceDays: value['cadenceDays'] as int?,
+  closeness: Closeness.fromValue(value['closeness'] as int?),
   lastSeenAt: _dateOrNull(value['lastSeenAt']),
   googleResourceName: value['googleResourceName'] as String?,
   places: [
@@ -136,6 +145,16 @@ Person personFromJson(Map<String, Object?> value) => Person(
         givenAt: _dateOrNull(raw['givenAt']),
       ),
   ],
+  connections: [
+    for (final raw in _list(value['connections']))
+      if (raw['personId'] is String &&
+          raw['closeness'] is int &&
+          Closeness.fromValue(raw['closeness']! as int) != null)
+        PersonConnection(
+          personId: raw['personId']! as String,
+          closeness: Closeness.fromValue(raw['closeness']! as int)!,
+        ),
+  ],
 );
 
 /// The birthday as three parts, or nothing. Never a date: a contact with no
@@ -145,12 +164,13 @@ Map<String, Object?>? birthdayToJson(Birthday? value) => value == null
     : {'month': value.month, 'day': value.day, 'year': value.year};
 
 Birthday? birthdayFromJson(Object? value) => switch (value) {
-  final Map<String, Object?> raw when raw['month'] != null && raw['day'] != null
-      => Birthday(
-          month: raw['month']! as int,
-          day: raw['day']! as int,
-          year: raw['year'] as int?,
-        ),
+  final Map<String, Object?> raw
+      when raw['month'] != null && raw['day'] != null =>
+    Birthday(
+      month: raw['month']! as int,
+      day: raw['day']! as int,
+      year: raw['year'] as int?,
+    ),
   _ => null,
 };
 

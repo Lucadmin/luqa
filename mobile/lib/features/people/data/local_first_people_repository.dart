@@ -113,10 +113,7 @@ class LocalFirstPeopleRepository implements PeopleRepository {
   }
 
   @override
-  Future<Person> createPerson({
-    String? id,
-    required PersonWrite write,
-  }) async {
+  Future<Person> createPerson({String? id, required PersonWrite write}) async {
     await queue.ready;
     // Adding someone this device already knows by name is the same person, not
     // a second row for the server to merge — the same rule the API applies.
@@ -152,12 +149,16 @@ class LocalFirstPeopleRepository implements PeopleRepository {
     bool clearEmoji = false,
     int? defaultPercent,
     bool clearDefaultPercent = false,
+    int? order,
     String? nickname,
     bool clearNickname = false,
     Birthday? birthday,
     bool clearBirthday = false,
     int? cadenceDays,
     bool clearCadence = false,
+    Closeness? closeness,
+    bool clearCloseness = false,
+    List<PersonConnection>? connections,
     bool? archived,
   }) => _edit(
     id,
@@ -169,12 +170,16 @@ class LocalFirstPeopleRepository implements PeopleRepository {
       clearEmoji: clearEmoji,
       defaultPercent: defaultPercent,
       clearDefaultPercent: clearDefaultPercent,
+      order: order,
       nickname: nickname,
       clearNickname: clearNickname,
       birthday: birthday,
       clearBirthday: clearBirthday,
       cadenceDays: cadenceDays,
       clearCadence: clearCadence,
+      closeness: closeness,
+      clearCloseness: clearCloseness,
+      connections: connections,
       archived: archived,
       queuedAt: _now(),
     ),
@@ -185,12 +190,16 @@ class LocalFirstPeopleRepository implements PeopleRepository {
       clearEmoji: clearEmoji,
       defaultPercent: defaultPercent,
       clearDefaultPercent: clearDefaultPercent,
+      order: order,
       nickname: nickname,
       clearNickname: clearNickname,
       birthday: birthday,
       clearBirthday: clearBirthday,
       cadenceDays: cadenceDays,
       clearCadence: clearCadence,
+      closeness: closeness,
+      clearCloseness: clearCloseness,
+      connections: connections,
       archived: archived,
     ),
   );
@@ -325,7 +334,10 @@ class LocalFirstPeopleRepository implements PeopleRepository {
         queuedAt: _now(),
       ),
       (person) => person.copyWith(
-        gifts: [...person.gifts, GiftIdea(id: giftId, idea: idea, url: url)],
+        gifts: [
+          ...person.gifts,
+          GiftIdea(id: giftId, idea: idea, url: url),
+        ],
       ),
     );
   }

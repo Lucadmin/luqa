@@ -49,12 +49,16 @@ abstract interface class PeopleRepository {
     bool clearEmoji = false,
     int? defaultPercent,
     bool clearDefaultPercent = false,
+    int? order,
     String? nickname,
     bool clearNickname = false,
     Birthday? birthday,
     bool clearBirthday = false,
     int? cadenceDays,
     bool clearCadence = false,
+    Closeness? closeness,
+    bool clearCloseness = false,
+    List<PersonConnection>? connections,
     bool? archived,
   });
 

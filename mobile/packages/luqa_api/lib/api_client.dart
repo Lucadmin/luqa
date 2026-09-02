@@ -368,6 +368,8 @@ class ApiClient {
           return PersonBalance.fromJson(value);
         case 'PersonChannel':
           return PersonChannel.fromJson(value);
+        case 'PersonConnection':
+          return PersonConnection.fromJson(value);
         case 'PersonDelta':
           return PersonDelta.fromJson(value);
         case 'PersonGiftIdea':

@@ -119,6 +119,33 @@ test("a cadence is bounded at both ends", () => {
   );
 });
 
+test("closeness is an explicit coarse level, not a computed score", () => {
+  assert.equal(personProfileSchema.safeParse({ closeness: 1 }).success, true);
+  assert.equal(personProfileSchema.safeParse({ closeness: 4 }).success, true);
+  assert.equal(personProfileSchema.safeParse({ closeness: null }).success, true);
+  assert.equal(personProfileSchema.safeParse({ closeness: 0 }).success, false);
+  assert.equal(personProfileSchema.safeParse({ closeness: 5 }).success, false);
+  assert.deepEqual(profileUpdateData({ closeness: 3 }), { closeness: 3 });
+});
+
+test("person-to-person links carry a named endpoint and coarse level", () => {
+  const parsed = updatePersonSchema.safeParse({
+    connections: [
+      { personId: "person-b", closeness: 3 },
+      { personId: "person-c", closeness: 1 },
+    ],
+  });
+
+  assert.equal(parsed.success, true);
+  assert.equal(parsed.data.connections.length, 2);
+  assert.equal(
+    updatePersonSchema.safeParse({
+      connections: [{ personId: "person-b", closeness: 9 }],
+    }).success,
+    false,
+  );
+});
+
 test("one update carries identity and profile together", () => {
   // The People editor changes a name and a birthday on one sheet; splitting
   // that into two writes would put two entries in the queue for one action.

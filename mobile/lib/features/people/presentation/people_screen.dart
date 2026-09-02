@@ -76,6 +76,12 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                 ),
                 contextualActions: [
                   IconButton(
+                    key: const ValueKey('people-connections'),
+                    tooltip: 'Relationship map',
+                    onPressed: () => context.push('/people/connections'),
+                    icon: const Icon(Icons.hub_outlined),
+                  ),
+                  IconButton(
                     key: const ValueKey('people-places'),
                     tooltip: 'Where everyone is',
                     onPressed: () => context.push('/people/places'),
@@ -136,7 +142,8 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                             '${describeElapsed(contact.daysSince)} · '
                             'aiming for every '
                             '${describeCadence(contact.cadenceDays)}',
-                        onTap: () => context.push('/people/${contact.person.id}'),
+                        onTap: () =>
+                            context.push('/people/${contact.person.id}'),
                       ),
                   ],
                   const SizedBox(height: LuqaSpacing.section),
@@ -173,7 +180,8 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: LuqaSpacing.lg),
                 sliver: SliverList.separated(
                   itemCount: matches.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
                   itemBuilder: (context, index) => PersonRow(
                     key: ValueKey('person-${matches[index].id}'),
                     person: matches[index],
@@ -247,8 +255,7 @@ class _Headline extends StatelessWidget {
       ReconnectFocus(:final contact) => _FocusBlock(
         label: 'Been longest',
         title: contact.person.displayName,
-        supporting:
-            '${describeElapsed(contact.daysSince)} since you saw them',
+        supporting: '${describeElapsed(contact.daysSince)} since you saw them',
         onTap: () => onOpen(contact.person.id),
         valueKey: const ValueKey('people-focus-reconnect'),
       ),
@@ -259,9 +266,7 @@ class _Headline extends StatelessWidget {
         key: const ValueKey('people-focus-quiet'),
         children: [
           Text(
-            peopleCount == 0
-                ? 'Nobody yet'
-                : 'Nothing coming up',
+            peopleCount == 0 ? 'Nobody yet' : 'Nothing coming up',
             style: theme.textTheme.displaySmall,
           ),
           const SizedBox(height: LuqaSpacing.sm),

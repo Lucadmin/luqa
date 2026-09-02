@@ -138,6 +138,24 @@ void main() {
       expect(read.name, 'Mira Hensel');
       expect(read.notes.single.body, 'Ceramics course');
     });
+
+    test('manual closeness and connections survive sqlite', () async {
+      final mira = await givenPerson('Mira');
+      final jonas = await givenPerson('Jonas');
+
+      await repository.updatePerson(
+        id: mira.id,
+        closeness: Closeness.innerCircle,
+        connections: [
+          PersonConnection(personId: jonas.id, closeness: Closeness.close),
+        ],
+      );
+
+      final read = await repository.loadPerson(mira.id);
+      expect(read.closeness, Closeness.innerCircle);
+      expect(read.connections.single.personId, jonas.id);
+      expect(read.connections.single.closeness, Closeness.close);
+    });
   });
 
   group('writing offline', () {
@@ -178,6 +196,18 @@ void main() {
       await repository.markSeen(person.id, _now.add(const Duration(hours: 2)));
 
       expect(queue.pending.whereType<MarkPersonSeen>(), hasLength(1));
+    });
+
+    test('a relationship choice stays behind a pending create', () async {
+      final person = await givenPerson('Mira');
+      await repository.updatePerson(id: person.id, closeness: Closeness.close);
+
+      // The create must land before a PATCH that may eventually point to a
+      // second locally-created person. It is deliberately not folded into the
+      // create payload.
+      expect(queue.pending, hasLength(2));
+      expect(queue.pending.first, isA<CreatePerson>());
+      expect(queue.pending.last, isA<UpdatePerson>());
     });
 
     test('removing a person drops the record still queued for them', () async {

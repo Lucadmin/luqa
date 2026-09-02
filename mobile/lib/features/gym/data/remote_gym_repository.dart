@@ -67,7 +67,14 @@ class RemoteGymRepository implements GymRepository {
       gymSessionFromApi(
         await client.updateGymSession(
           id,
-          api.UpdateGymSessionRequest(endedAt: api.Optional.present(endedAt)),
+          api.UpdateGymSessionRequest(
+            // The Dart generator defaults optional arrays to a present empty
+            // list. A finish-only PATCH must not therefore become
+            // `exercises: []`, which is an intentional full replacement on
+            // the server.
+            exercises: const api.Optional.absent(),
+            endedAt: api.Optional.present(endedAt),
+          ),
         ),
       );
 
@@ -78,7 +85,9 @@ class RemoteGymRepository implements GymRepository {
   Future<GymSessionPage> loadSessions({String? cursor, int limit = 20}) async {
     final response = await client.listGymSessions(cursor: cursor, limit: limit);
     return GymSessionPage(
-      sessions: response.sessions.map(gymSessionFromApi).toList(growable: false),
+      sessions: response.sessions
+          .map(gymSessionFromApi)
+          .toList(growable: false),
       nextCursor: response.nextCursor,
     );
   }

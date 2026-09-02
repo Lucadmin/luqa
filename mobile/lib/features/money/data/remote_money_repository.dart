@@ -119,9 +119,7 @@ class RemoteMoneyRepository implements MoneyRepository {
             : api.Optional.present(hexColor(colorValue)),
         // Clearing is a value the server has to see, so it cannot ride on the
         // same "absent" that means "leave it alone".
-        emoji: clearEmoji
-            ? const api.Optional.present(null)
-            : _optional(emoji),
+        emoji: clearEmoji ? const api.Optional.present(null) : _optional(emoji),
         defaultPercent: clearDefaultPercent
             ? const api.Optional.present(null)
             : _optional(defaultPercent),
@@ -167,9 +165,7 @@ class RemoteMoneyRepository implements MoneyRepository {
         color: colorValue == null
             ? const api.Optional.absent()
             : api.Optional.present(hexColor(colorValue)),
-        emoji: clearEmoji
-            ? const api.Optional.present(null)
-            : _optional(emoji),
+        emoji: clearEmoji ? const api.Optional.present(null) : _optional(emoji),
         memberIds: _optional(memberIds),
         archived: _optional(archived),
       ),
@@ -204,9 +200,8 @@ class RemoteMoneyRepository implements MoneyRepository {
   Future<void> deleteSettlement(String id) => client.deleteSettlement(id);
 }
 
-api.Optional<T> _optional<T>(T? value) => value == null
-    ? api.Optional<T>.absent()
-    : api.Optional<T>.present(value);
+api.Optional<T> _optional<T>(T? value) =>
+    value == null ? api.Optional<T>.absent() : api.Optional<T>.present(value);
 
 List<api.ExpenseParticipantInput> _participantsToApi(ExpenseWrite write) => [
   for (final participant in write.participants)
@@ -275,6 +270,7 @@ Person personFromApi(api.Person person) => Person(
         )
       : null,
   cadenceDays: person.cadenceDays,
+  closeness: Closeness.fromValue(person.closeness),
   lastSeenAt: person.lastSeenAt?.toLocal(),
   googleResourceName: person.googleResourceName,
   places: [
@@ -327,6 +323,14 @@ Person personFromApi(api.Person person) => Person(
         url: gift.url,
         givenAt: gift.givenAt?.toLocal(),
       ),
+  ],
+  connections: [
+    for (final connection in person.connections)
+      if (Closeness.fromValue(connection.closeness) != null)
+        PersonConnection(
+          personId: connection.personId,
+          closeness: Closeness.fromValue(connection.closeness)!,
+        ),
   ],
 );
 

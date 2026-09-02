@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luqa/features/people/domain/city_candidate.dart';
+import 'package:luqa/features/people/domain/person.dart';
 import 'package:luqa/features/people/presentation/widgets/people_map.dart';
 import 'package:luqa/features/today/presentation/widgets/timeline_view.dart';
 
 import '../../helpers/fake_people_repository.dart';
+import '../../helpers/in_memory_people_repository.dart';
 import '../../helpers/pump_luqa.dart';
 
 Future<void> openPeople(WidgetTester tester) async {
@@ -33,6 +35,104 @@ Future<void> scrollSheetTo(WidgetTester tester, Finder target) async {
 }
 
 void main() {
+  testWidgets('opens the manually curated relationship map', (tester) async {
+    await pumpLuqa(tester);
+    await openPeople(tester);
+    await tester.tap(find.byKey(const ValueKey('people-connections')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('connections-graph')), findsOneWidget);
+    expect(
+      find.text(
+        'You decide the shape. Luqa does not calculate closeness from activity.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('connection-node-mira')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('connection-node-mira')));
+    await tester.pumpAndSettle();
+    final inner = tester.widget<ChoiceChip>(
+      find.byKey(const ValueKey('connections-closeness-mira-4')),
+    );
+    expect(inner.selected, isTrue);
+    expect(find.text('Jo'), findsWidgets);
+    expect(find.text('Close'), findsWidgets);
+  });
+
+  testWidgets('placing and connecting people writes only explicit choices', (
+    tester,
+  ) async {
+    final repository = InMemoryPeopleRepository(
+      seed: const [
+        Person(
+          id: 'ada',
+          name: 'Ada Lovelace',
+          colorValue: 0xFFBE185D,
+          emoji: null,
+          defaultPercent: null,
+          order: 0,
+          archived: false,
+        ),
+        Person(
+          id: 'bea',
+          name: 'Bea Bell',
+          colorValue: 0xFF2563EB,
+          emoji: null,
+          defaultPercent: null,
+          order: 1,
+          archived: false,
+        ),
+      ],
+    );
+    await pumpLuqa(
+      tester,
+      peopleRepository: repository,
+      initialLocation: '/people/connections',
+    );
+
+    expect(find.byKey(const ValueKey('connections-empty')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('connections-start')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('connections-place-ada')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('connections-closeness-ada-4')));
+    await tester.pumpAndSettle();
+    expect(
+      (await repository.loadPerson('ada')).closeness,
+      Closeness.innerCircle,
+    );
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('connections-place-someone')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('connections-place-bea')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('connections-closeness-bea-3')));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('connection-node-ada')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('connections-add-person')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bea Bell').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('connections-add-level-3')));
+    await tester.pumpAndSettle();
+
+    expect(
+      (await repository.loadPerson('ada')).connections.single.personId,
+      'bea',
+    );
+    expect(
+      (await repository.loadPerson('ada')).connections.single.closeness,
+      Closeness.close,
+    );
+  });
+
   testWidgets('leads with the nearest birthday', (tester) async {
     await pumpLuqa(tester);
     await openPeople(tester);

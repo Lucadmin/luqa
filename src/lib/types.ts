@@ -275,6 +275,8 @@ export interface PersonDTO {
   /** Days between catch-ups worth aiming for. Null = no rhythm, and someone
    *  with no rhythm is never reported as overdue. */
   cadenceDays: number | null;
+  /** A deliberately chosen, coarse level: 1 familiar through 4 inner circle. */
+  closeness: number | null;
   /** ISO instant they were last actually seen. */
   lastSeenAt: string | null;
   /** People API resource, e.g. "people/c123". Null = Luqa-only. */
@@ -287,6 +289,13 @@ export interface PersonDTO {
   channels: PersonChannelDTO[];
   notes: PersonNoteDTO[];
   gifts: PersonGiftIdeaDTO[];
+  connections: PersonConnectionDTO[];
+}
+
+export interface PersonConnectionDTO {
+  personId: string;
+  /** 1 familiar, 2 in my life, 3 close, 4 inner circle. */
+  closeness: number;
 }
 
 export type PlaceSource = "GOOGLE" | "MANUAL";

@@ -37,7 +37,10 @@ class InMemoryPeopleRepository implements PeopleRepository {
       defaultPercent: write.defaultPercent,
       // New people go to the end of the arranged order rather than the top:
       // the list the owner built is not reshuffled by an addition.
-      order: _people.values.fold(0, (top, p) => p.order >= top ? p.order + 1 : top),
+      order: _people.values.fold(
+        0,
+        (top, p) => p.order >= top ? p.order + 1 : top,
+      ),
       archived: false,
       nickname: write.nickname,
       birthday: write.birthday,
@@ -56,12 +59,16 @@ class InMemoryPeopleRepository implements PeopleRepository {
     bool clearEmoji = false,
     int? defaultPercent,
     bool clearDefaultPercent = false,
+    int? order,
     String? nickname,
     bool clearNickname = false,
     Birthday? birthday,
     bool clearBirthday = false,
     int? cadenceDays,
     bool clearCadence = false,
+    Closeness? closeness,
+    bool clearCloseness = false,
+    List<PersonConnection>? connections,
     bool? archived,
   }) async => _save(
     _require(id).copyWith(
@@ -71,12 +78,16 @@ class InMemoryPeopleRepository implements PeopleRepository {
       clearEmoji: clearEmoji,
       defaultPercent: defaultPercent,
       clearDefaultPercent: clearDefaultPercent,
+      order: order,
       nickname: nickname,
       clearNickname: clearNickname,
       birthday: birthday,
       clearBirthday: clearBirthday,
       cadenceDays: cadenceDays,
       clearCadence: clearCadence,
+      closeness: closeness,
+      clearCloseness: clearCloseness,
+      connections: connections,
       archived: archived,
     ),
   );
@@ -183,7 +194,12 @@ class InMemoryPeopleRepository implements PeopleRepository {
         gifts: [
           for (final gift in person.gifts)
             if (gift.id == giftId)
-              GiftIdea(id: gift.id, idea: gift.idea, url: gift.url, givenAt: givenAt)
+              GiftIdea(
+                id: gift.id,
+                idea: gift.idea,
+                url: gift.url,
+                givenAt: givenAt,
+              )
             else
               gift,
         ],

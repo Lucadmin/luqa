@@ -90,6 +90,7 @@ doc/PeopleApi.md
 doc/Person.md
 doc/PersonBalance.md
 doc/PersonChannel.md
+doc/PersonConnection.md
 doc/PersonDelta.md
 doc/PersonGiftIdea.md
 doc/PersonGroup.md
@@ -241,6 +242,7 @@ lib/model/money_overview_response.dart
 lib/model/person.dart
 lib/model/person_balance.dart
 lib/model/person_channel.dart
+lib/model/person_connection.dart
 lib/model/person_delta.dart
 lib/model/person_gift_idea.dart
 lib/model/person_group.dart

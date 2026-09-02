@@ -122,6 +122,7 @@ part 'model/money_overview_response.dart';
 part 'model/person.dart';
 part 'model/person_balance.dart';
 part 'model/person_channel.dart';
+part 'model/person_connection.dart';
 part 'model/person_delta.dart';
 part 'model/person_gift_idea.dart';
 part 'model/person_group.dart';

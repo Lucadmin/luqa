@@ -68,3 +68,33 @@ test("an update cannot smuggle in a new id", () => {
   assert.equal("id" in parsed, false);
   assert.equal(parsed.notes, "hi");
 });
+
+test("a generated finish-only patch cannot erase workout exercises", () => {
+  const endedAt = "2026-09-02T13:45:00.000Z";
+  const parsed = updateGymSessionSchema.parse({ endedAt, exercises: [] });
+
+  assert.equal(parsed.endedAt, endedAt);
+  assert.equal(parsed.notes, undefined);
+  assert.equal(parsed.exercises, undefined);
+});
+
+test("omitted workout fields survive PATCH parsing as omitted", () => {
+  assert.deepEqual(updateGymSessionSchema.parse({ notes: "hi" }), {
+    notes: "hi",
+  });
+});
+
+test("an explicit exercise replacement can still clear a workout", () => {
+  assert.deepEqual(
+    updateGymSessionSchema.parse({ exercises: [] }).exercises,
+    [],
+  );
+  assert.deepEqual(
+    updateGymSessionSchema.parse({
+      notes: "",
+      exercises: [],
+      endedAt: "2026-09-02T13:45:00.000Z",
+    }).exercises,
+    [],
+  );
+});

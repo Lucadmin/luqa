@@ -24,6 +24,7 @@ class CreatePersonRequest {
     this.birthdayMonth = const Optional.absent(),
     this.birthdayDay = const Optional.absent(),
     this.cadenceDays = const Optional.absent(),
+    this.closeness = const Optional.absent(),
     this.lastSeenAt = const Optional.absent(),
   });
 
@@ -120,6 +121,16 @@ class CreatePersonRequest {
   ///
   final Optional<int?> cadenceDays;
 
+  /// Minimum value: 1
+  /// Maximum value: 4
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<int?> closeness;
+
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -143,6 +154,7 @@ class CreatePersonRequest {
           other.birthdayMonth == birthdayMonth &&
           other.birthdayDay == birthdayDay &&
           other.cadenceDays == cadenceDays &&
+          other.closeness == closeness &&
           other.lastSeenAt == lastSeenAt;
 
   @override
@@ -159,11 +171,12 @@ class CreatePersonRequest {
       (birthdayMonth == null ? 0 : birthdayMonth!.hashCode) +
       (birthdayDay == null ? 0 : birthdayDay!.hashCode) +
       (cadenceDays == null ? 0 : cadenceDays!.hashCode) +
+      (closeness == null ? 0 : closeness!.hashCode) +
       (lastSeenAt == null ? 0 : lastSeenAt!.hashCode);
 
   @override
   String toString() =>
-      'CreatePersonRequest[id=$id, name=$name, color=$color, emoji=$emoji, defaultPercent=$defaultPercent, nickname=$nickname, photoUrl=$photoUrl, birthdayYear=$birthdayYear, birthdayMonth=$birthdayMonth, birthdayDay=$birthdayDay, cadenceDays=$cadenceDays, lastSeenAt=$lastSeenAt]';
+      'CreatePersonRequest[id=$id, name=$name, color=$color, emoji=$emoji, defaultPercent=$defaultPercent, nickname=$nickname, photoUrl=$photoUrl, birthdayYear=$birthdayYear, birthdayMonth=$birthdayMonth, birthdayDay=$birthdayDay, cadenceDays=$cadenceDays, closeness=$closeness, lastSeenAt=$lastSeenAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -208,6 +221,10 @@ class CreatePersonRequest {
       final value = this.cadenceDays.value;
       json[r'cadenceDays'] = value;
     }
+    if (this.closeness.isPresent) {
+      final value = this.closeness.value;
+      json[r'closeness'] = value;
+    }
     if (this.lastSeenAt.isPresent) {
       final value = this.lastSeenAt.value;
       json[r'lastSeenAt'] =
@@ -230,6 +247,7 @@ class CreatePersonRequest {
     Optional<int?>? birthdayMonth,
     Optional<int?>? birthdayDay,
     Optional<int?>? cadenceDays,
+    Optional<int?>? closeness,
     Optional<DateTime?>? lastSeenAt,
   }) =>
       CreatePersonRequest(
@@ -244,6 +262,7 @@ class CreatePersonRequest {
         birthdayMonth: birthdayMonth ?? this.birthdayMonth,
         birthdayDay: birthdayDay ?? this.birthdayDay,
         cadenceDays: cadenceDays ?? this.cadenceDays,
+        closeness: closeness ?? this.closeness,
         lastSeenAt: lastSeenAt ?? this.lastSeenAt,
       );
 
@@ -306,6 +325,11 @@ class CreatePersonRequest {
             ? Optional.present(json[r'cadenceDays'] == null
                 ? null
                 : int.parse('${json[r'cadenceDays']}'))
+            : const Optional.absent(),
+        closeness: json.containsKey(r'closeness')
+            ? Optional.present(json[r'closeness'] == null
+                ? null
+                : int.parse('${json[r'closeness']}'))
             : const Optional.absent(),
         lastSeenAt: json.containsKey(r'lastSeenAt')
             ? Optional.present(mapDateTime(json, r'lastSeenAt', r''))

@@ -33,7 +33,7 @@ class LuqaStore {
   /// providers build them eagerly and signed-out ones never read anything.
   static final LuqaStore shared = LuqaStore();
 
-  static const _version = 10;
+  static const _version = 11;
 
   final DatabaseFactory? _injectedFactory;
   final String? _path;
@@ -114,6 +114,7 @@ class LuqaStore {
         if (oldVersion < 8) _addRollingInterval(batch, oldVersion);
         if (oldVersion < 9) _addSessionEnd(batch, oldVersion);
         if (oldVersion < 10) _addPlaceCity(batch, oldVersion);
+        if (oldVersion < 11) _addPeopleConnections(batch, oldVersion);
         await batch.commit();
       },
       // Going backwards means an older build opened a newer file. There is
@@ -164,6 +165,8 @@ class LuqaStore {
         birthday_month INTEGER,
         birthday_day INTEGER,
         cadence_days INTEGER,
+        closeness INTEGER,
+        connections TEXT NOT NULL DEFAULT '[]',
         last_seen_at INTEGER,
         google_resource_name TEXT,
         pending INTEGER NOT NULL DEFAULT 0,
@@ -284,6 +287,15 @@ class LuqaStore {
     if (oldVersion < 4) return;
     batch.execute(
       "ALTER TABLE timeline_entry ADD COLUMN person_ids TEXT NOT NULL DEFAULT '[]'",
+    );
+  }
+
+  static void _addPeopleConnections(Batch batch, int oldVersion) {
+    // New databases already received both columns in `_createPeopleTables`.
+    if (oldVersion < 2) return;
+    batch.execute('ALTER TABLE person ADD COLUMN closeness INTEGER');
+    batch.execute(
+      "ALTER TABLE person ADD COLUMN connections TEXT NOT NULL DEFAULT '[]'",
     );
   }
 

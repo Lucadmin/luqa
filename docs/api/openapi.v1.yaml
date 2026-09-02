@@ -2912,12 +2912,14 @@ components:
         - birthdayMonth
         - birthdayDay
         - cadenceDays
+        - closeness
         - lastSeenAt
         - googleResourceName
         - places
         - channels
         - notes
         - gifts
+        - connections
       properties:
         id:
           type: string
@@ -2966,6 +2968,13 @@ components:
           description: >-
             How often being in touch is worth aiming for. Null for most people,
             and null means they are never reported as overdue.
+        closeness:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 4
+          description: >-
+            Explicitly chosen by the owner: 1 familiar, 2 in my life, 3 close,
+            4 inner circle. Never inferred from activity.
         lastSeenAt:
           type: [string, "null"]
           format: date-time
@@ -2990,6 +2999,24 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PersonGiftIdea"
+        connections:
+          type: array
+          description: >-
+            Symmetric links to other people. A link is stored on one endpoint
+            only, so clients build the graph from every person's list.
+          items:
+            $ref: "#/components/schemas/PersonConnection"
+    PersonConnection:
+      type: object
+      additionalProperties: false
+      required: [personId, closeness]
+      properties:
+        personId:
+          type: string
+        closeness:
+          type: integer
+          minimum: 1
+          maximum: 4
     PersonPlace:
       type: object
       additionalProperties: false
@@ -3603,6 +3630,10 @@ components:
           type: [integer, "null"]
           minimum: 1
           maximum: 3650
+        closeness:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 4
         lastSeenAt:
           type: [string, "null"]
           format: date-time
@@ -3653,6 +3684,15 @@ components:
           type: [integer, "null"]
           minimum: 1
           maximum: 3650
+        closeness:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 4
+        connections:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/PersonConnection"
         lastSeenAt:
           type: [string, "null"]
           format: date-time

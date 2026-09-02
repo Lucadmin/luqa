@@ -140,45 +140,56 @@ void main() {
     expect(mira.places, isEmpty);
   });
 
-  test('the unsent flag survives, so the delta cannot overwrite the row',
-      () async {
-    final path = 'person_migration_b.db';
-    await seedVersion4(path);
+  test(
+    'the unsent flag survives, so the delta cannot overwrite the row',
+    () async {
+      final path = 'person_migration_b.db';
+      await seedVersion4(path);
 
-    final store = LuqaStore(factory: databaseFactoryFfi, path: path);
-    addTearDown(store.close);
-    final local = MoneyLocalStore(namespace: 'user-a', store: store);
+      final store = LuqaStore(factory: databaseFactoryFfi, path: path);
+      addTearDown(store.close);
+      final local = MoneyLocalStore(namespace: 'user-a', store: store);
 
-    // A delta arriving with the server's older copy must leave the local row
-    // alone while the write is still pending — that flag is what says so, and
-    // losing it in the migration would silently revert the user's edit.
-    await local.applyPeople([
-      (await local.people()).single.copyWith(name: 'Stale Server Name'),
-    ], const []);
+      // A delta arriving with the server's older copy must leave the local row
+      // alone while the write is still pending — that flag is what says so, and
+      // losing it in the migration would silently revert the user's edit.
+      await local.applyPeople([
+        (await local.people()).single.copyWith(name: 'Stale Server Name'),
+      ], const []);
 
-    expect((await local.people()).single.name, 'Mira Hensel');
-  });
+      expect((await local.people()).single.name, 'Mira Hensel');
+    },
+  );
 
-  test('the profile tables are there to write into after the upgrade',
-      () async {
-    final path = 'person_migration_c.db';
-    await seedVersion4(path);
+  test(
+    'the profile tables are there to write into after the upgrade',
+    () async {
+      final path = 'person_migration_c.db';
+      await seedVersion4(path);
 
-    final store = LuqaStore(factory: databaseFactoryFfi, path: path);
-    addTearDown(store.close);
-    final local = MoneyLocalStore(namespace: 'user-a', store: store);
+      final store = LuqaStore(factory: databaseFactoryFfi, path: path);
+      addTearDown(store.close);
+      final local = MoneyLocalStore(namespace: 'user-a', store: store);
 
-    final mira = (await local.people()).single;
-    await local.putPerson(
-      mira.copyWith(
-        notes: [
-          PersonNote(id: 'n1', body: 'Ceramics course', createdAt: DateTime(2026, 8, 27)),
-        ],
-      ),
-    );
+      final mira = (await local.people()).single;
+      await local.putPerson(
+        mira.copyWith(
+          notes: [
+            PersonNote(
+              id: 'n1',
+              body: 'Ceramics course',
+              createdAt: DateTime(2026, 8, 27),
+            ),
+          ],
+        ),
+      );
 
-    expect((await local.people()).single.notes.single.body, 'Ceramics course');
-  });
+      expect(
+        (await local.people()).single.notes.single.body,
+        'Ceramics course',
+      );
+    },
+  );
 
   /// A database as version 9 left it: `person_place` exists, and its rows are
   /// cities that were typed rather than chosen.
@@ -298,6 +309,34 @@ void main() {
     // Which means it still groups by name, as it did before.
     expect(place.cityKey, 'name:hamburg');
   });
+
+  test(
+    'an existing person upgrades with no invented relationship data',
+    () async {
+      final path = 'person_migration_connections.db';
+      await seedVersion9(path);
+
+      final store = LuqaStore(factory: databaseFactoryFfi, path: path);
+      addTearDown(store.close);
+      final local = MoneyLocalStore(namespace: 'user-a', store: store);
+
+      final person = (await local.people()).single;
+      expect(person.closeness, isNull);
+      expect(person.connections, isEmpty);
+
+      await local.putPerson(
+        person.copyWith(
+          closeness: Closeness.close,
+          connections: const [
+            PersonConnection(personId: 'mira', closeness: Closeness.inMyLife),
+          ],
+        ),
+      );
+      final written = (await local.people()).single;
+      expect(written.closeness, Closeness.close);
+      expect(written.connections.single.personId, 'mira');
+    },
+  );
 
   test('a chosen city can be written into the upgraded table', () async {
     final path = 'person_migration_f.db';

@@ -31,6 +31,7 @@ import type {
   HabitLogDTO,
   LifePeriodDTO,
   PersonChannelDTO,
+  PersonConnectionDTO,
   PersonDTO,
   PersonGiftIdeaDTO,
   PersonGroupDTO,
@@ -176,6 +177,7 @@ export function toPersonDTO(p: PersonWithProfile): PersonDTO {
     birthdayMonth: p.birthdayMonth,
     birthdayDay: p.birthdayDay,
     cadenceDays: p.cadenceDays,
+    closeness: p.closeness,
     lastSeenAt: p.lastSeenAt?.toISOString() ?? null,
     googleResourceName: p.googleResourceName,
 
@@ -183,7 +185,30 @@ export function toPersonDTO(p: PersonWithProfile): PersonDTO {
     channels: (p.channels ?? []).map(toPersonChannelDTO),
     notes: (p.notes ?? []).map(toPersonNoteDTO),
     gifts: (p.gifts ?? []).map(toPersonGiftIdeaDTO),
+    connections: personConnections(p.connections),
   };
+}
+
+function personConnections(value: unknown): PersonConnectionDTO[] {
+  if (!Array.isArray(value)) return [];
+  const connections: PersonConnectionDTO[] = [];
+  for (const item of value) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      continue;
+    }
+    const personId = Reflect.get(item, "personId");
+    const closeness = Reflect.get(item, "closeness");
+    if (
+      typeof personId === "string" &&
+      typeof closeness === "number" &&
+      Number.isInteger(closeness) &&
+      closeness >= 1 &&
+      closeness <= 4
+    ) {
+      connections.push({ personId, closeness });
+    }
+  }
+  return connections;
 }
 
 export function toPersonPlaceDTO(place: PersonPlace): PersonPlaceDTO {

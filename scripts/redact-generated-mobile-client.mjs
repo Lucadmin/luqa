@@ -3,26 +3,37 @@ import { join } from "node:path";
 
 const replacements = [
   {
+    path: "mobile/packages/luqa_api/lib/model/update_person_request.dart",
+    generated: "this.connections = const Optional.present(const []),",
+    safe: "this.connections = const Optional.absent(),",
+  },
+  {
+    path: "mobile/packages/luqa_api/lib/model/update_gym_session_request.dart",
+    generated: "this.exercises = const Optional.present(const []),",
+    safe: "this.exercises = const Optional.absent(),",
+  },
+  {
     path: "mobile/packages/luqa_api/lib/model/create_session_request.dart",
     generated:
       "'CreateSessionRequest[email=$email, password=$password, deviceId=$deviceId, deviceName=$deviceName]'",
-    safe:
-      "'CreateSessionRequest[email=$email, password=[REDACTED], deviceId=$deviceId, deviceName=$deviceName]'",
+    safe: "'CreateSessionRequest[email=$email, password=[REDACTED], deviceId=$deviceId, deviceName=$deviceName]'",
   },
   {
     path: "mobile/packages/luqa_api/lib/model/session_credentials.dart",
     generated:
       "'SessionCredentials[user=$user, accessToken=$accessToken, accessExpiresAt=$accessExpiresAt, refreshToken=$refreshToken, refreshExpiresAt=$refreshExpiresAt]'",
-    safe:
-      "'SessionCredentials[user=$user, accessToken=[REDACTED], accessExpiresAt=$accessExpiresAt, refreshToken=[REDACTED], refreshExpiresAt=$refreshExpiresAt]'",
+    safe: "'SessionCredentials[user=$user, accessToken=[REDACTED], accessExpiresAt=$accessExpiresAt, refreshToken=[REDACTED], refreshExpiresAt=$refreshExpiresAt]'",
   },
 ];
 
 for (const replacement of replacements) {
   const source = await readFile(replacement.path, "utf8");
-  if (!source.includes(replacement.generated)) {
+  if (
+    !source.includes(replacement.generated) &&
+    !source.includes(replacement.safe)
+  ) {
     throw new Error(
-      `Generated credential model changed; review redaction for ${replacement.path}`,
+      `Generated model changed; review post-processing for ${replacement.path}`,
     );
   }
   await writeFile(

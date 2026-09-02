@@ -514,6 +514,15 @@ model Person {
   // null means they never appear in an overdue list.
   cadenceDays Int?
 
+  // Chosen by the owner. Never inferred from calls, bills, or time entries.
+  // 1 = familiar, 2 = in my life, 3 = close, 4 = inner circle.
+  closeness Int?
+
+  // Symmetric links to other people as [{ personId, closeness }]. Kept on one
+  // endpoint of the link and sent with the person row, like the other small
+  // profile collections. The API validates both shape and ownership.
+  connections Json @default("[]")
+
   // The last time they were actually seen.
   lastSeenAt DateTime?
 

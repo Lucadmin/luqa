@@ -16,6 +16,7 @@ import 'package:luqa/features/money/presentation/money_screen.dart';
 import 'package:luqa/features/money/presentation/money_people_screen.dart';
 import 'package:luqa/features/money/presentation/person_ledger_screen.dart';
 import 'package:luqa/features/people/presentation/birthdays_screen.dart';
+import 'package:luqa/features/people/presentation/connections_screen.dart';
 import 'package:luqa/features/people/presentation/people_screen.dart';
 import 'package:luqa/features/people/presentation/person_screen.dart';
 import 'package:luqa/features/people/presentation/places_screen.dart';
@@ -147,6 +148,11 @@ final luqaRouter = GoRouter(
       parentNavigatorKey: _rootNavigatorKey,
       path: '/people/places',
       builder: (context, state) => const PlacesScreen(),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootNavigatorKey,
+      path: '/people/connections',
+      builder: (context, state) => const ConnectionsScreen(),
     ),
     GoRoute(
       parentNavigatorKey: _rootNavigatorKey,

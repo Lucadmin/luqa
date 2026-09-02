@@ -91,7 +91,11 @@ const healthSource = z.enum([
   "GOOGLE_HEALTH",
   "MANUAL",
 ]);
-const sleepMinutes = z.number().int().min(0).max(48 * 60);
+const sleepMinutes = z
+  .number()
+  .int()
+  .min(0)
+  .max(48 * 60);
 const recordingMethod = z.enum([
   "AUTOMATICALLY_RECORDED",
   "ACTIVELY_RECORDED",
@@ -145,7 +149,10 @@ export const sleepEntryImportSchema = z
 export const importSleepSchema = z.object({
   source: healthSource.default("HEALTH_CONNECT"),
   entries: z.array(sleepEntryImportSchema).max(1000).default([]),
-  deletedExternalIds: z.array(z.string().trim().min(1).max(300)).max(1000).optional(),
+  deletedExternalIds: z
+    .array(z.string().trim().min(1).max(300))
+    .max(1000)
+    .optional(),
 });
 
 // --- Health samples (steps, heart rate, body metrics) ---
@@ -257,14 +264,18 @@ export const updateLifePeriodSchema = z
     startDate: dateKeyValidation.optional(),
     endDate: dateKeyValidation.nullable().optional(),
   })
-  .refine(
-    (v) => !v.startDate || !v.endDate || v.endDate >= v.startDate,
-    { message: "End must be on or after start", path: ["endDate"] },
-  );
+  .refine((v) => !v.startDate || !v.endDate || v.endDate >= v.startDate, {
+    message: "End must be on or after start",
+    path: ["endDate"],
+  });
 
 // Upsert one week's review. When every field is empty the row is removed.
 export const upsertWeekNoteSchema = z.object({
-  weekIndex: z.number().int().min(0).max(150 * 52),
+  weekIndex: z
+    .number()
+    .int()
+    .min(0)
+    .max(150 * 52),
   highlights: z.string().max(4000).optional().default(""),
   lessons: z.string().max(4000).optional().default(""),
   rating: z.number().int().min(1).max(5).nullish(),
@@ -295,7 +306,12 @@ export const createHabitSchema = z.object({
   goalType: habitGoalType.optional(),
   goalPeriod: habitGoalPeriod.optional(),
   targetCount: z.number().int().min(1).max(1000).optional(),
-  targetSeconds: z.number().int().min(0).max(30 * 24 * 3600).optional(), // up to 30 days worth
+  targetSeconds: z
+    .number()
+    .int()
+    .min(0)
+    .max(30 * 24 * 3600)
+    .optional(), // up to 30 days worth
   categoryId: z.string().nullish(),
 
   scheduleType: habitScheduleType.optional(),
@@ -338,7 +354,11 @@ export const createHabitMobileSchema = createHabitSchema.extend({
 /// it lands on the same numbers.
 export const putHabitLogSchema = z.object({
   count: z.number().int().min(0).max(100000),
-  seconds: z.number().int().min(0).max(30 * 24 * 3600),
+  seconds: z
+    .number()
+    .int()
+    .min(0)
+    .max(30 * 24 * 3600),
   runningSince: z.string().datetime().nullish(),
 });
 
@@ -361,7 +381,10 @@ export const habitLogSchema = z.object({
 
 // Cents throughout. The ceiling is a sanity rail, not a real limit.
 const cents = z.number().int().min(0).max(1_000_000_00);
-const positiveCents = cents.refine((v) => v > 0, "Amount must be more than zero");
+const positiveCents = cents.refine(
+  (v) => v > 0,
+  "Amount must be more than zero",
+);
 const percentBp = z.number().int().min(0).max(10000);
 
 const splitMode = z.enum(["EQUAL", "PERCENT", "AMOUNT"]);
@@ -390,7 +413,15 @@ export const personProfileSchema = z.object({
   // Bounded so a typo cannot create a rhythm nobody will ever be overdue on,
   // or one that reports somebody overdue every day.
   cadenceDays: z.number().int().min(1).max(3650).nullish(),
+  // Explicitly curated. Activity may inform the owner, but it never writes
+  // this value on their behalf.
+  closeness: z.number().int().min(1).max(4).nullish(),
   lastSeenAt: z.string().datetime().nullish(),
+});
+
+export const personConnectionSchema = z.object({
+  personId: z.string().trim().min(1).max(64),
+  closeness: z.number().int().min(1).max(4),
 });
 
 export const updatePersonSchema = createPersonSchema
@@ -398,6 +429,9 @@ export const updatePersonSchema = createPersonSchema
   .extend({
     order: z.number().int().min(0).optional(),
     archived: z.boolean().optional(),
+    // A complete replacement. This makes removing a link an ordinary PATCH
+    // and keeps repeated offline saves idempotent.
+    connections: z.array(personConnectionSchema).max(200).optional(),
   })
   .merge(personProfileSchema);
 
@@ -485,7 +519,11 @@ export const createExpenseSchema = z.object({
   splitMode: splitMode.optional().default("EQUAL"),
   // EQUAL only: whether the user is one of the equal parts.
   includeMe: z.boolean().optional().default(true),
-  participants: z.array(expenseParticipantSchema).max(50).optional().default([]),
+  participants: z
+    .array(expenseParticipantSchema)
+    .max(50)
+    .optional()
+    .default([]),
   notes: z.string().trim().max(2000).optional().default(""),
 });
 
@@ -578,9 +616,33 @@ export const createGymSessionSchema = z.object({
 
 // Omitting `exercises` leaves the session's exercises alone; sending it
 // replaces them wholesale, which is how the editor saves.
-export const updateGymSessionSchema = createGymSessionSchema
-  .partial()
-  .omit({ id: true });
+//
+// Keep this separate from the create schema: `.partial()` retains the inner
+// defaults, turning omitted `notes` and `exercises` into "" and [] during a
+// PATCH. Presence is the operation here, so omission must survive parsing.
+export const updateGymSessionSchema = z
+  .object({
+    date: dateKey.optional(),
+    locationId: z.string().nullish(),
+    notes: z.string().trim().max(4000).optional(),
+    exercises: z.array(sessionExerciseSchema).max(60).optional(),
+    endedAt: z.string().datetime().nullish(),
+  })
+  .transform((input) => {
+    // OpenAPI Generator's Dart client used to serialize every optional list
+    // as present and empty. The finish-only call consequently arrived as
+    // `{ endedAt, exercises: [] }` and erased the workout. Keep accepting
+    // that released client safely. A real editor save also carries at least
+    // one of the workout fields, while `{ exercises: [] }` on its own remains
+    // the deliberate way to clear a workout.
+    const generatedFinishOnly =
+      input.endedAt !== undefined &&
+      input.exercises?.length === 0 &&
+      input.date === undefined &&
+      input.locationId === undefined &&
+      input.notes === undefined;
+    return generatedFinishOnly ? { ...input, exercises: undefined } : input;
+  });
 
 export const updateExerciseSchema = z.object({
   // Renaming onto a name that already exists merges the two, which is the fix
@@ -605,7 +667,9 @@ export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type ImportSleepInput = z.infer<typeof importSleepSchema>;
-export type ImportHealthSamplesInput = z.infer<typeof importHealthSamplesSchema>;
+export type ImportHealthSamplesInput = z.infer<
+  typeof importHealthSamplesSchema
+>;
 export type HealthMetricTypeInput = z.infer<typeof healthMetricType>;
 export type UpdateSleepInput = z.infer<typeof updateSleepSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

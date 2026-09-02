@@ -5,8 +5,17 @@ import 'package:luqa/features/people/domain/person.dart';
 /// a bill, on a timeline entry, and on a map. Re-exported here so every money
 /// caller keeps importing `Person` from the models it already imports.
 export 'package:luqa/features/people/domain/person.dart'
-    show Birthday, ChannelKind, GiftIdea, Person, PersonChannel, PersonNote,
-        PersonPlace, PlaceSource;
+    show
+        Birthday,
+        ChannelKind,
+        Closeness,
+        GiftIdea,
+        Person,
+        PersonChannel,
+        PersonConnection,
+        PersonNote,
+        PersonPlace,
+        PlaceSource;
 
 /// Shared expenses, as the phone sees them.
 ///
@@ -50,10 +59,10 @@ enum SettlementDirection {
 
   String get wireName => this == SettlementDirection.toMe ? 'TO_ME' : 'FROM_ME';
 
-  static SettlementDirection fromWire(String? value) =>
-      value == 'FROM_ME' ? SettlementDirection.fromMe : SettlementDirection.toMe;
+  static SettlementDirection fromWire(String? value) => value == 'FROM_ME'
+      ? SettlementDirection.fromMe
+      : SettlementDirection.toMe;
 }
-
 
 /// A person plus the numbers the overview shows next to their name.
 @immutable

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:luqa/core/storage/luqa_store.dart';
 import 'package:luqa/features/money/domain/money_models.dart';
 import 'package:sqflite/sqflite.dart';
@@ -101,7 +103,9 @@ class MoneyLocalStore {
         'WHERE s.namespace = e.namespace AND s.expense_id = e.id '
         'AND s.person_id = ?))',
       );
-      args..add(personId)..add(personId);
+      args
+        ..add(personId)
+        ..add(personId);
     }
 
     final after = _decodeCursor(cursor);
@@ -199,10 +203,7 @@ class MoneyLocalStore {
     ]);
 
     for (final row in expenseRows) {
-      final expense = _expenseFromRow(
-        row,
-        shares[row['id']] ?? const [],
-      );
+      final expense = _expenseFromRow(row, shares[row['id']] ?? const []);
       ExpenseShare? theirs;
       for (final share in expense.shares) {
         if (share.personId == personId) theirs = share;
@@ -313,6 +314,14 @@ class MoneyLocalStore {
       'birthday_month': person.birthday?.month,
       'birthday_day': person.birthday?.day,
       'cadence_days': person.cadenceDays,
+      'closeness': person.closeness?.value,
+      'connections': jsonEncode([
+        for (final connection in person.connections)
+          {
+            'personId': connection.personId,
+            'closeness': connection.closeness.value,
+          },
+      ]),
       'last_seen_at': person.lastSeenAt?.toUtc().millisecondsSinceEpoch,
       'google_resource_name': person.googleResourceName,
       'pending': pending ? 1 : 0,
@@ -493,11 +502,7 @@ class MoneyLocalStore {
 
   /// Hides a row the user deleted. It stays until the server confirms, so a
   /// delta that has not caught up cannot bring it back.
-  Future<void> remove(
-    String table,
-    String id, {
-    DatabaseExecutor? txn,
-  }) async {
+  Future<void> remove(String table, String id, {DatabaseExecutor? txn}) async {
     final db = txn ?? await _db;
     await db.update(
       table,
@@ -509,11 +514,7 @@ class MoneyLocalStore {
 
   /// Forgets a row outright, for one created and deleted before it ever
   /// reached the server — there is nothing for a delta to confirm.
-  Future<void> forget(
-    String table,
-    String id, {
-    DatabaseExecutor? txn,
-  }) async {
+  Future<void> forget(String table, String id, {DatabaseExecutor? txn}) async {
     final db = txn ?? await _db;
     await db.delete(
       table,
@@ -570,6 +571,34 @@ class MoneyLocalStore {
         whereArgs: [namespace, from],
       );
       if (table == 'person') {
+        final peopleWithConnections = await txn.query(
+          'person',
+          columns: ['id', 'connections'],
+          where: 'namespace = ?',
+          whereArgs: [namespace],
+        );
+        for (final row in peopleWithConnections) {
+          final connections = _connections(row['connections']);
+          if (!connections.any((connection) => connection.personId == from)) {
+            continue;
+          }
+          await txn.update(
+            'person',
+            {
+              'connections': jsonEncode([
+                for (final connection in connections)
+                  {
+                    'personId': connection.personId == from
+                        ? to
+                        : connection.personId,
+                    'closeness': connection.closeness.value,
+                  },
+              ]),
+            },
+            where: 'namespace = ? AND id = ?',
+            whereArgs: [namespace, row['id']],
+          );
+        }
         for (final ref in const [
           ('money_expense_share', 'person_id'),
           ('money_settlement', 'person_id'),
@@ -868,6 +897,8 @@ class MoneyLocalStore {
           ? Birthday(month: month, day: day, year: row['birthday_year'] as int?)
           : null,
       cadenceDays: row['cadence_days'] as int?,
+      closeness: Closeness.fromValue(row['closeness'] as int?),
+      connections: _connections(row['connections']),
       lastSeenAt: seen == null
           ? null
           : DateTime.fromMillisecondsSinceEpoch(seen, isUtc: true).toLocal(),
@@ -934,6 +965,27 @@ class MoneyLocalStore {
     );
   }
 
+  static List<PersonConnection> _connections(Object? encoded) {
+    if (encoded is! String) return const [];
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! List<Object?>) return const [];
+      return [
+        for (final item in decoded)
+          if (item is Map<String, Object?> &&
+              item['personId'] is String &&
+              item['closeness'] is int &&
+              Closeness.fromValue(item['closeness']! as int) != null)
+            PersonConnection(
+              personId: item['personId']! as String,
+              closeness: Closeness.fromValue(item['closeness']! as int)!,
+            ),
+      ];
+    } on FormatException {
+      return const [];
+    }
+  }
+
   Future<List<PersonGroup>> _groups(DatabaseExecutor db) async {
     final rows = await db.query(
       'money_group',
@@ -979,14 +1031,16 @@ class MoneyLocalStore {
     );
     final byExpense = <String, List<ExpenseShare>>{};
     for (final row in rows) {
-      byExpense.putIfAbsent(row['expense_id']! as String, () => []).add(
-        ExpenseShare(
-          personId: row['person_id']! as String,
-          amountCents: row['amount_cents']! as int,
-          percentBp: row['percent_bp'] as int?,
-          gifted: (row['gifted']! as int) == 1,
-        ),
-      );
+      byExpense
+          .putIfAbsent(row['expense_id']! as String, () => [])
+          .add(
+            ExpenseShare(
+              personId: row['person_id']! as String,
+              amountCents: row['amount_cents']! as int,
+              percentBp: row['percent_bp'] as int?,
+              gifted: (row['gifted']! as int) == 1,
+            ),
+          );
     }
     return byExpense;
   }

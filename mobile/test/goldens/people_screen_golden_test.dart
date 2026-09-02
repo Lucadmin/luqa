@@ -27,6 +27,15 @@ Future<void> _openPerson(
   await tester.pumpAndSettle();
 }
 
+Future<void> _openConnections(
+  WidgetTester tester, {
+  required ThemeMode themeMode,
+}) async {
+  await _openPeople(tester, themeMode: themeMode);
+  await tester.tap(find.byKey(const ValueKey('people-connections')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('People roster light', (tester) async {
     await _openPeople(tester, themeMode: ThemeMode.light);
@@ -57,6 +66,22 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('people_person_dark.png'),
+    );
+  });
+
+  testWidgets('People connections light', (tester) async {
+    await _openConnections(tester, themeMode: ThemeMode.light);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('people_connections_light.png'),
+    );
+  });
+
+  testWidgets('People connections dark', (tester) async {
+    await _openConnections(tester, themeMode: ThemeMode.dark);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('people_connections_dark.png'),
     );
   });
 }

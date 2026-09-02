@@ -135,12 +135,16 @@ class PeopleController extends Notifier<PeopleState> {
     bool clearEmoji = false,
     int? defaultPercent,
     bool clearDefaultPercent = false,
+    int? order,
     String? nickname,
     bool clearNickname = false,
     Birthday? birthday,
     bool clearBirthday = false,
     int? cadenceDays,
     bool clearCadence = false,
+    Closeness? closeness,
+    bool clearCloseness = false,
+    List<PersonConnection>? connections,
     bool? archived,
   }) => _write('saving the person', () async {
     _apply(
@@ -152,16 +156,74 @@ class PeopleController extends Notifier<PeopleState> {
         clearEmoji: clearEmoji,
         defaultPercent: defaultPercent,
         clearDefaultPercent: clearDefaultPercent,
+        order: order,
         nickname: nickname,
         clearNickname: clearNickname,
         birthday: birthday,
         clearBirthday: clearBirthday,
         cadenceDays: cadenceDays,
         clearCadence: clearCadence,
+        closeness: closeness,
+        clearCloseness: clearCloseness,
+        connections: connections,
         archived: archived,
       ),
     );
   });
+
+  Future<bool> setCloseness(String personId, Closeness? closeness) =>
+      updatePerson(
+        id: personId,
+        closeness: closeness,
+        clearCloseness: closeness == null,
+      );
+
+  /// Adds, changes, or removes one symmetric link.
+  ///
+  /// A link is stored on whichever endpoint already owns it. New links live on
+  /// [firstPersonId], but the graph reads every list, so the choice has no
+  /// visible direction and repeated edits never create a second edge.
+  Future<bool> setConnection({
+    required String firstPersonId,
+    required String secondPersonId,
+    required Closeness? closeness,
+  }) async {
+    if (firstPersonId == secondPersonId) return false;
+
+    Person? owner;
+    String? relatedId;
+    for (final person in state.people) {
+      if (person.id == firstPersonId &&
+          person.connections.any(
+            (connection) => connection.personId == secondPersonId,
+          )) {
+        owner = person;
+        relatedId = secondPersonId;
+        break;
+      }
+      if (person.id == secondPersonId &&
+          person.connections.any(
+            (connection) => connection.personId == firstPersonId,
+          )) {
+        owner = person;
+        relatedId = firstPersonId;
+        break;
+      }
+    }
+    owner ??= state.byId(firstPersonId);
+    relatedId ??= secondPersonId;
+    if (owner == null || state.byId(relatedId) == null) return false;
+
+    return updatePerson(
+      id: owner.id,
+      connections: [
+        for (final connection in owner.connections)
+          if (connection.personId != relatedId) connection,
+        if (closeness != null)
+          PersonConnection(personId: relatedId, closeness: closeness),
+      ],
+    );
+  }
 
   Future<bool> deletePerson(String id) =>
       _write('removing the person', () async {

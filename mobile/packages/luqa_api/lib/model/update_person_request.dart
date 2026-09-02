@@ -25,6 +25,8 @@ class UpdatePersonRequest {
     this.birthdayMonth = const Optional.absent(),
     this.birthdayDay = const Optional.absent(),
     this.cadenceDays = const Optional.absent(),
+    this.closeness = const Optional.absent(),
+    this.connections = const Optional.absent(),
     this.lastSeenAt = const Optional.absent(),
   });
 
@@ -135,6 +137,18 @@ class UpdatePersonRequest {
   ///
   final Optional<int?> cadenceDays;
 
+  /// Minimum value: 1
+  /// Maximum value: 4
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final Optional<int?> closeness;
+
+  final Optional<List<PersonConnection>?> connections;
+
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -159,6 +173,8 @@ class UpdatePersonRequest {
           other.birthdayMonth == birthdayMonth &&
           other.birthdayDay == birthdayDay &&
           other.cadenceDays == cadenceDays &&
+          other.closeness == closeness &&
+          _deepEquality.equals(other.connections, connections) &&
           other.lastSeenAt == lastSeenAt;
 
   @override
@@ -176,11 +192,13 @@ class UpdatePersonRequest {
       (birthdayMonth == null ? 0 : birthdayMonth!.hashCode) +
       (birthdayDay == null ? 0 : birthdayDay!.hashCode) +
       (cadenceDays == null ? 0 : cadenceDays!.hashCode) +
+      (closeness == null ? 0 : closeness!.hashCode) +
+      (connections.hashCode) +
       (lastSeenAt == null ? 0 : lastSeenAt!.hashCode);
 
   @override
   String toString() =>
-      'UpdatePersonRequest[name=$name, color=$color, emoji=$emoji, defaultPercent=$defaultPercent, order=$order, archived=$archived, nickname=$nickname, photoUrl=$photoUrl, birthdayYear=$birthdayYear, birthdayMonth=$birthdayMonth, birthdayDay=$birthdayDay, cadenceDays=$cadenceDays, lastSeenAt=$lastSeenAt]';
+      'UpdatePersonRequest[name=$name, color=$color, emoji=$emoji, defaultPercent=$defaultPercent, order=$order, archived=$archived, nickname=$nickname, photoUrl=$photoUrl, birthdayYear=$birthdayYear, birthdayMonth=$birthdayMonth, birthdayDay=$birthdayDay, cadenceDays=$cadenceDays, closeness=$closeness, connections=$connections, lastSeenAt=$lastSeenAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -232,6 +250,14 @@ class UpdatePersonRequest {
       final value = this.cadenceDays.value;
       json[r'cadenceDays'] = value;
     }
+    if (this.closeness.isPresent) {
+      final value = this.closeness.value;
+      json[r'closeness'] = value;
+    }
+    if (this.connections.isPresent) {
+      final value = this.connections.value;
+      json[r'connections'] = value;
+    }
     if (this.lastSeenAt.isPresent) {
       final value = this.lastSeenAt.value;
       json[r'lastSeenAt'] =
@@ -255,6 +281,8 @@ class UpdatePersonRequest {
     Optional<int?>? birthdayMonth,
     Optional<int?>? birthdayDay,
     Optional<int?>? cadenceDays,
+    Optional<int?>? closeness,
+    Optional<List<PersonConnection>?>? connections,
     Optional<DateTime?>? lastSeenAt,
   }) =>
       UpdatePersonRequest(
@@ -270,6 +298,8 @@ class UpdatePersonRequest {
         birthdayMonth: birthdayMonth ?? this.birthdayMonth,
         birthdayDay: birthdayDay ?? this.birthdayDay,
         cadenceDays: cadenceDays ?? this.cadenceDays,
+        closeness: closeness ?? this.closeness,
+        connections: connections ?? this.connections,
         lastSeenAt: lastSeenAt ?? this.lastSeenAt,
       );
 
@@ -334,6 +364,15 @@ class UpdatePersonRequest {
             ? Optional.present(json[r'cadenceDays'] == null
                 ? null
                 : int.parse('${json[r'cadenceDays']}'))
+            : const Optional.absent(),
+        closeness: json.containsKey(r'closeness')
+            ? Optional.present(json[r'closeness'] == null
+                ? null
+                : int.parse('${json[r'closeness']}'))
+            : const Optional.absent(),
+        connections: json.containsKey(r'connections')
+            ? Optional.present(
+                PersonConnection.listFromJson(json[r'connections']))
             : const Optional.absent(),
         lastSeenAt: json.containsKey(r'lastSeenAt')
             ? Optional.present(mapDateTime(json, r'lastSeenAt', r''))

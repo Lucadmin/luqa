@@ -16,7 +16,7 @@ class UpdateGymSessionRequest {
     this.date = const Optional.absent(),
     this.locationId = const Optional.absent(),
     this.notes = const Optional.absent(),
-    this.exercises = const Optional.present(const []),
+    this.exercises = const Optional.absent(),
     this.endedAt = const Optional.absent(),
   });
 

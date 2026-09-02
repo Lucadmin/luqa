@@ -19,6 +19,7 @@ Name | Type | Description | Notes
 **birthdayMonth** | **Optional<int?>** |  | [optional]
 **birthdayDay** | **Optional<int?>** |  | [optional]
 **cadenceDays** | **Optional<int?>** |  | [optional]
+**closeness** | **Optional<int?>** |  | [optional]
 **lastSeenAt** | [**Optional<DateTime?>**](DateTime.md) |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

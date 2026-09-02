@@ -21,11 +21,13 @@ Name | Type | Description | Notes
 **birthdayMonth** | **int** |  |
 **birthdayDay** | **int** | 29 February is storable, because it is a real birthday. Which day it falls on in a common year is the client's next-occurrence rule. |
 **cadenceDays** | **int** | How often being in touch is worth aiming for. Null for most people, and null means they are never reported as overdue. |
+**closeness** | **int** | Explicitly chosen by the owner: 1 familiar, 2 in my life, 3 close, 4 inner circle. Never inferred from activity. |
 **lastSeenAt** | [**DateTime**](DateTime.md) |  |
 **googleResourceName** | **String** | The People API resource this row is linked to. Null for someone who exists only in Luqa. |
 **places** | [**List<PersonPlace>**](PersonPlace.md) |  | [default to const []]
 **channels** | [**List<PersonChannel>**](PersonChannel.md) |  | [default to const []]
 **notes** | [**List<PersonNote>**](PersonNote.md) |  | [default to const []]
 **gifts** | [**List<PersonGiftIdea>**](PersonGiftIdea.md) |  | [default to const []]
+**connections** | [**List<PersonConnection>**](PersonConnection.md) | Symmetric links to other people. A link is stored on one endpoint only, so clients build the graph from every person's list. | [default to const []]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

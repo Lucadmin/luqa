@@ -30,28 +30,26 @@ class RemotePeopleRepository implements PeopleRepository {
   }
 
   @override
-  Future<Person> createPerson({
-    String? id,
-    required PersonWrite write,
-  }) async => personFromApi(
-    await client.createPerson(
-      api.CreatePersonRequest(
-        id: _present(id),
-        name: write.name,
-        color: api.Optional.present(hexColor(write.colorValue)),
-        emoji: api.Optional.present(write.emoji),
-        defaultPercent: api.Optional.present(write.defaultPercent),
-        nickname: api.Optional.present(write.nickname),
-        // The birthday travels as three parts or as three nulls. Sending a
-        // month without a day would be half a birthday, which the server
-        // refuses and no screen can count down to.
-        birthdayYear: api.Optional.present(write.birthday?.year),
-        birthdayMonth: api.Optional.present(write.birthday?.month),
-        birthdayDay: api.Optional.present(write.birthday?.day),
-        cadenceDays: api.Optional.present(write.cadenceDays),
-      ),
-    ),
-  );
+  Future<Person> createPerson({String? id, required PersonWrite write}) async =>
+      personFromApi(
+        await client.createPerson(
+          api.CreatePersonRequest(
+            id: _present(id),
+            name: write.name,
+            color: api.Optional.present(hexColor(write.colorValue)),
+            emoji: api.Optional.present(write.emoji),
+            defaultPercent: api.Optional.present(write.defaultPercent),
+            nickname: api.Optional.present(write.nickname),
+            // The birthday travels as three parts or as three nulls. Sending a
+            // month without a day would be half a birthday, which the server
+            // refuses and no screen can count down to.
+            birthdayYear: api.Optional.present(write.birthday?.year),
+            birthdayMonth: api.Optional.present(write.birthday?.month),
+            birthdayDay: api.Optional.present(write.birthday?.day),
+            cadenceDays: api.Optional.present(write.cadenceDays),
+          ),
+        ),
+      );
 
   @override
   Future<Person> updatePerson({
@@ -62,12 +60,16 @@ class RemotePeopleRepository implements PeopleRepository {
     bool clearEmoji = false,
     int? defaultPercent,
     bool clearDefaultPercent = false,
+    int? order,
     String? nickname,
     bool clearNickname = false,
     Birthday? birthday,
     bool clearBirthday = false,
     int? cadenceDays,
     bool clearCadence = false,
+    Closeness? closeness,
+    bool clearCloseness = false,
+    List<PersonConnection>? connections,
     bool? archived,
   }) async => personFromApi(
     await client.updatePerson(
@@ -83,6 +85,7 @@ class RemotePeopleRepository implements PeopleRepository {
         defaultPercent: clearDefaultPercent || defaultPercent != null
             ? api.Optional.present(defaultPercent)
             : const api.Optional.absent(),
+        order: _present(order),
         nickname: clearNickname || nickname != null
             ? api.Optional.present(nickname)
             : const api.Optional.absent(),
@@ -98,6 +101,18 @@ class RemotePeopleRepository implements PeopleRepository {
         cadenceDays: clearCadence || cadenceDays != null
             ? api.Optional.present(cadenceDays)
             : const api.Optional.absent(),
+        closeness: clearCloseness || closeness != null
+            ? api.Optional.present(closeness?.value)
+            : const api.Optional.absent(),
+        connections: connections == null
+            ? const api.Optional.absent()
+            : api.Optional.present([
+                for (final connection in connections)
+                  api.PersonConnection(
+                    personId: connection.personId,
+                    closeness: connection.closeness.value,
+                  ),
+              ]),
         archived: _present(archived),
       ),
     ),
